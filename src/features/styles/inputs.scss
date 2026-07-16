@@ -1,0 +1,108 @@
+textarea,
+input:not([type="range"]) {
+  background: var(--lce-element);
+  color: var(--lce-text);
+  border: min(0.2vh, 0.1vw) solid var(--lce-accent);
+
+  &:invalid:not(:disabled):not(:read-only) {
+    border-color: var(--lce-invalid);
+    background-color: color-mix(in srgb, var(--lce-element) 80%, var(--lce-invalid) 20%);
+    box-shadow: 0 0 5px 0px var(--lce-invalid);
+  }
+}
+
+input[type="range"] {
+  background-color: transparent;
+}
+
+input[type="color"] {
+  padding: 0px;
+}
+
+textarea:focus,
+input:focus {
+  outline: var(--lce-accent) solid 1px;
+}
+
+/*
+ * BIO（個人資料）輸入框：BC 用 ID 選擇器指定它的底色，優先級（1-0-0）高過上面的
+ * `textarea`（0-0-1），所以必須同樣用 ID 才蓋得過。它本質上就是一個大輸入窗，
+ * 因此套用與按鈕相同的 element 色。
+ */
+#DescriptionInput {
+  background: var(--lce-element);
+  color: var(--lce-text);
+  border: min(0.2vh, 0.1vw) solid var(--lce-accent);
+}
+
+:not(:has(.toast-button)) {
+  .button {
+    --button-color: var(--lce-element);
+    --disabled-color: var(--lce-element-disabled);
+    --hover-color: var(--lce-element-hover);
+  }
+
+  .button-styling {
+    border-color: var(--lce-accent);
+  }
+
+  .button-styling:hover {
+    border-color: var(--lce-accent-hover);
+  }
+
+  .button-tooltip {
+    background-color: var(--lce-element-hint);
+    color: var(--lce-text);
+    border-color: var(--lce-accent);
+  }
+
+  .button-styling>.button-label {
+    color: var(--lce-text);
+  }
+}
+
+input[type="checkbox"] {
+  background-color: var(--lce-element);
+  color: var(--lce-text);
+  border-color: var(--lce-accent);
+}
+
+input[type="checkbox"]:hover {
+  background-color: var(--lce-element-hover);
+}
+
+input[type="checkbox"]:disabled {
+  background-color: var(--lce-element-disabled);
+}
+
+input[type="checkbox"]::before {
+  background-color: var(--lce-accent);
+}
+
+input[type=range]::-moz-range-track,
+input[type=range]::-webkit-slider-runnable-track {
+
+  &:not(.hue-input),
+  &:not(.opacity-select) {
+    background-color: var(--lce-element);
+  }
+}
+
+input[type=range]::-moz-range-thumb,
+input[type=range]::-webkit-slider-thumb {
+  background-color: var(--lce-accent);
+}
+
+.custom-select {
+	--button-color: var(--lce-element);
+	--disabled-color: var(--lce-element-disabled);
+
+  background-color: var(--lce-element);
+	border: min(0.2vh, 0.1vw) solid var(--lce-accent);
+	border: min(0.2dvh, 0.1dvw) solid var(--lce-accent);
+  color: var(--lce-text);
+}
+
+.custom-select:disabled {
+	background-color: var(--lce-element-disabled);
+}

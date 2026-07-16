@@ -2,8 +2,20 @@
 // 通用 DOM / 環境工具
 // ════════════════════════════════════════════════════════════════════════════
 
-/** @returns {boolean} 是否為橫向（LCE 只在橫向啟用，與 MPL 直向互補） */
+/** @returns {boolean} 是否為橫向 */
 export function isLandscape() { return window.innerWidth >= window.innerHeight; }
+
+/** @returns {boolean} 是否為直向。與 isLandscape() 恰為互補，兩者不會同時成立或同時不成立。 */
+export function isPortrait() { return window.innerWidth < window.innerHeight; }
+
+/**
+ * 取得排除軟體鍵盤後的視窗高度。
+ * 手機鍵盤彈出時 innerHeight 不會變，但 visualViewport.height 會縮小；
+ * 直式版面靠這個值算高度才不會被鍵盤推爆。
+ */
+export function getLockedVH() {
+    return window.visualViewport ? window.visualViewport.height : window.innerHeight;
+}
 
 /** @returns {HTMLCanvasElement|null} 主 canvas 元素 */
 export function getCanvas() {
@@ -16,6 +28,21 @@ export function mk(tag, cssText, props) {
     if (cssText) el.style.cssText = cssText;
     if (props) Object.assign(el, props);
     return el;
+}
+
+/**
+ * 定位 BC 的 DOM 元素；元素不存在就跳過。
+ *
+ * BC 的 ElementPositionFix 對找不到的元素會印警告
+ * （"A call to ElementPositionFix was made on non-existent element with ID undefined"
+ *   —— 訊息裡的 undefined 是它拿 null 元素的 .id 印出來的，不是我們傳錯值）。
+ * 我們幾個呼叫點都在每幀跑的 *Run / DrawProcess 裡，元素還沒建立或已被移除的那些
+ * frame 就會洗版，所以統一在這裡擋掉。
+ */
+export function positionElement(id, font, x, y, w, h) {
+    if (typeof ElementPositionFix !== 'function') return;
+    if (!id || !document.getElementById(id)) return;
+    ElementPositionFix(id, font, x, y, w, h);
 }
 
 /** 注入 / 更新 <style> */

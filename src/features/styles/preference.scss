@@ -1,0 +1,50 @@
+#preference-subscreen-h1,
+.preference-settings-dropdown,
+.preference-settings-range {
+  color: var(--lce-text);
+}
+
+.preference-settings-word-delete img {
+  filter: invert(1);
+}
+
+#preference-subscreen {
+  color: var(--lce-text);
+}
+
+.preference-settings-divider {
+  border-bottom-color: var(--lce-accent);
+}
+
+/* #region Keybindings */
+
+#keybind-main-content {
+  --border-color: var(--lce-accent);
+  --text-color: var(--lce-text);
+}
+
+.keybind-combo:disabled {
+  color: var(--lce-text-disabled);
+}
+
+#keybind-manager {
+  .keybind-combo:not(:disabled) {
+    --button-color: var(--lce-element);
+    --hover-color: var(--lce-element-hover);
+    --disabled-color: var(--lce-element-disabled);
+  }
+}
+
+#keybind-help-sheet {
+  color: var(--lce-text);
+  background-color: var(--lce-element-hint);
+  border-color: var(--lce-accent);
+}
+
+#keybind-modal {
+  color: var(--lce-text);
+  background-color: color-mix(in srgb, var(--lce-element-hint) 70%, transparent);
+  border-color: var(--lce-accent);
+}
+
+/* #endregion Keybindings */

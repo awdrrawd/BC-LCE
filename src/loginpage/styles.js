@@ -197,5 +197,135 @@ export function injectLoginStyles() {
     border-radius:10px; color:#eaf3ff; font-size:17px; font-family:inherit; cursor:pointer;
 }
 .lce-sett-close:hover { background:rgba(74,158,255,0.4); }
+
+/* ══ LCE 直式登入 UI（verticalLogin）════════════════════════════════════════
+   直向時 canvas 會被壓成一條，貼著它的 2000×1000 座標系整個版面就爛了。
+   所以這裡把 stage 從 canvas 座標系整個拆下來，改成滿版 flex 直排。
+   尺寸對齊 MPL 直式版面（卡寬 84 / 表單 420 / 帳號列 560 / 標題 28px …）。
+
+   buildUI() 用 place() 寫的是 inline style（left/top/width/height/font-size），
+   優先級比 class 高，所以下面必須用 !important 才蓋得過。DOM 順序與視覺順序不同，
+   靠 order 重排：標題 → 狀態 → 帳號列 → 表單 → 按鈕 → 建立角色 → 底部。
+   ═════════════════════════════════════════════════════════════════════════ */
+#lce-stage[data-orient="portrait"] {
+    position:fixed; inset:0;
+    width:100%; height:100%;
+    transform:none !important;
+    display:flex; flex-direction:column; align-items:center;
+    justify-content:flex-start; gap:0;
+    padding:0; overflow:hidden;
+    pointer-events:auto;
+}
+/* 解除 place() 的絕對定位，交給 flex 排 */
+#lce-stage[data-orient="portrait"] .lce-el {
+    position:static !important;
+    left:auto !important; top:auto !important;
+    width:auto !important; height:auto !important;
+    font-size:inherit !important;
+    flex-shrink:0;
+}
+/* 背景圖與遮罩維持絕對定位、滿版 */
+#lce-stage[data-orient="portrait"] #lce-bg-img,
+#lce-stage[data-orient="portrait"] #lce-bg-overlay {
+    position:absolute !important; inset:0 !important;
+    width:100% !important; height:100% !important;
+    object-fit:cover; object-position:center;
+}
+#lce-stage[data-orient="portrait"] #lce-bg-overlay { background:rgba(0,0,0,0.38); z-index:0; }
+#lce-stage[data-orient="portrait"] > *:not(#lce-bg-img):not(#lce-bg-overlay) { position:relative; z-index:1; }
+
+/* ── 頂部：標題 + 歡迎 + 狀態 ──
+   標題與底部列各掛一個 margin-top:auto：flex 會把剩餘空間平均分給所有 auto 邊距，
+   於是內容整塊垂直置中、底部列貼底，不會像單一個 auto 那樣把留白全堆在底部列上方。
+   padding-top 保底，畫面很矮時仍留得住上緣間距。 */
+#lce-stage[data-orient="portrait"] .lce-title {
+    order:1; margin-top:auto; padding-top:20px;
+    font-size:28px !important; font-weight:700; letter-spacing:2px;
+    text-shadow:0 0 24px rgba(167,139,250,0.50);
+}
+#lce-stage[data-orient="portrait"] .lce-welcome {
+    order:2; margin-top:8px; font-size:17px !important; opacity:0.8;
+}
+#lce-stage[data-orient="portrait"] .lce-status {
+    order:3; margin-top:8px; min-height:26px; font-size:19px !important;
+}
+
+/* ── 帳號列：水平摩天輪（軸向由 setCarouselAxis('x') 切換，輪徑見 account-carousel.js） ──
+   卡片沿用橫式的設計（頭像 + 資訊橫排），但橫式的 330×120 是 canvas 單位、會被 stage
+   縮放；直向沒有縮放，直接用會整張佔滿手機寬度，所以這裡重新給一組 px 尺寸。 */
+#lce-stage[data-orient="portrait"] #lce-acct-area {
+    order:4;
+    width:100% !important; max-width:560px;
+    height:132px !important;
+    margin:12px 0 6px;
+    position:relative !important;
+}
+#lce-stage[data-orient="portrait"] .lce-acct-card {
+    width:160px !important; height:60px !important;
+    padding:6px 8px !important; gap:7px !important;
+    border-radius:11px !important;
+}
+#lce-stage[data-orient="portrait"] .lce-avatar {
+    width:44px !important; height:44px !important; border-radius:8px !important;
+}
+#lce-stage[data-orient="portrait"] .lce-acct-nm   { font-size:13px !important; }
+#lce-stage[data-orient="portrait"] .lce-acct-acct,
+#lce-stage[data-orient="portrait"] .lce-acct-id   { font-size:10px !important; }
+#lce-stage[data-orient="portrait"] .lce-acct-del  {
+    width:16px !important; height:16px !important; font-size:9px !important;
+    top:3px !important; right:3px !important;
+}
+#lce-stage[data-orient="portrait"] .lce-acct-empty { font-size:14px !important; }
+
+/* ── 表單 ── */
+#lce-stage[data-orient="portrait"] .lce-box { display:none !important; }  /* 橫式的裝飾外框，直向不需要 */
+/* 兩個欄位同 order，flex 會照 DOM 順序排（帳號 → 密碼），不必個別指定。
+   position 必須是 relative 而非上面的 static —— .lce-field-icon 是 absolute 定位，
+   要靠欄位當定位容器；設成 static 的話圖示會改去對齊 stage，直接飛到畫面角落。 */
+#lce-stage[data-orient="portrait"] .lce-field {
+    order:5; position:relative !important;
+    width:min(88vw,420px) !important; height:52px !important;
+    margin-top:10px;
+}
+#lce-stage[data-orient="portrait"] .lce-field-icon { left:14px; width:26px; height:26px; }
+#lce-stage[data-orient="portrait"] .lce-field-icon svg { width:26px; height:26px; }
+#lce-stage[data-orient="portrait"] .lce-input { font-size:18px !important; padding:0 14px 0 48px !important; }
+
+#lce-stage[data-orient="portrait"] #lce-btn-login {
+    order:7; width:min(88vw,420px) !important; margin-top:18px;
+    padding:12px !important; font-size:21px !important; font-weight:700;
+}
+
+/* 保存 / 重設：靠 #lce-row-save 併成一列 */
+#lce-stage[data-orient="portrait"] #lce-row-save {
+    order:8; display:flex; gap:10px; margin-top:10px;
+    width:min(88vw,420px);
+}
+#lce-stage[data-orient="portrait"] #lce-row-save .lce-btn {
+    flex:1; min-width:0; padding:11px !important; font-size:14px !important;
+}
+
+#lce-stage[data-orient="portrait"] #lce-btn-register {
+    order:9; width:min(70vw,340px) !important;
+    padding:11px !important; font-size:18px !important; margin-top:16px;
+}
+#lce-stage[data-orient="portrait"] .lce-note {
+    order:10; margin-top:14px; font-size:13px !important; opacity:0.55; padding:0 20px;
+}
+
+/* ── 底部：語言 + 設定。第二個 margin-top:auto（另一個在標題上），兩者平分剩餘空間 ── */
+#lce-stage[data-orient="portrait"] #lce-row-bottom {
+    order:11; display:flex; gap:10px; align-items:center; justify-content:center;
+    margin-top:auto; margin-bottom:20px; padding-top:16px;
+    width:min(92vw,560px);
+}
+#lce-stage[data-orient="portrait"] #lce-lang-select {
+    font-size:16px !important; padding:7px 20px 7px 10px !important;
+}
+#lce-stage[data-orient="portrait"] #lce-btn-settings {
+    padding:0 18px !important; height:38px !important; font-size:16px !important;
+}
+/* row 在橫式必須完全透明：不佔位、不攔點擊，子元素照舊絕對定位 */
+#lce-stage[data-orient="landscape"] .lce-row { position:static; pointer-events:none; }
     `);
 }

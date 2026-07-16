@@ -1,0 +1,32 @@
+/* #region InformationSheet */
+
+#AllowedInteractions-dropdown-label {
+  color: var(--lce-text);
+}
+
+/* #endregion InformationSheet */
+
+/* #region Title */
+
+#title-subscreen-h1,
+#input-nickname-group {
+  color: var(--lce-text);
+}
+
+#title-subscreen-titlebuttons .button.title-button[active] {
+  --button-color: var(--lce-accent);
+  --hover-color: var(--lce-accent-hover);
+  background-color: var(--lce-accent);
+}
+
+/* #endregion Title */
+
+/* #region AdminCustomization */
+
+#chatroom-admin-subscreen {
+  p, h1, label, span {
+    color: var(--lce-text);
+  }
+}
+
+/* #endregion AdminCustomization */

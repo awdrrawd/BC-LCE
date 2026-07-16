@@ -1,0 +1,4 @@
+::selection {
+  background-color: var(--lce-accent);
+  color: var(--lce-text);
+}

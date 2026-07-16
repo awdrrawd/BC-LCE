@@ -8,11 +8,10 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 import modApi from '../modsdk.js';
-import { S } from '../core/state.js';
-import { isLandscape } from '../core/util.js';
+import { S, saveSettings } from '../core/state.js';
 import { captureAndSaveProfile } from '../core/storage.js';
 import {
-    checkScene, lceApply, lceRemove, lceLayout, handleResize, destroyLoginUI,
+    checkScene, lceRemove, lceLayout, handleResize, destroyLoginUI,
 } from './login-ui.js';
 
 let unhooks = [];
@@ -27,6 +26,11 @@ export function installLoginPage() {
         const result = next(args);
         // 只有登入成功（回傳物件而非錯誤字串）才擷取快照並熱移除登入介面
         if (args[0] && typeof args[0] === 'object') {
+            // 記住這次登入的帳號，下次開啟登入頁時自動選定
+            try {
+                const name = args[0].AccountName || document.getElementById('lce-input-name')?.value || '';
+                if (name) { S.settings.lastAccount = name; saveSettings(); }
+            } catch { /* ignore */ }
             setTimeout(captureAndSaveProfile, 5000); // 等角色資料/外觀載入後擷取頭像
             setTimeout(teardownLoginPage, 800);      // 之後不再需要登入介面，釋放資源
         }
@@ -35,7 +39,8 @@ export function installLoginPage() {
 
     unhooks.push(modApi.hookFunction('LoginLoad', 0, (args, next) => {
         const r = next(args);
-        if (S.settings.enhance && isLandscape()) setTimeout(lceApply, 50);
+        // 交給 checkScene 判斷（含直向 + verticalLogin），避免這裡與它的條件各寫一份
+        setTimeout(checkScene, 50);
         return r;
     }));
 

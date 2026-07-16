@@ -1,0 +1,85 @@
+:root {
+  --lce-scrollbar-track: var(--lce-element);
+  --lce-scrollbar-thumb: var(--lce-accent);
+  --lce-scrollbar-thumb-hover: var(--lce-accent-hover);
+  --lce-scrollbar-corner: var(--lce-element);
+}
+
+* {
+  scrollbar-color: var(--lce-scrollbar-thumb) var(--lce-scrollbar-track);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background-color: var(--lce-scrollbar-track);
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--lce-scrollbar-thumb);
+  border-radius: 5px;
+  border: 2px solid var(--lce-scrollbar-track);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--lce-scrollbar-thumb-hover);
+}
+
+::-webkit-scrollbar-corner {
+  background-color: var(--lce-scrollbar-corner);
+}
+
+::-moz-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-moz-scrollbar-track {
+  background-color: var(--lce-scrollbar-track);
+}
+
+::-moz-scrollbar-thumb {
+  background-color: var(--lce-scrollbar-thumb);
+  border-radius: 5px;
+  border: 2px solid var(--lce-scrollbar-track);
+}
+
+::-moz-scrollbar-thumb:hover {
+  background-color: var(--lce-scrollbar-thumb-hover);
+}
+
+::-ms-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-ms-scrollbar-track {
+  background-color: var(--lce-scrollbar-track);
+}
+
+::-ms-scrollbar-thumb {
+  background-color: var(--lce-scrollbar-thumb);
+  border-radius: 5px;
+  border: 2px solid var(--lce-scrollbar-track);
+}
+
+::-ms-scrollbar-thumb:hover {
+  background-color: var(--lce-scrollbar-thumb-hover);
+}
+
+.scroll-box {
+	scrollbar-color: var(--lce-scrollbar-thumb) var(--lce-scrollbar-track);
+}
+
+@media (hover: hover) {
+	.scroll-box {
+		scrollbar-color: var(--lce-scrollbar-thumb) var(--lce-scrollbar-track);
+	}
+
+	.scroll-box:hover {
+		scrollbar-color: var(--lce-scrollbar-thumb-hover) var(--lce-scrollbar-track);
+	}
+}

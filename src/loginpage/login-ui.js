@@ -2,14 +2,15 @@
 // 登入 UI 主流程：建構、事件、狀態同步、定位、啟用/停用、場景偵測
 // ════════════════════════════════════════════════════════════════════════════
 
-import { CANVAS_W, CANVAS_H, ICON_PERSON, ICON_LOCK } from '../core/constants.js';
+import { CANVAS_W, CANVAS_H, ICON_PERSON, ICON_LOCK, LOGIN_REQUEST_EVENT } from '../core/constants.js';
 import { S, saveSettings, loadSettings } from '../core/state.js';
 import { T, i18nText, i18nPlaceholder, refreshI18n } from '../core/i18n.js';
-import { mk, place, getCanvas, isLandscape } from '../core/util.js';
+import { mk, place, getCanvas, isLandscape, isPortrait } from '../core/util.js';
+import { getFeature, setFeature } from '../core/feature-settings.js';
 import { addOrUpdateAccount } from '../core/storage.js';
 import { hideBC, showBC } from './bc.js';
 import { applyBackground } from './background.js';
-import { buildCarousel, destroyCarousel } from './account-carousel.js';
+import { buildCarousel, destroyCarousel, setCarouselAxis } from './account-carousel.js';
 import { buildSettingsOverlay, toggleSettings, closeSettings, applyShowSettings } from './settings-ui.js';
 
 // ── 建構 ──────────────────────────────────────────────────────────────────
@@ -63,11 +64,16 @@ export function buildUI() {
     place(loginBtn, 210, 540, 400, 50, 26); stage.appendChild(loginBtn);
 
     // ── 保存帳號 / 重設密碼 ──
+    // 包一層 row：直式版面靠它把兩顆併排（見 styles.js）。
+    // 橫式不受影響 —— 子元素是 position:absolute，會對齊最近的「有定位祖先」（stage），
+    // 而這個 row 是 position:static，等於不存在。
+    const saveRow = mk('div', '', { id: 'lce-row-save' }); saveRow.className = 'lce-row';
     const saveBtn = mk('button', '', { id: 'lce-btn-save' }); saveBtn.className = 'lce-btn'; i18nText(saveBtn, 'btn_save_acct');
-    place(saveBtn, 225, 610, 180, 50, 22); stage.appendChild(saveBtn);
+    place(saveBtn, 225, 610, 180, 50, 22); saveRow.appendChild(saveBtn);
 
     const resetBtn = mk('button', '', { id: 'lce-btn-reset' }); resetBtn.className = 'lce-btn'; i18nText(resetBtn, 'btn_reset');
-    place(resetBtn, 420, 610, 180, 50, 22); stage.appendChild(resetBtn);
+    place(resetBtn, 420, 610, 180, 50, 22); saveRow.appendChild(resetBtn);
+    stage.appendChild(saveRow);
 
     // ── 創建人物 ──
     const regBtn = mk('button', '', { id: 'lce-btn-register' }); regBtn.className = 'lce-btn'; i18nText(regBtn, 'btn_register');
@@ -77,12 +83,14 @@ export function buildUI() {
     const note = mk('div'); note.className = 'lce-text lce-note'; i18nText(note, 'privacy_note');
     place(note, 184, 750, 460, 30, 18); stage.appendChild(note);
 
-    // ── 語言 / 設定 ──
+    // ── 語言 / 設定（同樣包 row，供直式併排） ──
+    const bottomRow = mk('div', '', { id: 'lce-row-bottom' }); bottomRow.className = 'lce-row';
     const langSel = mk('select', '', { id: 'lce-lang-select' }); langSel.className = 'lce-select';
-    place(langSel, 210, 850, 210, 50, 22); stage.appendChild(langSel);
+    place(langSel, 210, 850, 210, 50, 22); bottomRow.appendChild(langSel);
 
     const settBtn = mk('button', '', { id: 'lce-btn-settings' }); settBtn.className = 'lce-btn'; i18nText(settBtn, 'btn_settings');
-    place(settBtn, 455, 850, 160, 50, 22); stage.appendChild(settBtn);
+    place(settBtn, 455, 850, 160, 50, 22); bottomRow.appendChild(settBtn);
+    stage.appendChild(bottomRow);
 
     // ── 帳號區（摩天輪；無外框，H 加高、垂直置中於畫面） ──
     const acctArea = mk('div', '', { id: 'lce-acct-area' });
@@ -110,6 +118,8 @@ function bindEvents() {
         if (e.key === 'Enter') doLogin();
     });
     document.getElementById('lce-btn-login').addEventListener('click', doLogin);
+    // 帳號卡連點兩下 → 直接登入（以事件傳遞，避免與 account-carousel 循環相依）
+    window.addEventListener(LOGIN_REQUEST_EVENT, doLogin);
 
     document.getElementById('lce-btn-save').addEventListener('click', async () => {
         const name = document.getElementById('lce-input-name')?.value.trim();
@@ -163,6 +173,11 @@ function bindEvents() {
     document.getElementById('lce-set-enhance').addEventListener('change', function () {
         S.settings.enhance = this.checked; saveSettings();
         if (!S.settings.enhance) { closeSettings(); lceRemove(); }
+    });
+    // 設定：直式登入介面（全域功能設定，與遊戲內設定頁同一份值）
+    document.getElementById('lce-set-vertical').addEventListener('change', function () {
+        setFeature('verticalLogin', this.checked);
+        refreshOrientation();
     });
     // 設定：頭像 / 帳號 / 名稱 顯示
     document.getElementById('lce-set-avatar').addEventListener('change', function () {
@@ -278,9 +293,34 @@ export function syncStatus() {
 // ── stage 定位（每幀由 DrawProcess hook 呼叫，數值不變時不重寫避免 reflow） ──
 // 使用與 BC ElementSetPosition 相同的 canvas→螢幕換算，確保與角色對齊。
 
+/**
+ * 版面配置。兩種模式共用同一份 DOM，只差定位方式：
+ *   橫向：stage 貼著 canvas，用 transform 把 2000×1000 的邏輯座標縮放到 canvas 大小。
+ *   直向：canvas 在直向會被壓成一條，貼著它整個版面就爛了。改成脫離 canvas 座標系、
+ *         滿版 flex 直排（樣式見 styles.js 的 [data-orient="portrait"] 區塊），
+ *         這裡只負責清掉 transform 並標記方向。
+ */
 export function lceLayout() {
+    if (!S.stageEl) return;
+    const portrait = isPortrait() && !!getFeature('verticalLogin');
+
+    if (portrait) {
+        if (S.stageEl.dataset.orient !== 'portrait') {
+            S.stageEl.dataset.orient = 'portrait';
+            S.stageEl.style.transform = 'none';
+            setCarouselAxis('x');
+        }
+        S.lastLayout = null;   // 之後轉回橫向時要強制重算
+        return;
+    }
+
     const cv = getCanvas();
-    if (!cv || !S.stageEl) return;
+    if (!cv) return;
+    if (S.stageEl.dataset.orient !== 'landscape') {
+        S.stageEl.dataset.orient = 'landscape';
+        S.lastLayout = null;
+        setCarouselAxis('y');
+    }
     const w = cv.clientWidth, h = cv.clientHeight, l = cv.offsetLeft, t = cv.offsetTop;
     const last = S.lastLayout;
     if (last && last.w === w && last.h === h && last.l === l && last.t === t) return;
@@ -321,6 +361,7 @@ export function lceRemove() {
  * 呼叫前應先 lceRemove()。
  */
 export function destroyLoginUI() {
+    window.removeEventListener(LOGIN_REQUEST_EVENT, doLogin);
     lceRemove();
     destroyCarousel();
     if (S.fusamObserver) { S.fusamObserver.disconnect(); S.fusamObserver = null; }
@@ -333,10 +374,19 @@ export function destroyLoginUI() {
 
 // ── 場景偵測（每幀由 DrawProcess hook 呼叫） ──────────────────────────────
 
+/**
+ * 登入頁是否該啟用。
+ * 橫向一律套用；直向只在「直式登入介面」開啟時套用（關閉則退回 BC 原生登入頁）。
+ * verticalLogin 是全域設定（見 settings-schema 的 GLOBAL_CATEGORIES），登入前讀得到。
+ */
+function shouldEnhance() {
+    if (!S.settings.enhance) return false;
+    return isLandscape() || !!getFeature('verticalLogin');
+}
+
 export function checkScene() {
     const scr = typeof CurrentScreen !== 'undefined' ? CurrentScreen : '';
-    const shouldRun = S.settings.enhance && scr === 'Login' && isLandscape();
-    if (shouldRun) { if (!S.active) lceApply(); }
+    if (scr === 'Login' && shouldEnhance()) { if (!S.active) lceApply(); }
     else if (S.active) lceRemove();
 }
 
@@ -345,7 +395,18 @@ export function checkScene() {
 export function handleResize() {
     const scr = typeof CurrentScreen !== 'undefined' ? CurrentScreen : '';
     if (scr !== 'Login') return;
-    if (!S.settings.enhance || !isLandscape()) { if (S.active) lceRemove(); return; }
+    if (!shouldEnhance()) { if (S.active) lceRemove(); return; }
     if (!S.active) lceApply();
     else { S.lastLayout = null; lceLayout(); }
+}
+
+/** 設定浮層切換「直式登入介面」後即時重套版面。 */
+export function refreshOrientation() {
+    const scr = typeof CurrentScreen !== 'undefined' ? CurrentScreen : '';
+    if (scr !== 'Login') return;
+    if (!shouldEnhance()) { if (S.active) lceRemove(); return; }
+    if (!S.active) { lceApply(); return; }
+    S.lastLayout = null;
+    if (S.stageEl) S.stageEl.dataset.orient = '';   // 強制 lceLayout 重跑切換分支
+    lceLayout();
 }

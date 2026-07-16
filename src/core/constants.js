@@ -22,8 +22,12 @@ export const IDB_NAME      = 'mpl-profiles';   // IndexedDB 資料庫
 export const IDB_STORE     = 'profiles';       // 角色快照 ObjectStore
 export const IDB_KEY_STORE = 'cryptokeys';     // AES-GCM 金鑰 ObjectStore
 
-// LCE 專屬設定（不與 MPL 共用）
+// LCE 專屬設定（不與 MPL 共用）—— 登入頁的全域設定（登入時尚無帳號，故不分帳號）
 export const SETTINGS_KEY = 'lce_settings';
+
+// 功能設定（每帳號 + 伺服器同步）——見 core/feature-settings.js
+export const LCE_EXT_KEY = 'LCE';             // Player.ExtensionSettings 的鍵
+export const FEATURE_SETTINGS_VERSION = 1;    // 設定結構版本，日後遷移用
 
 /**
  * z-index 分層。stage 疊在 canvas 之上、fusam 之下；設定浮層蓋過 stage；fusam 蓋過一切。
@@ -61,7 +65,16 @@ export const DEFAULT_SETTINGS = {
     showName:     true,      // 2c. 顯示名稱（預設啟用）
     bgMode:       'random',  // 3. 背景：'random' | 'select'（預設隨機）
     bgName:       'BG-01',   // bgMode='select' 時使用的背景名稱（Images/ 內的檔名，去副檔名）
+    lastAccount:  '',        // 上次成功登入的帳號名稱（下次開啟登入頁時自動選定）
 };
+
+// 帳號卡連點兩下要求登入。account-carousel 不能直接 import login-ui 的 doLogin
+// （login-ui 已經 import account-carousel，會形成循環相依），故以事件傳遞。
+export const LOGIN_REQUEST_EVENT = 'lce-login-request';
+
+// 設定變更事件。settings-schema 不能 import 功能模組（會循環相依），
+// 需要即時反應設定變更的功能改為監聽此事件。detail = { key, value }
+export const SETTING_CHANGED_EVENT = 'lce-setting-changed';
 
 // 內嵌 SVG 圖示（點2）：人形＝帳號、鎖＝密碼
 export const ICON_PERSON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4.2"/><path d="M4 21c0-4.2 3.8-6.4 8-6.4s8 2.2 8 6.4"/></svg>';

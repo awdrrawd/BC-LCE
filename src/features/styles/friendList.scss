@@ -1,0 +1,52 @@
+#friend-list-subscreen {
+  --border-color: var(--lce-accent);
+  --image-color: var(--lce-accent);
+  --text-color: var(--lce-text);
+  --button-color: var(--lce-element);
+  --inactive-button-color: var(--lce-element-disabled);
+}
+
+#friend-list-beep-dialog {
+  background-color: color-mix(in srgb, var(--lce-element) 80%, #ffffffaa 40%);
+  color: var(--lce-text);
+}
+
+#friend-list-subscreen,
+#friend-list-beep-dialog {
+  textarea {
+    background: var(--lce-element);
+    color: var(--lce-text);
+    border: min(0.2vh, 0.1vw) solid var(--lce-accent);
+  }
+
+  input {
+    background: var(--lce-element);
+    color: var(--lce-text);
+    border: min(0.2vh, 0.1vw) solid var(--lce-accent);
+  }
+
+  textarea:focus,
+  input:focus {
+    outline: var(--lce-accent) solid 1px;
+  }
+
+  .button {
+    --button-color: var(--lce-element);
+    --disabled-color: var(--lce-element-disabled);
+    --hover-color: var(--lce-element-hover);
+  }
+
+  .button-styling {
+    border-color: var(--lce-accent);
+  }
+
+  .button-styling:hover {
+    border-color: var(--lce-accent-hover);
+  }
+
+  .button-tooltip {
+    background-color: var(--lce-element-hint);
+    color: var(--lce-text);
+    border-color: var(--lce-accent);
+  }
+}
