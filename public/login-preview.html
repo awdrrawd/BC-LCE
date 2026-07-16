@@ -1,0 +1,48 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>LCE Login Preview (dev only)</title>
+<style>
+  html,body{margin:0;padding:0;background:#222;overflow:hidden}
+  #MainCanvas{position:absolute;left:0;top:0;width:1280px;height:640px;background:#333}
+</style>
+</head>
+<body>
+<canvas id="MainCanvas" width="2000" height="1000"></canvas>
+<script>
+  // ── 最小化 BC 環境模擬（僅供本地目視檢查登入版面用） ──
+  localStorage.setItem('mpl_accounts', JSON.stringify([
+    { accountName:'ALICE',   password:'x', addedAt:1 },
+    { accountName:'BOBLONG', password:'x', addedAt:2 },
+  ]));
+  window.Player = { AccountName:'', Name:'', Nickname:'', MemberNumber:0, Canvas:{ width:0, height:0 } };
+  window.CurrentScreen = 'Login';
+  window.CurrentModule = 'Character';
+  window.ServerIsConnected = true;
+  window.LoginSubmitted = false;
+  window.LoginErrorMessage = '';
+  window.LoginQueuePosition = -1;
+  window.TranslationLanguage = 'TW';
+  window.TranslationDictionary = [
+    { LanguageCode:'TW', LanguageName:'中文', Icon:'🇹🇼' },
+    { LanguageCode:'EN', LanguageName:'English', Icon:'🇬🇧' },
+  ];
+  window.TextGet = k => k;
+  window.LoginResponse = function(){};
+  window.LoginLoad = function(){};
+  window.LoginUnload = function(){};
+  window.DrawProcess = function(){};
+  window.LoginDoLogin = function(){};
+  window.CommonSetScreen = function(){};
+  window.DisclaimerOpen = function(){};
+</script>
+<script type="module" src="./assets/main.js"></script>
+<script type="module">
+  // 驅動：反覆呼叫（已被 hook 的）DrawProcess → checkScene → lceApply + lceLayout
+  function pump(){ try { window.DrawProcess(0); } catch(e){ console.error(e); } }
+  const t = setInterval(pump, 200);
+  setTimeout(()=>clearInterval(t), 6000);
+</script>
+</body>
+</html>
