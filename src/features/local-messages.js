@@ -75,7 +75,12 @@ function injectStyle() {
         .ChatMessage .lce-help-row,
         .ChatMessage .lce-setlist-row,
         .ChatMessage .lce-welcome-row { margin: 2px 0; }
-        .ChatMessage .lce-confirm-bar { margin-top: 4px; }
+        .ChatMessage .lce-confirm-bar {
+            margin-top: 4px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 18px;
+        }
     `;
     document.head.appendChild(s);
 }

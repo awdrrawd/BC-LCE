@@ -369,10 +369,19 @@ function isBcNativeFps(args) {
     return args[1] === BC_FPS_CALL.x && args[2] === BC_FPS_CALL.y && args[3] === BC_FPS_CALL.w;
 }
 
-const FPS_XY = {
-    tl: [60, 25],   ml: [60, 500],   bl: [60, 975],
-    tc: [1000, 25],                  bc: [1000, 975],
-    tr: [1940, 25], mr: [1940, 500], br: [1940, 975],
+// 貼齊角落：靠 textAlign / textBaseline 對齊到邊，而不是硬猜座標 —— 這樣不管數字幾位數
+// （"9" 或 "144"）都不會超出畫面或離角落忽遠忽近（呼應「留意文字大小」）。只留一點邊距免得
+// 字貼死邊緣。canvas 邏輯座標是 2000×1000。
+const FPS_MARGIN = 6;
+const FPS_POS = {
+    tl: { x: FPS_MARGIN,        y: FPS_MARGIN,        align: 'left',   base: 'top' },
+    ml: { x: FPS_MARGIN,        y: 500,               align: 'left',   base: 'middle' },
+    bl: { x: FPS_MARGIN,        y: 1000 - FPS_MARGIN, align: 'left',   base: 'bottom' },
+    tc: { x: 1000,              y: FPS_MARGIN,        align: 'center', base: 'top' },
+    bc: { x: 1000,              y: 1000 - FPS_MARGIN, align: 'center', base: 'bottom' },
+    tr: { x: 2000 - FPS_MARGIN, y: FPS_MARGIN,        align: 'right',  base: 'top' },
+    mr: { x: 2000 - FPS_MARGIN, y: 500,               align: 'right',  base: 'middle' },
+    br: { x: 2000 - FPS_MARGIN, y: 1000 - FPS_MARGIN, align: 'right',  base: 'bottom' },
 };
 
 /**
@@ -385,23 +394,28 @@ let fpsLastTs = 0;
 let fpsSmooth = 0;
 
 function drawFps() {
-    const pos = FPS_XY[getFeature('showFps')] ?? FPS_XY.tl;
+    const pos = FPS_POS[getFeature('showFps')] ?? FPS_POS.tl;
     const ctx = window.MainCanvas?.getContext('2d');
     if (!ctx) return;
 
     const bakAlign = ctx.textAlign;
+    const bakBase = ctx.textBaseline;
     const bakFont = ctx.font;
-    ctx.textAlign = 'center';
+    // BC 的 DrawText 用的是當下 MainCanvas 的 textAlign / textBaseline（它自己不設），
+    // 所以在這裡指定對齊方式，字就會精準貼到選定的角落／邊。
+    ctx.textAlign = pos.align;
+    ctx.textBaseline = pos.base;
     try {
         // 只畫數字，不加 "FPS"。
         // 用 DrawText 而非 DrawTextFit：後者會自己依寬度把字級從 36 一路縮到塞得下為止，
         // 字級等於被寬度綁架（"144" 會比 "60" 小一號）。這裡要的是固定字級，
         // 所以自己設好字型再畫 —— DrawText 用的就是當下的 MainCanvas.font。
         if (typeof CommonGetFont === 'function') ctx.font = CommonGetFont(FPS_FONT_SIZE);
-        DrawText(String(Math.round(fpsSmooth)), pos[0], pos[1], 'White', 'Black');
+        DrawText(String(Math.round(fpsSmooth)), pos.x, pos.y, 'White', 'Black');
     } finally {
         ctx.font = bakFont;
         ctx.textAlign = bakAlign;
+        ctx.textBaseline = bakBase;
     }
 }
 

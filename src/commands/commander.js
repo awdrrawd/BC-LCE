@@ -10,7 +10,6 @@ import { MOD_VER, LCE_EXT_KEY } from '../core/constants.js';
 import { getFeature } from '../core/feature-settings.js';
 import { isExpressionEngineStarted } from '../features/expressions.js';
 import { LOCAL_MARKER } from '../features/local-messages.js';
-import { allowExtensionSettingsWrite } from '../features/misc.js';
 
 const LOG = '🐈‍⬛ [LCE]';
 
@@ -20,7 +19,7 @@ function parseJSON(s) { try { return s ? JSON.parse(s) : null; } catch { return 
  * 在聊天室輸出一則本地訊息（不送伺服器）。移植自 WCE fbcChatNotify。
  * lce-local 是給 features/local-messages.js 認的標記（淡紫底 + 黑字）。
  */
-export function lceChatNotify(node) {
+export function lceChatNotify(node, opts) {
     const div = document.createElement('div');
     div.setAttribute('class', `ChatMessage lce-notification ${LOCAL_MARKER}`);
     div.setAttribute('data-time', typeof ChatRoomCurrentTime === 'function' ? ChatRoomCurrentTime() : '');
@@ -29,6 +28,11 @@ export function lceChatNotify(node) {
     else if (Array.isArray(node)) div.append(...node);
     else div.appendChild(node);
     if (typeof ChatRoomAppendChat === 'function') ChatRoomAppendChat(div);
+    // 過一段時間自動移除（例如刪除確認框：只保留 10 秒，避免留在聊天室裡卡著）。
+    if (opts?.autoRemoveMs > 0) {
+        setTimeout(() => { try { div.remove(); } catch { /* 已被清掉就算了 */ } }, opts.autoRemoveMs);
+    }
+    return div;
 }
 
 /** 依名稱/會員編號找出房間內角色。移植自 WCE findDrawnCharacters。 */
@@ -119,10 +123,11 @@ function openSettings() {
 
 const extSettings = () => (typeof Player !== 'undefined' && Player?.ExtensionSettings) || null;
 
-/** 依大小排序的 [鍵名, 位元組]。 */
+/** 依大小排序的 [鍵名, 位元組]。已被清成 null/空字串的鍵（我們刪除後留下的 null 佔位）不列出。 */
 function extRows(ext) {
     return Object.entries(ext)
-        .map(([k, v]) => [k, typeof v === 'string' ? v.length : JSON.stringify(v ?? '').length])
+        .filter(([, v]) => v != null && v !== '')
+        .map(([k, v]) => [k, typeof v === 'string' ? v.length : JSON.stringify(v).length])
         .sort((a, b) => b[1] - a[1]);
 }
 
@@ -186,7 +191,8 @@ function confirmDelete(key) {
     bar.appendChild(chatButton('取消', () => done('（已取消）')));
     wrap.appendChild(bar);
 
-    lceChatNotify(wrap);
+    // 確認框只保留 10 秒（不論有沒有按），逾時自動移除、不留在聊天室。
+    lceChatNotify(wrap, { autoRemoveMs: 10000 });
 }
 
 function doDelete(key, size) {
@@ -194,23 +200,20 @@ function doDelete(key, size) {
         if (Player.ExtensionSettings[key] === undefined) {
             lceChatNotify(`"${key}" 已經不存在了。`); return;
         }
-        // 要讓「鍵本身」從伺服器真正消失，得整包重送 ExtensionSettings：BC 伺服器對 AccountUpdate
-        // 的 ExtensionSettings 是整個欄位 $set(取代)，缺席的鍵才會被移除。（dot-notation 單鍵同步
-        // 只能把值設成 null、鍵仍留著，刷新後又列出來 —— 那不是真的刪掉。）
-        //
-        // 走 ServerAccountUpdate 佇列（BC 內部同一條），而不是自己裸送 ServerSend：否則 BC 佇列裡
-        // 若還排著含舊 ExtensionSettings 的資料，之後 flush 會把剛刪的鍵又寫回去（先前刪不掉的元兇）。
-        // Force=true 立即同步，讓整個送出落在 allowExtensionSettingsWrite 的授權窗口內、通過我們
-        // 自己的整包守衛（features/misc.js）。本地 Player.ExtensionSettings 在登入時已載入完整，
-        // 用它覆蓋不會抹掉別的插件的鍵。
+        // 用 dot-notation 單鍵同步把值清成 null（ServerPlayerExtensionSettingsSync 送
+        // { "ExtensionSettings.<key>": null }）—— 這是 BC / BCX 自己在用、既小又可靠的寫法：
+        //   • 訊息極小：不會觸發 BCX 的「巨大送出訊息」警告（整包重送動輒數百 KB，還可能被伺服器
+        //     退回而刪不掉，這正是先前整包法「刪了沒生效」+「BCX 報錯」的原因）。
+        //   • 真正持久：跟我們存自己 LCE 設定同一條路徑（所以「有效」），伺服器 $set 該子鍵、
+        //     刷新後仍是 null。
+        // BC 的 API 沒辦法把「鍵本身」$unset 掉（只有整包取代做得到，但那訊息太大又不穩），
+        // 只能退而求其次留一個 null 佔位（≈0 bytes）。之後本地把鍵刪掉、清單也濾掉 null（見 extRows），
+        // 使用者就不會再看到它，也不佔容量。
+        Player.ExtensionSettings[key] = null;
+        if (typeof ServerPlayerExtensionSettingsSync === 'function') {
+            ServerPlayerExtensionSettingsSync(key);
+        }
         delete Player.ExtensionSettings[key];
-        allowExtensionSettingsWrite(() => {
-            if (typeof ServerAccountUpdate?.QueueData === 'function') {
-                ServerAccountUpdate.QueueData({ ExtensionSettings: Player.ExtensionSettings }, true);
-            } else if (typeof ServerSend === 'function') {
-                ServerSend('AccountUpdate', { ExtensionSettings: Player.ExtensionSettings });
-            }
-        });
         const left = extRows(Player.ExtensionSettings).reduce((s, [, n]) => s + n, 0);
         lceChatNotify(`已移除 "${key}"（釋出約 ${size}KB，剩餘合計 ${(left / 1024).toFixed(1)}KB）。`
             + ' 該插件下次載入時會重建自己的預設值。可用 /lcesetlist 確認。');
