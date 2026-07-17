@@ -7,7 +7,7 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 const pkg = JSON.parse(readFileSync(root + 'package.json', 'utf-8'));
 const version = pkg.version;
 
-const loaders = ['loader.user.js', 'loader.local.user.js'];
+const loaders = ['public/loader.user.js', 'public/loader.local.user.js'];
 for (const file of loaders) {
   const path = root + file;
   let text;
