@@ -48,6 +48,17 @@ function askOrigin(origin, type) {
 
 let installed = false;
 
+// 守衛的授權窗口：LCE 自己「刻意」整包重送 ExtensionSettings（例如 /lcesetlist 刪除某個鍵，
+// 必須整包 $set 覆蓋才能讓鍵真正從伺服器消失）時，用這個包起來讓那一次送出通過守衛。
+// 其他插件誤送整包仍照擋 —— 差別就在有沒有走這個授權窗口。
+let allowExtWrite = false;
+export function allowExtensionSettingsWrite(fn) {
+    const prev = allowExtWrite;
+    allowExtWrite = true;
+    try { return fn(); }
+    finally { allowExtWrite = prev; }
+}
+
 export function installMisc() {
     if (installed) return;
     installed = true;
@@ -65,7 +76,7 @@ export function installMisc() {
     hook('ServerSend', 100, (args, next) => {
         try {
             const [msgType, data] = args;
-            if (msgType === 'AccountUpdate' && data && typeof data === 'object'
+            if (!allowExtWrite && msgType === 'AccountUpdate' && data && typeof data === 'object'
                 && Object.prototype.hasOwnProperty.call(data, 'ExtensionSettings')) {
                 const keys = Object.keys(data.ExtensionSettings ?? {});
                 console.warn(LOG, '已攔截「整包 ExtensionSettings」的 AccountUpdate ——'

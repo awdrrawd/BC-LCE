@@ -10,6 +10,7 @@ import { MOD_VER, LCE_EXT_KEY } from '../core/constants.js';
 import { getFeature } from '../core/feature-settings.js';
 import { isExpressionEngineStarted } from '../features/expressions.js';
 import { LOCAL_MARKER } from '../features/local-messages.js';
+import { allowExtensionSettingsWrite } from '../features/misc.js';
 
 const LOG = '🐈‍⬛ [LCE]';
 
@@ -193,22 +194,23 @@ function doDelete(key, size) {
         if (Player.ExtensionSettings[key] === undefined) {
             lceChatNotify(`"${key}" 已經不存在了。`); return;
         }
-        // 伺服器對 AccountUpdate 的 ExtensionSettings 是「合併」而非「取代」：整包重送時，
-        // 本地已刪掉、封包裡缺席的鍵並不會被移除，刷新後又原封不動回來
-        // （這就是「刪了沒上傳」的真正原因）。
+        // 要讓「鍵本身」從伺服器真正消失，得整包重送 ExtensionSettings：BC 伺服器對 AccountUpdate
+        // 的 ExtensionSettings 是整個欄位 $set(取代)，缺席的鍵才會被移除。（dot-notation 單鍵同步
+        // 只能把值設成 null、鍵仍留著，刷新後又列出來 —— 那不是真的刪掉。）
         //
-        // BCX 證實可行的作法（storage.ts storageClearData）：把該鍵設成 null，再用
-        // dot-notation 單鍵同步 —— ServerPlayerExtensionSettingsSync 會送
-        // { "ExtensionSettings.<key>": null }，伺服器以 $set 寫成 null，體積趨近於零、
-        // 且是真正的寫入而會持久保存。之後本地再把鍵刪掉，清單就不會再列出它。
-        // （ServerPlayerExtensionSettingsSync 遇到 undefined 會丟例外，所以務必先設 null 再刪。）
-        Player.ExtensionSettings[key] = null;
-        if (typeof ServerPlayerExtensionSettingsSync === 'function') {
-            ServerPlayerExtensionSettingsSync(key);
-        } else if (typeof ServerSend === 'function') {
-            ServerSend('AccountUpdate', { ExtensionSettings: Player.ExtensionSettings });
-        }
+        // 走 ServerAccountUpdate 佇列（BC 內部同一條），而不是自己裸送 ServerSend：否則 BC 佇列裡
+        // 若還排著含舊 ExtensionSettings 的資料，之後 flush 會把剛刪的鍵又寫回去（先前刪不掉的元兇）。
+        // Force=true 立即同步，讓整個送出落在 allowExtensionSettingsWrite 的授權窗口內、通過我們
+        // 自己的整包守衛（features/misc.js）。本地 Player.ExtensionSettings 在登入時已載入完整，
+        // 用它覆蓋不會抹掉別的插件的鍵。
         delete Player.ExtensionSettings[key];
+        allowExtensionSettingsWrite(() => {
+            if (typeof ServerAccountUpdate?.QueueData === 'function') {
+                ServerAccountUpdate.QueueData({ ExtensionSettings: Player.ExtensionSettings }, true);
+            } else if (typeof ServerSend === 'function') {
+                ServerSend('AccountUpdate', { ExtensionSettings: Player.ExtensionSettings });
+            }
+        });
         const left = extRows(Player.ExtensionSettings).reduce((s, [, n]) => s + n, 0);
         lceChatNotify(`已移除 "${key}"（釋出約 ${size}KB，剩餘合計 ${(left / 1024).toFixed(1)}KB）。`
             + ' 該插件下次載入時會重建自己的預設值。可用 /lcesetlist 確認。');

@@ -19,12 +19,48 @@
 import modApi from '../modsdk.js';
 import { getFeature } from '../core/feature-settings.js';
 import { SETTING_CHANGED_EVENT } from '../core/constants.js';
+import { injectStyle, removeStyle } from '../core/util.js';
 import { T } from '../core/i18n.js';
 
 const LOG = '🐈‍⬛ [LCE]';
 const CAP = 'layeringHide';            // 能力名（沿用 WCE 的字串，才能與 WCE 使用者互通）
 const OVERRIDE_KEY = 'WCEOverrides';   // ExtensionSettings 鍵（與 WCE 相同，勿改）
 const HIDE_PROP = 'wceOverrideHide';   // item.Property 欄位（與 WCE 相同，勿改）
+const STYLE_ID = 'lce-layering-hide';
+
+// BC 原生的 #layering 是 CSS grid，grid-template 裡沒有「隱藏設定」用的兩列(header/grid)。
+// 只把 header + 勾選表單塞進 root、卻不補這兩列的話，它們沒有 grid-area 可放 → 位置錯亂
+// （這就是「按鈕座標怪怪的」的成因）。這段 CSS 移植自 WCE wceStyles，補上 layer-hide-header /
+// layer-hide-grid 兩列並指派 grid-area，讓設定框落在圖層清單下方。
+// 只在功能開啟時注入、關閉時移除，避免影響沒用這功能的人的分層選單版面。
+const LAYERING_CSS = `
+#layering {
+    grid-template:
+        "asset-header button-grid" min-content
+        "asset-grid asset-grid" min-content
+        "layer-header layer-header" min-content
+        "layer-grid layer-grid" auto
+        "layer-hide-header layer-hide-header" min-content
+        "layer-hide-grid layer-hide-grid" auto
+        / auto min-content;
+}
+#layering-button-grid { top: 0; position: sticky; }
+#layering-hide-header { grid-area: layer-hide-header; }
+#layering-wce-hide-div {
+    box-sizing: border-box;
+    grid-area: layer-hide-grid;
+    width: 100%;
+    height: calc(100% - min(2vh, 1vw));
+    padding-left: min(2vh, 1vw);
+    padding-right: min(2vh, 1vw);
+    align-self: self-start;
+}`;
+
+/** 依設定注入/移除分層選單的版面 CSS。 */
+function applyLayeringStyle() {
+    if (getFeature(CAP)) injectStyle(STYLE_ID, LAYERING_CSS);
+    else removeStyle(STYLE_ID);
+}
 
 let installed = false;
 
@@ -79,9 +115,11 @@ export function installLayeringHide() {
     installed = true;
 
     refreshLayeringCapability();
+    applyLayeringStyle();
     window.addEventListener(SETTING_CHANGED_EVENT, (e) => {
         if (e.detail?.key !== CAP) return;
         refreshLayeringCapability();
+        applyLayeringStyle();
         // 開/關後重新對房間報名，讓別人的 BCECapabilities 跟著更新（進而顯示/隱藏效果）。
         try {
             if (typeof ServerPlayerIsInChatRoom === 'function' && ServerPlayerIsInChatRoom()
