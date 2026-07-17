@@ -52,27 +52,31 @@ export function installMisc() {
     if (installed) return;
     installed = true;
 
-    // ── 防止「整包 ExtensionSettings」被送出（移植 WCE commonPatches 的 ServerSend 守衛）──
+    // ── 防止「整包 ExtensionSettings」被送出（對應 WCE commonPatches 的 ServerSend 守衛）──
     // BC 只用 dot-notation 同步單一鍵（ServerPlayerExtensionSettingsSync 送 "ExtensionSettings.<key>"）；
     // 沒有任何正常路徑會在 AccountUpdate 夾帶「整包 ExtensionSettings」物件。一旦有插件這麼做：
     //   1. 伺服器會用整包覆蓋雲端 —— 別的插件當下沒載到記憶體的鍵會被連帶抹掉
     //      （WCE 註解稱之為 "settings erasure by client"）。
-    //   2. 那則 AccountUpdate 會夾帶全部 ExtensionSettings（動輒數百 KB）—— 就是你看到的
-    //      「容量異常 / 巨大送出訊息」。
-    // WCE 裝著時會把這種寫入擋掉，所以問題被藏住；拿掉 WCE 就現形。LCE 作為替代品把守衛補回來。
-    // 比 WCE 溫和：只擋下該次送出並記警告，不像 WCE 直接 throw（避免炸掉呼叫端的流程）。
-    // BC 核心從不批次整包 ExtensionSettings（只走 dot-notation），故這道守衛不會誤傷 BC 本體。
+    //   2. 那則 AccountUpdate 會夾帶全部 ExtensionSettings（動輒數百 KB）—— 就是「巨大送出訊息」報告，
+    //      有斷線風險。裝著 WCE 時它會 throw 擋掉，所以問題被藏住；拿掉 WCE 就現形。
+    //
+    // 比 WCE 更精準：不整封擋掉（那會連同封包裡合法的 OnlineSharedSettings / ConfiscatedItems 一起丟），
+    // 只「剝掉 ExtensionSettings」再把其餘欄位照送。ExtensionSettings 的真正變更本來就該走 dot-notation，
+    // 剝掉不會漏存合法的單鍵更新。BC 核心從不批次整包 ExtensionSettings，故不會誤傷 BC 本體。
     hook('ServerSend', 100, (args, next) => {
         try {
             const [msgType, data] = args;
             if (msgType === 'AccountUpdate' && data && typeof data === 'object'
                 && Object.prototype.hasOwnProperty.call(data, 'ExtensionSettings')) {
-                const keys = Object.keys(data.ExtensionSettings ?? {});
-                console.warn(LOG, '已攔截「整包 ExtensionSettings」的 AccountUpdate ——'
-                    + ' 這會覆蓋雲端設定並造成巨大送出訊息，已擋下。'
-                    + ' 正確做法：改用 ServerPlayerExtensionSettingsSync(key) 只同步單一鍵。',
-                    '夾帶的鍵：', keys);
-                return null;   // 擋下這次送出（同 WCE：整包寫入一律不放行）
+                const bytes = (() => { try { return JSON.stringify(data.ExtensionSettings).length; } catch { return '?'; } })();
+                console.warn(LOG, `已從一則 AccountUpdate 剝除整包 ExtensionSettings（約 ${bytes} bytes）——`
+                    + ' 避免覆蓋雲端設定與巨大送出訊息。ExtensionSettings 請改用'
+                    + ' ServerPlayerExtensionSettingsSync(key) 逐鍵同步。');
+                const clean = { ...data };
+                delete clean.ExtensionSettings;
+                // 整封只有 ExtensionSettings → 沒有其他欄位可送，直接擋下。
+                if (Object.keys(clean).length === 0) return null;
+                return next([msgType, clean, ...args.slice(2)]);
             }
         } catch { /* 守衛本身絕不能讓正常送出中斷 */ }
         return next(args);
