@@ -74,8 +74,8 @@ const WHISPER_LEVEL     = ['none', 'low', 'medium', 'high', 'full', 'off'];
 const WHISPER_LEVEL_LBL = ['so_g_none', 'so_g_low', 'so_g_medium', 'so_g_high', 'so_g_full', 'so_g_off'];
 const TALK_MODE     = ['remove', 'ignore', 'preserve'];
 const TALK_MODE_LBL = ['so_t_remove', 'so_t_ignore', 'so_t_preserve'];
-const NOTIFY_STYLE     = ['bubble', 'message'];                 // 已有啟用勾選箱，故不需「關閉」
-const NOTIFY_STYLE_LBL = ['so_n_bubble', 'so_n_message'];
+const NOTIFY_STYLE     = ['bubble', 'message', 'both'];         // 已有啟用勾選箱，故不需「關閉」
+const NOTIFY_STYLE_LBL = ['so_n_bubble', 'so_n_message', 'so_n_both'];
 const MAXMSG           = ['25', '30', '35', '40', '45', '50'];  // 直接顯示數字，無需 optionLabels
 
 // 主題色停用條件
@@ -89,7 +89,7 @@ export const DEFAULT_FEATURE_SETTINGS = {
     // ───────────────────────── chat 聊天與社交 ─────────────────────────
     instantMessenger: {
         label: 's_instantMessenger', desc: 'sd_instantMessenger',
-        type: 'checkbox', value: true, category: 'chat', disabled: () => false, sideEffects: todo('instantMessenger'),
+        type: 'checkbox', value: false, category: 'chat', disabled: () => false, sideEffects: todo('instantMessenger'),
     },
     augmentChat: {
         label: 's_augmentChat', desc: 'sd_augmentChat',
@@ -167,7 +167,7 @@ export const DEFAULT_FEATURE_SETTINGS = {
     themeFlatColor: {
         // 開：背景直接填滿主色；關：保留原背景圖並以主色 multiply 疊色（同 Themed）
         label: 's_themeFlatColor', desc: 'sd_themeFlatColor',
-        type: 'checkbox', value: true, category: 'theme', disabled: themeOff, sideEffects: todo('themeFlatColor'),
+        type: 'checkbox', value: false, category: 'theme', disabled: themeOff, sideEffects: todo('themeFlatColor'),
     },
     themeMainColor:     { label: 's_c_main',     desc: 'sd_c_main',     type: 'input', subtype: 'color', value: '#202020', category: 'theme', disabled: themeOff, sideEffects: todo('themeMainColor') },
     themeAccentColor:   { label: 's_c_accent',   desc: 'sd_c_accent',   type: 'input', subtype: 'color', value: '#440171', category: 'theme', disabled: themeOff, sideEffects: todo('themeAccentColor') },
@@ -232,6 +232,13 @@ export const DEFAULT_FEATURE_SETTINGS = {
     // 註：「美化登入介面」不放在這裡 —— 功能設定要等 Player.AccountName（登入後）才載入，
     // 而登入頁是在 LoginLoad（登入前）就套用，讀不到這裡的值。該開關由登入頁自己的
     // 設定浮層管理（存全域 lce_settings 的 enhance，見 loginpage/settings-ui.js）。
+    // 橫式 / 直式登入是一對：依螢幕方向各自決定要不要用 LCE 的登入頁，
+    // 關掉的那個方向會退回 BC 原生登入頁。兩者都是全域設定（ui 分類），
+    // 所以登入頁的設定浮層與遊戲內設定頁改的是同一份值。
+    horizontalLogin: {
+        label: 's_horizontalLogin', desc: 'sd_horizontalLogin',
+        type: 'checkbox', value: true, category: 'ui', disabled: () => false, sideEffects: todo('horizontalLogin'),
+    },
     verticalLogin: {
         label: 's_verticalLogin', desc: 'sd_verticalLogin',
         type: 'checkbox', value: false, category: 'ui', disabled: () => false, sideEffects: todo('verticalLogin'),
@@ -338,21 +345,20 @@ export const DEFAULT_FEATURE_SETTINGS = {
     // ───────────────────────── performance 性能 ─────────────────────────
     automateCacheClear: {
         label: 's_automateCacheClear', desc: 'sd_automateCacheClear',
-        type: 'checkbox', value: false, category: 'performance', disabled: () => false, sideEffects: todo('automateCacheClear'),
+        type: 'checkbox', value: true, category: 'performance', disabled: () => false, sideEffects: todo('automateCacheClear'),
     },
     manualCacheClear: {
         label: 's_manualCacheClear', desc: 'sd_manualCacheClear',
         type: 'checkbox', value: false, category: 'performance', disabled: () => false, sideEffects: todo('manualCacheClear'),
     },
-    // 以下為 Lian 性能細項（預設：滾動優化開、降畫質/低幀率關）
-    scrollOptimization: {
-        label: 's_scrollOptimization', desc: 'sd_scrollOptimization',
-        type: 'checkbox', value: true, category: 'performance', disabled: () => false, sideEffects: todo('scrollOptimization'),
-    },
+    // 以下為 Lian 性能細項（預設：全關）
+    // 「啟用」與「上限」本來是兩列，合併成一列複合控制項：
+    // 左側勾選箱 = scrollMaxMessagesEnabled（開關），右側 = 上限值。
     scrollMaxMessages: {
         label: 's_scrollMaxMessages', desc: 'sd_scrollMaxMessages',
-        type: 'select', value: '40', options: MAXMSG, category: 'performance',
-        disabled: (s) => !s.scrollOptimization, sideEffects: todo('scrollMaxMessages'),
+        type: 'select', value: '50', options: MAXMSG, category: 'performance',
+        withToggle: true, toggleDefault: false,
+        disabled: () => false, sideEffects: todo('scrollMaxMessages'),
     },
     reduceTextureQuality: {
         label: 's_reduceTextureQuality', desc: 'sd_reduceTextureQuality',
@@ -378,7 +384,7 @@ export const DEFAULT_FEATURE_SETTINGS = {
     },
     uwall: {
         label: 's_uwall', desc: 'sd_uwall',
-        type: 'checkbox', value: true, category: 'cheats', disabled: () => false, sideEffects: todo('uwall'),
+        type: 'checkbox', value: false, category: 'cheats', disabled: () => false, sideEffects: todo('uwall'),
     },
     lockpick: {
         label: 's_lockpick', desc: 'sd_lockpick',
@@ -418,16 +424,16 @@ export const DEFAULT_FEATURE_SETTINGS = {
         label: 's_ghostNewUsers', desc: 'sd_ghostNewUsers',
         type: 'checkbox', value: false, category: 'misc', disabled: () => false, sideEffects: todo('ghostNewUsers'),
     },
-    commander: {
-        label: 's_commander', desc: 'sd_commander',
-        type: 'checkbox', value: true, category: 'misc', disabled: () => false, sideEffects: todo('commander'),
-    },
+    // 註：指令系統（/lce、/w、/beep…）沒有開關 —— 它是必要功能，一律啟用。
 
     // ───────────────────────── hidden 隱藏（不顯示於設定頁）─────────────────────────
     // 3 組主題紀錄快照；由 saveThemeSlot / loadThemeSlot 存取。
     // global: true —— 分類是 hidden，但內容純粹是主題色。主題已改全域共用，
     // 快照若留在各帳號，會變成「在 A 帳號存的主題到 B 帳號讀不到」。
     themeSlots: { type: 'hidden', value: [null, null, null], category: 'hidden', global: true, disabled: () => false },
+    // BCX 的指令教學是否已顯示過。每帳號記一次，之後 BCX 每次換房重播都會被擋掉。
+    // 見 features/local-messages.js。
+    bcxTutorialSeen: { type: 'hidden', value: false, category: 'hidden', disabled: () => false },
 };
 
 /**

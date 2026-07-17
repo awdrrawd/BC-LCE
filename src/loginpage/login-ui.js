@@ -170,15 +170,15 @@ function bindEvents() {
     });
 
     // 設定：登入介面增強
-    document.getElementById('lce-set-enhance').addEventListener('change', function () {
-        S.settings.enhance = this.checked; saveSettings();
-        if (!S.settings.enhance) { closeSettings(); lceRemove(); }
-    });
-    // 設定：直式登入介面（全域功能設定，與遊戲內設定頁同一份值）
-    document.getElementById('lce-set-vertical').addEventListener('change', function () {
-        setFeature('verticalLogin', this.checked);
-        refreshOrientation();
-    });
+    // 設定：橫式 / 直式登入介面（全域功能設定，與遊戲內設定頁同一份值）
+    for (const [id, key] of [['lce-set-horizontal', 'horizontalLogin'], ['lce-set-vertical', 'verticalLogin']]) {
+        document.getElementById(id).addEventListener('change', function () {
+            setFeature(key, this.checked);
+            // 關掉目前這個方向 → 浮層跟著收起來，否則會浮在 BC 原生登入頁上
+            if (!this.checked) closeSettings();
+            refreshOrientation();
+        });
+    }
     // 設定：頭像 / 帳號 / 名稱 顯示
     document.getElementById('lce-set-avatar').addEventListener('change', function () {
         S.settings.showAvatar = this.checked; saveSettings(); applyShowSettings();
@@ -375,13 +375,11 @@ export function destroyLoginUI() {
 // ── 場景偵測（每幀由 DrawProcess hook 呼叫） ──────────────────────────────
 
 /**
- * 登入頁是否該啟用。
- * 橫向一律套用；直向只在「直式登入介面」開啟時套用（關閉則退回 BC 原生登入頁）。
- * verticalLogin 是全域設定（見 settings-schema 的 GLOBAL_CATEGORIES），登入前讀得到。
+ * 登入頁是否該啟用：依目前方向查對應的那個開關，關閉則退回 BC 原生登入頁。
+ * 兩者都是全域設定（見 settings-schema 的 GLOBAL_CATEGORIES），登入前讀得到。
  */
 function shouldEnhance() {
-    if (!S.settings.enhance) return false;
-    return isLandscape() || !!getFeature('verticalLogin');
+    return !!getFeature(isLandscape() ? 'horizontalLogin' : 'verticalLogin');
 }
 
 export function checkScene() {

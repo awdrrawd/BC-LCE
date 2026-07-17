@@ -58,8 +58,9 @@ export const THIRD_PARTY_HIDE_CSS =
     '#tmd-login-options-open,#tmd-login-options-dialog{display:none !important}';
 
 // 預設設定
+// 註：登入介面的總開關已改為功能設定 horizontalLogin / verticalLogin（ui 分類、全域），
+// 不再放這裡；舊的 enhance 由 feature-settings 的 migrateEnhance() 一次性接手後刪除。
 export const DEFAULT_SETTINGS = {
-    enhance:      true,      // 1. 登入介面增強（預設啟用）
     showAvatar:   true,      // 2a. 顯示頭像（預設啟用）
     showAccount:  true,      // 2b. 顯示帳號（預設啟用）
     showName:     true,      // 2c. 顯示名稱（預設啟用）

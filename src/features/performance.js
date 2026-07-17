@@ -2,8 +2,8 @@
 // 性能
 //   automateCacheClear   每小時清除繪圖緩存（移植 WCE cacheClearer.ts）
 //   manualCacheClear     在聊天室選單加一顆清除/重載繪圖緩存的按鈕（同上）
-//   scrollOptimization   限制聊天室可見訊息數量（移植 BC_LianOptimizationSource）
-//   scrollMaxMessages    可見訊息上限
+//   scrollMaxMessages    限制聊天室可見訊息數量與上限（移植 BC_LianOptimizationSource）
+//                        開關是 scrollMaxMessagesEnabled（withToggle 產生的鍵）
 //   reduceTextureQuality 降低角色貼圖畫質
 //   lowFrameRate         低幀率模式
 // ════════════════════════════════════════════════════════════════════════════
@@ -58,7 +58,7 @@ function updateChatVisibility() {
     if (!log) return;
     const messages = Array.from(log.children);
 
-    if (!getFeature('scrollOptimization')) {
+    if (!getFeature('scrollMaxMessagesEnabled')) {
         // 關閉時把先前隱藏的還原（只還原我們自己隱藏的）
         for (const m of messages) {
             if (m.getAttribute(HIDDEN_ATTR)) { m.style.display = ''; m.removeAttribute(HIDDEN_ATTR); }
@@ -66,7 +66,7 @@ function updateChatVisibility() {
         return;
     }
 
-    const max = parseInt(getFeature('scrollMaxMessages'), 10) || 40;
+    const max = parseInt(getFeature('scrollMaxMessages'), 10) || 50;
     const hideCount = messages.length - max;
     messages.forEach((m, i) => {
         if (i < hideCount) {

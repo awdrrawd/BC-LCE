@@ -19,23 +19,19 @@ export function buildSettingsOverlay() {
     title.className = 'lce-sett-title'; title.dataset.lceKey = 'settings_title';
     box.appendChild(title);
 
-    // 1. 登入介面增強
-    const rowEnhance = mk('div'); rowEnhance.className = 'lce-sett-row';
-    const lblEnhance = mk('span', '', { textContent: T('set_enhance') }); lblEnhance.dataset.lceKey = 'set_enhance';
-    const cbEnhance  = mk('input', '', { id: 'lce-set-enhance', type: 'checkbox' }); cbEnhance.checked = S.settings.enhance;
-    rowEnhance.appendChild(lblEnhance); rowEnhance.appendChild(cbEnhance);
-    box.appendChild(rowEnhance);
-
-    // 1b. 直式登入介面
-    // 這一項是 LCE 的功能設定（schema 的 ui 分類），不是登入頁的區域設定。
+    // 1. 橫式 / 直式登入介面
+    // 這兩項是 LCE 的功能設定（schema 的 ui 分類），不是登入頁的區域設定。
     // 因為 ui/theme 是全域共用（見 settings-schema 的 GLOBAL_CATEGORIES），登入前也讀寫得到，
     // 所以這裡跟遊戲內設定頁改的是同一份值，兩邊都能設定。
-    const rowVert = mk('div'); rowVert.className = 'lce-sett-row';
-    const lblVert = mk('span', '', { textContent: T('s_verticalLogin') }); lblVert.dataset.lceKey = 's_verticalLogin';
-    const cbVert  = mk('input', '', { id: 'lce-set-vertical', type: 'checkbox' });
-    cbVert.checked = !!getFeature('verticalLogin');
-    rowVert.appendChild(lblVert); rowVert.appendChild(cbVert);
-    box.appendChild(rowVert);
+    const mkFeatureRow = (labelKey, id, key) => {
+        const row = mk('div'); row.className = 'lce-sett-row';
+        const lbl = mk('span', '', { textContent: T(labelKey) }); lbl.dataset.lceKey = labelKey;
+        const cb  = mk('input', '', { id, type: 'checkbox' }); cb.checked = !!getFeature(key);
+        row.appendChild(lbl); row.appendChild(cb);
+        return row;
+    };
+    box.appendChild(mkFeatureRow('s_horizontalLogin', 'lce-set-horizontal', 'horizontalLogin'));
+    box.appendChild(mkFeatureRow('s_verticalLogin',   'lce-set-vertical',   'verticalLogin'));
 
     // 2. 帳號保存顯示（頭像 / 帳號 / 名稱，三個獨立開關）
     const mkShowRow = (labelKey, id, checked) => {

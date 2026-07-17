@@ -8,15 +8,19 @@
 import { MOD_VER, LCE_EXT_KEY } from '../core/constants.js';
 import { getFeature } from '../core/feature-settings.js';
 import { isExpressionEngineStarted } from '../features/expressions.js';
+import { LOCAL_MARKER } from '../features/local-messages.js';
 
 const LOG = '🐈‍⬛ [LCE]';
 
 function parseJSON(s) { try { return s ? JSON.parse(s) : null; } catch { return null; } }
 
-/** 在聊天室輸出一則本地訊息（不送伺服器）。移植自 WCE fbcChatNotify。 */
+/**
+ * 在聊天室輸出一則本地訊息（不送伺服器）。移植自 WCE fbcChatNotify。
+ * lce-local 是給 features/local-messages.js 認的標記（淡紫底 + 黑字）。
+ */
 export function lceChatNotify(node) {
     const div = document.createElement('div');
-    div.setAttribute('class', 'ChatMessage lce-notification');
+    div.setAttribute('class', `ChatMessage lce-notification ${LOCAL_MARKER}`);
     div.setAttribute('data-time', typeof ChatRoomCurrentTime === 'function' ? ChatRoomCurrentTime() : '');
     div.setAttribute('data-sender', Player?.MemberNumber?.toString() ?? '');
     if (typeof node === 'string') div.appendChild(document.createTextNode(node));
@@ -358,10 +362,9 @@ function showHelp() {
 
 let installed = false;
 
-/** 等 Commands 就緒後註冊 LCE 指令（若 commander 設定關閉則不註冊）。 */
+/** 等 Commands 就緒後註冊 LCE 指令。指令系統是必要功能，沒有開關。 */
 export function installCommander() {
     if (installed) return;
-    if (!getFeature('commander')) return;
     (function wait(n = 240) {
         if (typeof Commands === 'undefined' || !Commands || typeof CommandCombine !== 'function') {
             if (n <= 0) { console.warn(LOG, '找不到 Commands，指令未註冊'); return; }

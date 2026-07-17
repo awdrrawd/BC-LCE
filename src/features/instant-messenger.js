@@ -54,10 +54,11 @@ function injectStyle() {
     const s = document.createElement('style');
     s.id = STYLE_ID;
     s.textContent = `
-#lce-im{display:flex;z-index:100;position:fixed;width:80%;height:70%;top:5%;left:10%;padding:0;margin:0;
+/* 貼齊左上角、滿寬。z-index 10 是為了蓋過chat-room-top-menu */
+#lce-im{display:flex;z-index:10;position:fixed;width:100%;height:70%;top:0;left:0;padding:0;margin:0;
   flex-direction:row;background-color:var(--lce-main,#111);color:var(--lce-text,#eee);
   border:0.2em solid var(--lce-accent,#fff);resize:both;overflow:auto;
-  max-width:80%;max-height:75%;min-width:38%;min-height:30%;overflow-wrap:break-word;}
+  max-width:100%;max-height:75%;min-width:38%;min-height:30%;overflow-wrap:break-word;box-sizing:border-box;}
 #lce-im.lce-hidden{display:none !important;}
 #lce-im-left{display:flex;flex-direction:column;width:20%;height:100%;}
 #lce-im-right{width:80%;display:flex;flex-direction:column;border-left:0.1em solid var(--lce-accent,#fff);}

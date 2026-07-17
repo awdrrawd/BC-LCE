@@ -20,6 +20,7 @@ import { installChat } from './features/chat.js';
 import { installChatAugments } from './features/chat-augments.js';
 import { installPendingMessages } from './features/pending-messages.js';
 import { installFriendPresence } from './features/friend-presence.js';
+import { installLocalMessages } from './features/local-messages.js';
 import { installPastProfiles } from './features/past-profiles.js';
 import { installInstantMessenger } from './features/instant-messenger.js';
 import { installCharTalk } from './features/char-talk.js';
@@ -80,6 +81,7 @@ if (LCE_ALREADY_LOADED) {
                 installChatAugments();
                 installPendingMessages();
                 installFriendPresence();
+                installLocalMessages();
                 installPastProfiles();
                 installInstantMessenger();
                 installCharTalk();

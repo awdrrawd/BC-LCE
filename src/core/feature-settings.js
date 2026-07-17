@@ -136,11 +136,31 @@ export function loadGlobalFeatureSettings() {
 }
 
 /**
+ * 舊版登入頁用 lce_settings.enhance 當總開關（只有橫向版面）。
+ * 現在改成 horizontalLogin / verticalLogin 一對，所以把舊值接過來：
+ * 之前關掉 enhance 的人，升級後不該突然又冒出 LCE 登入頁。
+ * 只做一次，做完把舊鍵刪掉。
+ */
+function migrateEnhance() {
+    try {
+        const root = readGlobalRoot();
+        if (!('enhance' in root)) return;
+        const features = (root.features && typeof root.features === 'object') ? root.features : {};
+        if (!('horizontalLogin' in features)) features.horizontalLogin = !!root.enhance;
+        delete root.enhance;
+        root.features = features;
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify(root));
+        console.info(LOG, '登入介面開關已遷移：enhance →', features.horizontalLogin ? 'horizontalLogin(開)' : 'horizontalLogin(關)');
+    } catch (e) { console.warn(LOG, 'enhance 遷移失敗:', e); }
+}
+
+/**
  * 在登入前先把全域設定灌進 fSettings，讓 getFeature('verticalLogin') 之類
  * 在登入頁就讀得到。之後 loadFeatureSettings() 會再補上每帳號的部分。
  * 必須同步、不等 Player —— 登入頁等不到。
  */
 export function initGlobalFeatures() {
+    migrateEnhance();
     Object.assign(fSettings, loadGlobalFeatureSettings());
     return fSettings;
 }

@@ -444,6 +444,57 @@ function customArousalExpression() {
     PreviousArousal = { ...Player.ArousalSettings };
 }
 
+/**
+ * BC 的兩個函式會「直接」改臉，繞過我們的佇列，必須改導進引擎（同 WCE）。
+ * 這兩段是用 patchFunction 把 BC 原始碼裡的那一行換掉，取代碼跑在 BC 的全域範疇，
+ * 所以引擎的入口要先掛到 window 上才叫得到。
+ *
+ *   TimerInventoryRemove
+ *     BC 的限時表情到期時會直接呼叫 CharacterSetFacialExpression。不改導的話，
+ *     BC 的計時器與我們的引擎會互相搶同一張臉 —— 引擎每 250ms 寫回自己的表情，
+ *     BC 又把它清掉，結果就是活動表情（例如拍屁股的 Lewd 眼）看起來沒生效。
+ *
+ *   ValidationSanitizeProperties
+ *     其他插件塞了非法表情時 BC 會 delete property.Expression，而引擎不知情、
+ *     下一幀又寫回去，兩邊無限互踢。這裡通知引擎「這個部位已被清掉」。
+ */
+function installPatches() {
+    try {
+        // 供 patch 出來的程式碼呼叫（它們在 BC 的全域範疇執行，看不到模組作用域）
+        window.lceAnimationEngineEnabled = engineOn;
+        window.lcePushEvent = pushEvent;
+
+        modApi.patchFunction('TimerInventoryRemove', {
+            'CharacterSetFacialExpression(C, C.ExpressionQueue[0].Group, C.ExpressionQueue[0].Expression, undefined, undefined, true);':
+            `if (window.lceAnimationEngineEnabled()) {
+                window.lcePushEvent({
+                    Type: "${GAME_TIMED_EVT}",
+                    Duration: -1,
+                    Expression: {
+                        [C.ExpressionQueue[0].Group]: [{ Expression: C.ExpressionQueue[0].Expression, Duration: -1 }]
+                    }
+                });
+            } else {
+                CharacterSetFacialExpression(C, C.ExpressionQueue[0].Group, C.ExpressionQueue[0].Expression, undefined, undefined, true);
+            }`,
+        });
+
+        modApi.patchFunction('ValidationSanitizeProperties', {
+            'delete property.Expression;':
+            `delete property.Expression;
+            if (window.lceAnimationEngineEnabled()) {
+                if (item?.Asset?.Group?.Name) {
+                    CharacterSetFacialExpression(C, item.Asset.Group.Name, null);
+                } else {
+                    console.warn("🐈‍⬛ [LCE] 無法判斷物品的部位名稱", item);
+                }
+            }`,
+        });
+    } catch (e) {
+        console.warn(LOG, '表情 patch 未套用（限時表情可能與引擎互搶）:', e?.message ?? e);
+    }
+}
+
 let installed = false;
 let engineStarted = false;
 
@@ -494,6 +545,8 @@ export function installExpressions() {
         resetExpressionQueue([MANUAL_EVT, GAME_TIMED_EVT]);
         setInterval(() => { try { customArousalExpression(); } catch (e) { console.warn(LOG, 'expressions:', e); } }, 250);
     })();
+
+    installPatches();
 
     // 玩家手動改姿勢 → 記成手動覆寫。
     // 少了這段，引擎每 250ms 會把 ActivePose 打回預設的 BaseUpper/BaseLower，姿勢根本改不動。

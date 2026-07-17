@@ -14,17 +14,12 @@
 import modApi from '../modsdk.js';
 import { getFeature } from '../core/feature-settings.js';
 import { T } from '../core/i18n.js';
+import { LOCAL_MARKER } from './local-messages.js';
 
 const LOG = '🐈‍⬛ [LCE]';
 
-// 通知訊息的配色（吃主題強調色）
-(function injectStyle() {
-    if (document.getElementById('lce-friend-style')) return;
-    const s = document.createElement('style');
-    s.id = 'lce-friend-style';
-    s.textContent = '.lce-friend-notify{color:var(--lce-accent-hover,#b06ee8);}';
-    document.head.appendChild(s);
-})();
+// 註：通知訊息的配色交給 features/local-messages.js 統一處理
+// （所有 ChatRoomSendLocal 一律紫框黑字），這裡不再自己染色。
 const POLL_MS = 20000;
 
 // 這些畫面本來就有好友資訊 / 尚未連線，不查也不通知（同 WCE）
@@ -47,22 +42,39 @@ function playSound() {
     } catch { /* ignore */ }
 }
 
-/** 依樣式送出通知。sound=true 時額外播提示音。 */
+const BUBBLE_MS = 5000;
+const LOCAL_MS  = 10000;   // 聊天室訊息留久一點：氣泡會自己飄走，訊息是要讓人回頭看的
+
+function showBubble(text) {
+    if (typeof ServerShowBeep !== 'function') return;
+    ServerShowBeep(text, BUBBLE_MS, {
+        silent: true,
+        onClick: () => { if (typeof FriendListShow === 'function') FriendListShow(); },
+    });
+}
+
+/**
+ * 用 BC 的 ChatRoomSendLocal 送本地訊息（不外送，只有自己看得到）。
+ * 訊息 div 是 BC 建的，我們碰不到，所以把標記包在內容裡讓樣式認得出來
+ * （見 features/local-messages.js 的 :has 選擇器）。
+ */
+function showLocal(text) {
+    if (typeof ChatRoomSendLocal !== 'function') return false;
+    ChatRoomSendLocal(`<div class="${LOCAL_MARKER} lce-friend-notify">${esc(text)}</div>`, LOCAL_MS);
+    return true;
+}
+
+/**
+ * 依樣式送出通知。sound=true 時額外播提示音。
+ * style: bubble = 只有氣泡／message = 只有聊天室訊息／both = 兩個都送。
+ * 不在聊天室時 message 沒地方顯示，退回氣泡；both 則自然只剩氣泡。
+ */
 function notify(text, style, sound) {
     if (sound) playSound();
     const inChatRoom = typeof CurrentScreen !== 'undefined' && CurrentScreen === 'ChatRoom';
-    // message：用 BC 的 ChatRoomSendLocal 送本地訊息（不會外送、只有自己看得到）
-    if (style === 'message' && inChatRoom && typeof ChatRoomSendLocal === 'function') {
-        ChatRoomSendLocal(`<div class="lce-friend-notify">${esc(text)}</div>`, 10000);
-        return;
-    }
-    // bubble（或不在聊天室時的退路）
-    if (typeof ServerShowBeep === 'function') {
-        ServerShowBeep(text, 5000, {
-            silent: true,
-            onClick: () => { if (typeof FriendListShow === 'function') FriendListShow(); },
-        });
-    }
+    const wantLocal = (style === 'message' || style === 'both') && inChatRoom;
+    const sentLocal = wantLocal ? showLocal(text) : false;
+    if (style === 'bubble' || style === 'both' || !sentLocal) showBubble(text);
 }
 
 const fmt = (list) => list.map(({ MemberName, MemberNumber }) => `${MemberName} (${MemberNumber})`).join(', ');
