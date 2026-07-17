@@ -52,6 +52,32 @@ export function installMisc() {
     if (installed) return;
     installed = true;
 
+    // ── 防止「整包 ExtensionSettings」被送出（移植 WCE commonPatches 的 ServerSend 守衛）──
+    // BC 只用 dot-notation 同步單一鍵（ServerPlayerExtensionSettingsSync 送 "ExtensionSettings.<key>"）；
+    // 沒有任何正常路徑會在 AccountUpdate 夾帶「整包 ExtensionSettings」物件。一旦有插件這麼做：
+    //   1. 伺服器會用整包覆蓋雲端 —— 別的插件當下沒載到記憶體的鍵會被連帶抹掉
+    //      （WCE 註解稱之為 "settings erasure by client"）。
+    //   2. 那則 AccountUpdate 會夾帶全部 ExtensionSettings（動輒數百 KB）—— 就是你看到的
+    //      「容量異常 / 巨大送出訊息」。
+    // WCE 裝著時會把這種寫入擋掉，所以問題被藏住；拿掉 WCE 就現形。LCE 作為替代品把守衛補回來。
+    // 比 WCE 溫和：只擋下該次送出並記警告，不像 WCE 直接 throw（避免炸掉呼叫端的流程）。
+    // BC 核心從不批次整包 ExtensionSettings（只走 dot-notation），故這道守衛不會誤傷 BC 本體。
+    hook('ServerSend', 100, (args, next) => {
+        try {
+            const [msgType, data] = args;
+            if (msgType === 'AccountUpdate' && data && typeof data === 'object'
+                && Object.prototype.hasOwnProperty.call(data, 'ExtensionSettings')) {
+                const keys = Object.keys(data.ExtensionSettings ?? {});
+                console.warn(LOG, '已攔截「整包 ExtensionSettings」的 AccountUpdate ——'
+                    + ' 這會覆蓋雲端設定並造成巨大送出訊息，已擋下。'
+                    + ' 正確做法：改用 ServerPlayerExtensionSettingsSync(key) 只同步單一鍵。',
+                    '夾帶的鍵：', keys);
+                return null;   // 擋下這次送出（同 WCE：整包寫入一律不放行）
+            }
+        } catch { /* 守衛本身絕不能讓正常送出中斷 */ }
+        return next(args);
+    });
+
     // ── 共享插件清單 ──
     // 先把自己的欄位填好，/versions 看自己時才列得出來（本地欄位，別人看不到）。
     if (typeof Player !== 'undefined' && Player) Player.LCE = MOD_VER;

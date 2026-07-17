@@ -190,14 +190,25 @@ function confirmDelete(key) {
 
 function doDelete(key, size) {
     try {
-        // ServerPlayerExtensionSettingsSync 只能 $set 單一鍵（送 "" 只是把值清空，鍵還在）。
-        // 要讓「鍵本身」從伺服器消失，必須整包重送 ExtensionSettings 覆蓋掉整個欄位。
-        // 代價是這一次的 AccountUpdate 會比較大（等同目前所有 ExtensionSettings 的總和），
-        // 但只有刪除時才發生一次。
-        delete Player.ExtensionSettings[key];
-        if (typeof ServerSend === 'function') {
+        if (Player.ExtensionSettings[key] === undefined) {
+            lceChatNotify(`"${key}" 已經不存在了。`); return;
+        }
+        // 伺服器對 AccountUpdate 的 ExtensionSettings 是「合併」而非「取代」：整包重送時，
+        // 本地已刪掉、封包裡缺席的鍵並不會被移除，刷新後又原封不動回來
+        // （這就是「刪了沒上傳」的真正原因）。
+        //
+        // BCX 證實可行的作法（storage.ts storageClearData）：把該鍵設成 null，再用
+        // dot-notation 單鍵同步 —— ServerPlayerExtensionSettingsSync 會送
+        // { "ExtensionSettings.<key>": null }，伺服器以 $set 寫成 null，體積趨近於零、
+        // 且是真正的寫入而會持久保存。之後本地再把鍵刪掉，清單就不會再列出它。
+        // （ServerPlayerExtensionSettingsSync 遇到 undefined 會丟例外，所以務必先設 null 再刪。）
+        Player.ExtensionSettings[key] = null;
+        if (typeof ServerPlayerExtensionSettingsSync === 'function') {
+            ServerPlayerExtensionSettingsSync(key);
+        } else if (typeof ServerSend === 'function') {
             ServerSend('AccountUpdate', { ExtensionSettings: Player.ExtensionSettings });
         }
+        delete Player.ExtensionSettings[key];
         const left = extRows(Player.ExtensionSettings).reduce((s, [, n]) => s + n, 0);
         lceChatNotify(`已移除 "${key}"（釋出約 ${size}KB，剩餘合計 ${(left / 1024).toFixed(1)}KB）。`
             + ' 該插件下次載入時會重建自己的預設值。可用 /lcesetlist 確認。');

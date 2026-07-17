@@ -458,7 +458,6 @@ export function destroyLoginUI() {
     window.removeEventListener(LOGIN_REQUEST_EVENT, doLogin);
     lceRemove();
     destroyCarousel();
-    if (S.fusamObserver) { S.fusamObserver.disconnect(); S.fusamObserver = null; }
     document.getElementById('lce-stage')?.remove();
     document.getElementById('lce-bg-base')?.remove();
     document.getElementById('lce-settings-overlay')?.remove();

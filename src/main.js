@@ -34,6 +34,7 @@ import { installPerformance } from './features/performance.js';
 import { installCheats } from './features/cheats.js';
 import { installMisc } from './features/misc.js';
 import { installWardrobe } from './features/wardrobe.js';
+import { installLayeringHide } from './features/layering-hide.js';
 import { installRelogin } from './features/relogin.js';
 import {
     installExpressions, isExpressionEngineStarted, debugExpressions,
@@ -44,6 +45,7 @@ import { installVertical } from './features/vertical/index.js';
 import { injectLoginStyles } from './loginpage/styles.js';
 import { refreshAccounts } from './loginpage/account-carousel.js';
 import { installLoginPage, teardownLoginPage } from './loginpage/index.js';
+import { ensureFusamVisible } from './loginpage/bc.js';
 
 // 重複載入防護：已載入就直接結束（loader 也有前置檢查，這裡才是真正的旗標擁有者）。
 window.Liko = window.Liko ?? {};
@@ -61,6 +63,9 @@ if (LCE_ALREADY_LOADED) {
     // 必須在 installLoginPage() 之前：登入頁的樣式吃 --lce-login-accent，
     // 晚一步注入的話第一幀會閃一下 fallback 色。
     installUiColors();
+
+    // FUSAM 置頂規則：常駐、與登入頁是否啟用無關 —— 遊戲內開插件管理器時也要蓋過 LCE 浮層。
+    ensureFusamVisible();
 
     // 安裝登入頁（註冊鉤子與視窗事件）
     installLoginPage();
@@ -107,6 +112,7 @@ if (LCE_ALREADY_LOADED) {
                 installCheats();
                 installMisc();
                 installWardrobe();
+                installLayeringHide();
                 installRelogin();
                 installExpressions();
                 installVertical();

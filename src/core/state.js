@@ -49,6 +49,5 @@ export const S = {
     lastLayout:      null,
     lastStatusMsg:   null,
     lastStatusError: null,
-    fusamObserver:   null,
     settings:        loadSettings(),
 };

@@ -361,7 +361,11 @@ function installHooks() {
         imgW -= 2 * padding; imgH -= 2 * padding;
         if (Vibrating) { imgX += 1 + Math.floor(Math.random() * 3); imgY += 1 + Math.floor(Math.random() * 3); }
 
-        DrawRect(x, y, width, height, `${C.NoDraw}${Background}`);
+        // 不加 C.NoDraw：Background 要「走一次 DrawRect 染色」才會被主題接手（同 Themed draw_preview_box）。
+        // 這正是第三方 UI（LSCG 施法選單的法術卡用 DrawPreviewBox 傳 Background:"white"）被染到的關鍵 ——
+        // 加了 ! 前綴會讓 DrawRect 直接照畫，白卡就永遠是白的、吃不到 element 色。
+        // 落到預設值時 Background 本來就已是主題色（hex），再過一次 DrawRect 也只是原樣輸出，無副作用。
+        DrawRect(x, y, width, height, Background);
         if (typeof ControllerAddActiveArea === 'function') ControllerAddActiveArea(x, y);
         DrawEmptyRect(x, y, width, height, hover ? plainColors.accentHover : plainColors.accent);
         if (path !== '') DrawImageResize(path, imgX, imgY, imgW, imgH);

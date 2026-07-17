@@ -54,6 +54,12 @@ export function sendLceHello(target = null, requestReply = false) {
             version: MOD_VER,
             replyRequested: requestReply,
         };
+        // 能力宣告：讓對方知道我們支援哪些「需要雙方都裝才看得到」的功能（沿用 WCE 的
+        // BCECapabilities 慣例，字串也對齊，才能與 WCE 使用者互通）。目前只有圖層隱藏，
+        // 且只在該功能開啟時才宣告 —— 沒開就沒有 override 可呈現，也不該讓別人看到設定框。
+        const caps = [];
+        if (getFeature('layeringHide')) caps.push('layeringHide');
+        if (caps.length) payload.capabilities = caps;
         // 版本一律送（/versions 要靠它才看得到 LCE 的人）；完整插件清單則看使用者願不願意
         if (getFeature('shareAddons')) {
             payload.otherAddons = window.bcModSdk?.getModsInfo?.() ?? [];
@@ -92,6 +98,8 @@ function processWceHello(sender, msg) {
 function processLceHello(sender, msg) {
     sender.LCE = msg.version ?? '0.0';
     sender.LCEOtherAddons = msg.otherAddons;
+    // 能力清單放進 BCECapabilities（與 WCE 同欄位）：圖層隱藏的設定框靠它判斷該不該顯示。
+    sender.BCECapabilities = Array.isArray(msg.capabilities) ? msg.capabilities : [];
     // 對方要求回報時只回他一個人，且不再要求回覆 —— 否則兩邊會無限互相打招呼。
     // 排除自己：伺服器會把自己送出的 ChatRoomChat 原封不動回傳一份，
     // 不擋的話每次廣播都會多送一則「回覆給自己」的訊息。

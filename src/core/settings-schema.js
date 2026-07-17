@@ -434,6 +434,10 @@ export const DEFAULT_FEATURE_SETTINGS = {
         label: 's_extendedWardrobe', desc: 'sd_extendedWardrobe',
         type: 'checkbox', value: false, category: 'wardrobe', disabled: () => false, sideEffects: logChange('extendedWardrobe'),
     },
+    layeringHide: {
+        label: 's_layeringHide', desc: 'sd_layeringHide',
+        type: 'checkbox', value: false, category: 'wardrobe', disabled: () => false, sideEffects: logChange('layeringHide'),
+    },
     grantWardrobe: {
         // 動作按鈕（座標同其他項）：直接取得私人房間衣櫃，點下顯示回饋。
         label: 's_grantWardrobe', desc: 'sd_grantWardrobe',
