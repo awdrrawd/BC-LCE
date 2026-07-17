@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Liko - LCE - Loader
 // @name:zh      Liko的俱樂部擴充 - 載入器
-// @namespace    https://github.com/awdrrawd/liko-Plugin-Repository
+// @namespace    https://github.com/awdrrawd/BC-LCE
 // @version      0.1.0
 // @description  Liko Club Extensions - horizontal login UI and club extensions for Bondage Club.
 // @author       Likolisu
@@ -9,6 +9,8 @@
 // @icon         https://cdn.jsdelivr.net/gh/awdrrawd/liko-Plugin-Repository@main/Images/PCM_ICON.png
 // @grant        none
 // @run-at       document-end
+// @downloadURL  https://awdrrawd.github.io/BC-LCE/loader.user.js
+// @updateURL    https://awdrrawd.github.io/BC-LCE/loader.user.js
 // ==/UserScript==
 
 // 真正的重複載入防護在 bundle 內（src/main.js）。這裡只是提早警告，不擁有旗標。
