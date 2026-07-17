@@ -8,6 +8,8 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 import { S } from '../core/state.js';
+import { WALLPAPER_UPLOAD_SENTINEL } from '../core/constants.js';
+import { loadWallpaper } from '../core/storage.js';
 
 // 建置時把 Images/*.{jpg,jpeg,png,webp} 全部收進來（eager，取 default = 輸出檔的 URL）
 // 路徑相對本檔（src/loginpage/）→ 專案根的 Images/ 需回上兩層。
@@ -36,11 +38,71 @@ export function pickBackground() {
     return CUSTOM_BACKGROUNDS[Math.floor(Math.random() * CUSTOM_BACKGROUNDS.length)];
 }
 
-/** 依設定套用登入背景（設定 stage 底層背景圖的 src 為內嵌 data URI） */
-export function applyBackground() {
+/**
+ * 上傳桌布用的 object URL。每次重建都要把上一個 revoke 掉 ——
+ * object URL 會一直抓著整顆 Blob 不放，反覆換背景就會把記憶體吃光。
+ */
+let uploadedObjectUrl = null;
+
+function releaseUploadedUrl() {
+    if (uploadedObjectUrl) { URL.revokeObjectURL(uploadedObjectUrl); uploadedObjectUrl = null; }
+}
+
+/** 這一輪是否已經退回過內建背景（見 handleBackgroundError）。 */
+let fellBack = false;
+
+/**
+ * 背景圖載入失敗時的補救。自訂網址是很容易壞的東西 —— 圖床砍圖、防盜連、
+ * 對方站台掛掉都會讓它載不出來，這時候不能讓登入頁開天窗，退回內建背景。
+ * 只退一次：內建圖是打包進來的、不會再失敗，真失敗了也不該無限重試。
+ */
+export function handleBackgroundError() {
     const img = document.getElementById('lce-bg-img');
     if (!img) return;
+    if (fellBack) { img.style.display = 'none'; return; }
+    fellBack = true;
+    releaseUploadedUrl();
+    const bg = pickBackground();
+    if (bg) { img.src = bg.url; return; }
+    img.style.display = 'none';
+}
+
+/** 取得自訂桌布的網址：可能是使用者填的 URL，也可能是上傳進 DB 的那張。 */
+async function resolveCustomUrl() {
+    const v = S.settings.bgCustomUrl;
+    if (!v) return null;
+    if (v !== WALLPAPER_UPLOAD_SENTINEL) return v;   // 一般網址，直接用
+    const blob = await loadWallpaper();
+    if (!blob) return null;                          // 設成上傳但 DB 裡沒東西 → 交回去退回隨機
+    releaseUploadedUrl();
+    uploadedObjectUrl = URL.createObjectURL(blob);
+    return uploadedObjectUrl;
+}
+
+/**
+ * 依設定套用登入背景。
+ * custom 模式要讀 IndexedDB，所以是非同步的；呼叫端不需要等它（背景晚一拍出現無妨）。
+ */
+export async function applyBackground() {
+    const img = document.getElementById('lce-bg-img');
+    if (!img) return;
+    fellBack = false;   // 換了新來源，之前那次的失敗不算數
+
+    if (S.settings.bgMode === 'custom') {
+        const url = await resolveCustomUrl();
+        if (url) {
+            // 換過去之前先確定 img 還在（等 DB 的期間使用者可能已經登入、UI 被拆掉了）
+            if (!document.getElementById('lce-bg-img')) { releaseUploadedUrl(); return; }
+            img.style.display = '';
+            if (img.src !== url) img.src = url;
+            return;
+        }
+        // 網址空的或 DB 裡沒圖 → 不要讓畫面開天窗，退回內建背景
+    }
+
+    releaseUploadedUrl();
     const bg = pickBackground();
     if (!bg) return; // Images/ 為空時，僅保留暗化遮罩
+    img.style.display = '';
     if (img.src !== bg.url) img.src = bg.url;
 }

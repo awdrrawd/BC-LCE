@@ -10,8 +10,8 @@
 // QuotaExceededError。外觀類設定量小、又非讀不可，才特例放進去。
 // ════════════════════════════════════════════════════════════════════════════
 
-import { DEFAULT_FEATURE_SETTINGS, defaultValues, globalKeys } from './settings-schema.js';
-import { FEATURE_SETTINGS_VERSION, LCE_EXT_KEY, SETTINGS_KEY } from './constants.js';
+import { DEFAULT_FEATURE_SETTINGS, defaultValues, globalKeys, clampBar } from './settings-schema.js';
+import { FEATURE_SETTINGS_VERSION, LCE_EXT_KEY, SETTINGS_KEY, SETTING_CHANGED_EVENT } from './constants.js';
 
 // 載入後即為完整設定物件；載入前為空物件（getFeature 會 fallback 到預設）。
 export let fSettings = {};
@@ -54,7 +54,7 @@ function saveGlobalFeatures(obj) {
     }
 }
 
-/** 輪詢等待條件成立（預設最多 ~60 秒）。 */
+/** 輪詢等待條件成立。tries = Infinity 表示不設上限（等到成立為止）。 */
 function waitFor(cond, tries = 600, intervalMs = 100) {
     return new Promise((resolve) => {
         (function loop(n) {
@@ -68,16 +68,45 @@ function waitFor(cond, tries = 600, intervalMs = 100) {
 }
 
 /**
+ * 舊的布林開關 → 新的「開關 + 參數」兩個鍵。
+ *
+ * reduceTextureQuality / lowFrameRate 原本各是一個布林；改版後拆成
+ * textureQuality(+Enabled) 與 lowFrameRateFps(+Enabled)。不接手的話，
+ * 下面的未知鍵清理會把舊鍵默默刪掉、再從預設補一個 false ——
+ * 使用者本來開著的低幀率模式會在升級後無聲無息地關掉。
+ *
+ * 必須在「補齊缺漏的預設」之前呼叫：預設一補上去，新鍵就已經存在，
+ * 這裡的 `in` 判斷就再也接不到手了。
+ */
+const RENAMED_TOGGLES = {
+    reduceTextureQuality: 'textureQualityEnabled',
+    lowFrameRate: 'lowFrameRateFpsEnabled',
+};
+
+function migrateRenamedToggles(settings) {
+    for (const [oldKey, newKey] of Object.entries(RENAMED_TOGGLES)) {
+        if (typeof settings[oldKey] !== 'boolean' || newKey in settings) continue;
+        settings[newKey] = settings[oldKey];
+        console.info(LOG, `設定已遷移：${oldKey} → ${newKey} =`, settings[oldKey]);
+    }
+}
+
+/**
  * 等 Player.AccountName 就緒後從伺服器載入設定，補齊缺漏預設、剔除未知鍵。
  * 回傳完整設定物件。
  */
 export async function loadFeatureSettings() {
-    await waitFor(() => !!(typeof Player !== 'undefined' && Player?.AccountName));
-    if (typeof Player === 'undefined' || !Player?.AccountName) {
-        console.warn(LOG, '等待帳號逾時，功能設定改用預設值');
-        fSettings = { ...defaultValues(), version: FEATURE_SETTINGS_VERSION };
-        return fSettings;
-    }
+    // 不設上限，等到登入為止。
+    //
+    // 原本是等 60 秒就放棄、改用一整份預設值 —— 但使用者在登入頁停留超過一分鐘
+    // 太常見了（泡杯咖啡、掛著等朋友、慢慢挑帳號）。而放棄之後 main.js 會照常
+    // 接著跑 postFeatureSettings()，它結尾的 saveFeatureSettings() 會把那份預設值
+    // 寫回全域 localStorage —— 使用者調好的主題與 UI 設定就這樣被清成預設值。
+    // （這也是「共用設定常常失效」的另一個來源。）
+    //
+    // 沒登入本來就沒有「該載入的每帳號設定」，等下去才是對的：條件一成立就往下跑，
+    // 使用者永遠不登入的話這個 Promise 就永遠不 resolve，後面那些功能也本來就不該裝。
+    await waitFor(() => !!(typeof Player !== 'undefined' && Player?.AccountName), Infinity);
 
     // 每帳號的部分從伺服器讀（DB 是這半邊的唯一正本）
     const online = parseJSON(decompress(Player.ExtensionSettings?.[LCE_EXT_KEY] || ''));
@@ -104,6 +133,8 @@ export async function loadFeatureSettings() {
         if (k in globals) settings[k] = globals[k];
     }
 
+    migrateRenamedToggles(settings);
+
     // 補齊缺漏的預設
     const defs = defaultValues();
     for (const k of Object.keys(defs)) {
@@ -115,6 +146,11 @@ export async function loadFeatureSettings() {
     // 若拿 schema 當白名單，這些鍵會在每次載入時被誤刪，導致開關永遠存不起來。
     for (const k of Object.keys(settings)) {
         if (k !== 'version' && !(k in defs)) delete settings[k];
+    }
+    // bar 的值一律正規化成合法數字：舊版存的是 select 的字串（'50'），
+    // 直接拿去算比例會得到 NaN，滑桿就畫不出來也拖不動。
+    for (const [k, def] of Object.entries(DEFAULT_FEATURE_SETTINGS)) {
+        if (def.type === 'bar') settings[k] = clampBar(def, settings[k]);
     }
     settings.version = FEATURE_SETTINGS_VERSION;
 
@@ -216,12 +252,28 @@ export function getFeature(key) {
     return DEFAULT_FEATURE_SETTINGS[key]?.value;
 }
 
-/** 程式化設定單一值：更新、觸發 sideEffects、存檔。 */
+/**
+ * 程式化設定單一值：更新、觸發 sideEffects、發出變更事件、存檔。
+ *
+ * 事件不能只在設定頁發（settings-page.js 的 fireSideEffect）—— 那樣從登入頁的
+ * 控制項、指令或公開 API（window.Liko.LCE.setFeature）改值時，所有靠
+ * lce-setting-changed 即時反應的功能（介面配色、聊天容量、貼圖畫質…）全都收不到，
+ * 設定看起來就像沒生效。這裡是程式化改值的唯一出入口，事件就該在這裡發。
+ */
 export function setFeature(key, value) {
-    const def = DEFAULT_FEATURE_SETTINGS[key];
+    // withToggle / withSound 產生的 `<key>Enabled` / `<key>Sound` 是合法的設定鍵，
+    // 但它們是動態衍生的、不在 schema 物件裡（設定頁是直接寫 fSettings）。
+    // 不放行的話，從公開 API 或指令改這些開關會靜靜失敗、什麼事都不會發生。
+    // 副作用掛在「本尊」那一項上，所以要拿本尊的 def 來跑（同設定頁的 fireSideEffect）。
+    const owner = DEFAULT_FEATURE_SETTINGS[key] ? key : key.replace(/(Enabled|Sound)$/, '');
+    const def = DEFAULT_FEATURE_SETTINGS[owner];
     if (!def || def.type === 'action') return;
+    if (owner !== key && !def.withToggle && !def.withSound) return;   // 不是真的衍生鍵
+
     fSettings[key] = value;
-    try { def.sideEffects?.(value, false, fSettings); }
+    try { def.sideEffects?.(fSettings[owner], false, fSettings); }
     catch (e) { console.warn(LOG, 'sideEffects 失敗:', key, e); }
+    try { window.dispatchEvent(new CustomEvent(SETTING_CHANGED_EVENT, { detail: { key, value } })); }
+    catch { /* ignore */ }
     saveFeatureSettings();
 }

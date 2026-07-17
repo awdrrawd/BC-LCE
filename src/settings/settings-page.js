@@ -4,7 +4,7 @@
 // 透過 PreferenceRegisterExtensionSetting 註冊，繪製走 BC 全域 DrawText/DrawButton/…。
 // ════════════════════════════════════════════════════════════════════════════
 
-import { CATEGORIES, DEFAULT_FEATURE_SETTINGS } from '../core/settings-schema.js';
+import { CATEGORIES, DEFAULT_FEATURE_SETTINGS, clampBar } from '../core/settings-schema.js';
 import { SETTING_CHANGED_EVENT } from '../core/constants.js';
 import { fSettings, saveFeatureSettings } from '../core/feature-settings.js';
 import { T } from '../core/i18n.js';
@@ -19,8 +19,17 @@ const SOUND_GAP = 10;
 const SETTINGS_PER_PAGE = 8;
 const Y_START = 225;
 const Y_INC = 70;
-const SEL_OFFSET = 900;   // select / input / action 控制項起始 X
+const SEL_OFFSET = 900;   // select / input / bar / action 控制項起始 X
 const SEL_WIDTH = 340;
+
+// 說明框：左緣 200、右緣維持在 1900（跟頁面其他內容的右界一致）
+const TOOLTIP_X = 200;
+const TOOLTIP_W = 1700;
+
+// bar：軌道與右側數值欄
+const BAR_H = 20;         // 軌道高度
+const BAR_TOP = 22;       // 軌道相對於該列 y 的位移（(64 - 20) / 2，讓軌道垂直置中）
+const BAR_VAL_W = 110;    // 數值文字欄寬
 
 // 導覽狀態
 let currentCategory = null;   // null = 分類清單
@@ -60,20 +69,33 @@ function selDisplay(def, value) {
     return T(lblKey);
 }
 
+/** 顏色設定：值壞掉時退回 schema 預設，不讓整個說明框畫不出來。 */
+function uiColor(key) {
+    const v = fSettings[key];
+    if (typeof v === 'string' && /^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/.test(v)) return v;
+    return DEFAULT_FEATURE_SETTINGS[key]?.value ?? '#000000';
+}
+
 /**
- * WCE 風格的說明框（drawTooltip）。
- * 不需要自己判斷主題色：染色引擎的對照表已涵蓋這裡用的三種顏色
- * （#ffff88 → element、black 邊框 → accent、black 文字 → text），
- * 照原樣畫即可，主題關閉時就是原本的黃底黑字。
+ * WCE 風格的說明框（drawTooltip）。底色與文字色可由 UI 設置調整。
+ *
+ * 與 BC 主題的關係：染色引擎是靠比對顏色換色的（#ffff88 → element、
+ * #000000 → text，見 features/theme.js 的 KNOWN 對照表與 DrawTextFit hook）。
+ * 所以維持預設值時，開主題說明框仍會跟著染色，行為與以前一模一樣；
+ * 一旦使用者挑了別的顏色，對照表就比不中，主題不再插手 —— 明講要什麼顏色就給什麼顏色。
+ *
+ * 邊框沿用文字色：底色被改深時，原本寫死的黑框會整個看不見。
  */
 function drawTooltip(x, y, width, text) {
     const ctx = window.MainCanvas?.getContext('2d');
     if (!ctx) return;
+    const bg = uiColor('tooltipBgColor');
+    const fg = uiColor('tooltipTextColor');
     const bak = ctx.textAlign;
     ctx.textAlign = 'left';
-    DrawRect(x, y, width, 65, '#FFFF88');
-    DrawEmptyRect(x, y, width, 65, 'Black', 2);
-    DrawTextFit(text, x + 3, y + 33, width - 6, 'Black');
+    DrawRect(x, y, width, 65, bg);
+    DrawEmptyRect(x, y, width, 65, fg, 2);
+    DrawTextFit(text, x + 3, y + 33, width - 6, fg);
     ctx.textAlign = bak;
 }
 
@@ -134,6 +156,8 @@ function run() {
                     () => selDisplay(def, def.options[(idx + 1 + len) % len]),
                     ctrlDisabled,
                 );
+            } else if (def.type === 'bar') {
+                drawBarControl(key, def, y, ctrlDisabled);
             } else { // input
                 drawInputControl(key, def, y, ctrlDisabled);
             }
@@ -149,6 +173,9 @@ function run() {
                 () => selDisplay(def, def.options[(idx + 1 + len) % len]),
                 disabled,
             );
+        } else if (def.type === 'bar') {
+            DrawText(T(def.label), 400, y + 33, highlight, 'Gray');
+            drawBarControl(key, def, y, disabled);
         } else if (def.type === 'input') {
             DrawText(T(def.label), 400, y + 33, highlight, 'Gray');
             drawInputControl(key, def, y, disabled);
@@ -160,9 +187,10 @@ function run() {
         y += Y_INC;
     }
 
-    // 描述說明框（WCE 位置：下方 y=830）
+    // 描述說明框。左緣從 300 移到 200、寬度補回 100 讓右緣仍停在 1900 ——
+    // 說明文字是靠 DrawTextFit 縮字來塞進框裡的，框愈窄字就被壓得愈小愈難讀。
     if (currentSetting && DEFAULT_FEATURE_SETTINGS[currentSetting]) {
-        drawTooltip(300, 830, 1600, T(DEFAULT_FEATURE_SETTINGS[currentSetting].desc));
+        drawTooltip(TOOLTIP_X, 830, TOOLTIP_W, T(DEFAULT_FEATURE_SETTINGS[currentSetting].desc));
     }
 
     if (pageCount(currentCategory) > 1) {
@@ -226,6 +254,8 @@ function click() {
             }
         } else if (def.type === 'select' && !disabled) {
             adjustControl(key, def, y);
+        } else if (def.type === 'bar' && !disabled) {
+            handleBarClick(key, def, y);
         } else if (def.type === 'input' && !disabled) {
             handleInputClick(key, def, y);
         } else if (def.type === 'action' && !disabled) {
@@ -247,6 +277,8 @@ function adjustControl(key, def, y) {
         const len = def.options.length;
         if (MouseIn(SEL_OFFSET + seg, y, seg, 64)) { fSettings[key] = def.options[(idx + 1 + len) % len]; fireSideEffect(key, def); }
         else if (MouseIn(SEL_OFFSET, y, seg, 64)) { fSettings[key] = def.options[(idx - 1 + len) % len]; fireSideEffect(key, def); }
+    } else if (def.type === 'bar') {
+        handleBarClick(key, def, y);
     } else if (def.type === 'input') {
         handleInputClick(key, def, y);
     }
@@ -272,6 +304,36 @@ function drawSoundToggle(key, y, disabled) {
     DrawButton(...soundRect(y), '', disabled ? '#ebebe4' : 'White',
         on ? 'Icons/Audio2.png' : 'Icons/Audio0.png',
         T(on ? 'sound_on' : 'sound_off'), disabled);
+}
+
+/**
+ * 繪製 bar 控制項：軌道 + 已填滿的部分 + 拉桿，右側附目前數值。
+ * 顏色刻意沿用染色引擎已經涵蓋的幾種（White / Black / #3575b5 = themeEquipped），
+ * 主題開啟時會跟著變，不必在這裡自己查主題色。
+ */
+function drawBarControl(key, def, y, disabled) {
+    const v = clampBar(def, fSettings[key]);
+    const ratio = (v - def.min) / (def.max - def.min);
+    const top = y + BAR_TOP;
+
+    DrawRect(SEL_OFFSET, top, SEL_WIDTH, BAR_H, disabled ? '#ebebe4' : 'White');
+    if (ratio > 0) DrawRect(SEL_OFFSET, top, SEL_WIDTH * ratio, BAR_H, disabled ? '#c8c8c0' : '#3575b5');
+    DrawEmptyRect(SEL_OFFSET, top, SEL_WIDTH, BAR_H, 'Black', 2);
+
+    // 拉桿：夾在軌道內，兩端才不會畫到軌道外面
+    const hx = SEL_OFFSET + Math.max(6, Math.min(SEL_WIDTH - 6, SEL_WIDTH * ratio));
+    DrawRect(hx - 6, y + 12, 12, 40, disabled ? '#c8c8c0' : 'Black');
+
+    centered(() => DrawTextFit(String(v), SEL_OFFSET + SEL_WIDTH + SOUND_GAP + BAR_VAL_W / 2, y + 33,
+        BAR_VAL_W, disabled ? 'Gray' : 'Black'));
+}
+
+/** 點擊 bar：點到哪就跳到哪一格（依 step 對齊）。整列 64 高都算，不必精準點在軌道上。 */
+function handleBarClick(key, def, y) {
+    if (!MouseIn(SEL_OFFSET, y, SEL_WIDTH, 64)) return;
+    const ratio = (MouseX - SEL_OFFSET) / SEL_WIDTH;
+    const next = clampBar(def, def.min + ratio * (def.max - def.min));
+    if (next !== fSettings[key]) { fSettings[key] = next; fireSideEffect(key, def); }
 }
 
 /** 繪製 input 控制項：色彩型別 → 十六進位欄位 + 齊平色塊；其餘 → 一般數值鈕。 */

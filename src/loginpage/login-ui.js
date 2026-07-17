@@ -2,14 +2,17 @@
 // 登入 UI 主流程：建構、事件、狀態同步、定位、啟用/停用、場景偵測
 // ════════════════════════════════════════════════════════════════════════════
 
-import { CANVAS_W, CANVAS_H, ICON_PERSON, ICON_LOCK, LOGIN_REQUEST_EVENT } from '../core/constants.js';
+import {
+    CANVAS_W, CANVAS_H, ICON_PERSON, ICON_LOCK, LOGIN_REQUEST_EVENT, WALLPAPER_UPLOAD_SENTINEL,
+} from '../core/constants.js';
 import { S, saveSettings, loadSettings } from '../core/state.js';
 import { T, i18nText, i18nPlaceholder, refreshI18n } from '../core/i18n.js';
 import { mk, place, getCanvas, isLandscape, isPortrait } from '../core/util.js';
 import { getFeature, setFeature } from '../core/feature-settings.js';
-import { addOrUpdateAccount } from '../core/storage.js';
+import { previewLoginAccent, clearLoginAccentPreview } from '../features/ui-colors.js';
+import { addOrUpdateAccount, saveWallpaper, deleteWallpaper } from '../core/storage.js';
 import { hideBC, showBC } from './bc.js';
-import { applyBackground } from './background.js';
+import { applyBackground, handleBackgroundError } from './background.js';
 import { buildCarousel, destroyCarousel, setCarouselAxis } from './account-carousel.js';
 import { buildSettingsOverlay, toggleSettings, closeSettings, applyShowSettings } from './settings-ui.js';
 
@@ -21,9 +24,16 @@ export function buildUI() {
 
     const stage = mk('div', '', { id: 'lce-stage' });
 
-    // ── 滿版背景圖 + 暗化遮罩（最底層，蓋住 canvas 上的角色/感謝名單/WCE 按鈕） ──
+    // ── 黑底層（在 stage 外面、fixed 滿版）──
+    // 背景圖是貼著 canvas 鋪的，而 canvas 置中留邊，畫面上下緣一定會露出一條。
+    // 鋪一層純黑在最底下，那條就變成黑邊而不顯眼。
+    const bgBase = mk('div', '', { id: 'lce-bg-base' });
+    document.body.appendChild(bgBase);
+
+    // ── 滿版背景圖 + 遮罩（stage 內、蓋住 canvas 上的角色/感謝名單/WCE 按鈕） ──
     const bgImg = mk('img', '', { id: 'lce-bg-img', alt: '' });
-    bgImg.onerror = () => { bgImg.style.display = 'none'; };
+    // 自訂網址載不出來時退回內建背景，而不是直接把背景藏掉開天窗
+    bgImg.onerror = () => handleBackgroundError();
     const bgOverlay = mk('div', '', { id: 'lce-bg-overlay' });
     stage.appendChild(bgImg);
     stage.appendChild(bgOverlay);
@@ -44,7 +54,7 @@ export function buildUI() {
 
     // ── 帳號 / 密碼 輸入（人形 / 鎖 圖示放進輸入框內最前面） ──
     const nameField = mk('div'); nameField.className = 'lce-field';
-    const nameInput = mk('input', '', { id: 'lce-input-name', type: 'text', autocomplete: 'username' });
+    const nameInput = mk('input', '', { id: 'lce-input-name', type: 'text', autocomplete: 'off' });
     nameInput.className = 'lce-input'; nameInput.setAttribute('enterkeyhint', 'next'); i18nPlaceholder(nameInput, 'ph_account');
     nameInput.setAttribute('aria-label', T('label_account'));
     const nameIcon  = mk('span', '', { innerHTML: ICON_PERSON }); nameIcon.className = 'lce-field-icon';
@@ -52,8 +62,23 @@ export function buildUI() {
     place(nameField, 210, 400, 400, 50, 22); stage.appendChild(nameField);
 
     const passField = mk('div'); passField.className = 'lce-field';
-    const passInput = mk('input', '', { id: 'lce-input-pass', type: 'password', autocomplete: 'current-password' });
-    passInput.className = 'lce-input'; passInput.setAttribute('enterkeyhint', 'go'); i18nPlaceholder(passInput, 'ph_password');
+    // 密碼欄刻意不用 type="password"：只要瀏覽器認得出這是「帳號＋密碼」組合，
+    // 快速登入時就會跳出「要不要記住密碼」。LCE 自己就有 AES-GCM 加密的帳號庫，
+    // 再讓瀏覽器存一份既多餘、又每次都擋在畫面上。改用 text + text-security 遮罩：
+    // 外觀一樣是圓點，但密碼管理器不會認領它。
+    // 瀏覽器不支援 text-security 時退回 type="password" —— 寧可跳提示，也不能讓密碼裸奔。
+    const maskable = typeof CSS !== 'undefined' && CSS.supports?.('-webkit-text-security', 'disc');
+    const passInput = mk('input', '', {
+        id: 'lce-input-pass',
+        type: maskable ? 'text' : 'password',
+        autocomplete: 'off',
+        spellcheck: false,
+    });
+    passInput.className = 'lce-input';
+    if (maskable) passInput.classList.add('lce-masked');
+    passInput.setAttribute('autocapitalize', 'off');
+    passInput.setAttribute('autocorrect', 'off');
+    passInput.setAttribute('enterkeyhint', 'go'); i18nPlaceholder(passInput, 'ph_password');
     passInput.setAttribute('aria-label', T('label_password'));
     const passIcon  = mk('span', '', { innerHTML: ICON_LOCK }); passIcon.className = 'lce-field-icon';
     passField.appendChild(passInput); passField.appendChild(passIcon);
@@ -179,6 +204,15 @@ function bindEvents() {
             refreshOrientation();
         });
     }
+    // 設定：登入介面色系（全域設定，與遊戲內「UI 設置」同一份值）
+    // 拖曳中只預覽不存檔（input 會隨滑鼠連發），放開調色盤才真的寫進設定。
+    // 寫入後 setFeature 會發出變更事件，ui-colors 自己會重新套色。
+    const accentEl = document.getElementById('lce-set-accent');
+    accentEl.addEventListener('input', function () { previewLoginAccent(this.value); });
+    accentEl.addEventListener('change', function () {
+        clearLoginAccentPreview();
+        setFeature('loginAccentColor', this.value);
+    });
     // 設定：頭像 / 帳號 / 名稱 顯示
     document.getElementById('lce-set-avatar').addEventListener('change', function () {
         S.settings.showAvatar = this.checked; saveSettings(); applyShowSettings();
@@ -193,6 +227,7 @@ function bindEvents() {
     document.getElementById('lce-set-bgmode').addEventListener('change', function () {
         S.settings.bgMode = this.value; saveSettings();
         document.getElementById('lce-set-bgname-row').style.display = this.value === 'select' ? '' : 'none';
+        document.getElementById('lce-set-bgcustom-row').style.display = this.value === 'custom' ? 'flex' : 'none';
         applyBackground();
     });
     // 設定：背景名稱
@@ -200,7 +235,57 @@ function bindEvents() {
         S.settings.bgName = this.value; saveSettings();
         applyBackground();
     });
+    bindCustomWallpaper();
     document.getElementById('lce-sett-close').addEventListener('click', closeSettings);
+}
+
+/** 自訂桌布：網址欄、上傳、清除。 */
+function bindCustomWallpaper() {
+    const urlIn  = document.getElementById('lce-set-bgurl');
+    const fileIn = document.getElementById('lce-set-bgfile');
+    const hint   = document.getElementById('lce-set-bghint');
+    const setHint = (key) => { if (hint) { hint.textContent = key ? T(key) : ''; hint.dataset.lceKey = key || ''; } };
+
+    // 開啟浮層時就先反映目前狀態，使用者才知道現在用的是上傳的那張還是網址
+    if (S.settings.bgCustomUrl === WALLPAPER_UPLOAD_SENTINEL) setHint('bg_using_upload');
+
+    // change 而非 input：邊打字邊套用會對著半截網址狂發請求
+    urlIn?.addEventListener('change', function () {
+        const v = this.value.trim();
+        S.settings.bgCustomUrl = v;
+        saveSettings();
+        setHint(v ? '' : 'bg_empty_fallback');
+        applyBackground();
+    });
+
+    document.getElementById('lce-set-bgupload')?.addEventListener('click', () => fileIn?.click());
+
+    fileIn?.addEventListener('change', async function () {
+        const file = this.files?.[0];
+        this.value = '';   // 清掉，否則選同一個檔案第二次不會觸發 change
+        if (!file) return;
+        try {
+            await saveWallpaper(file);
+            S.settings.bgCustomUrl = WALLPAPER_UPLOAD_SENTINEL;   // 改用 DB 那張
+            saveSettings();
+            if (urlIn) urlIn.value = '';
+            setHint('bg_using_upload');
+            applyBackground();
+        } catch (e) {
+            // saveWallpaper 會針對「不是圖片」和「檔案太大」丟出可辨識的錯誤
+            setHint(e?.message === 'too-large' ? 'bg_too_large' : 'bg_not_image');
+            console.warn('🐈‍⬛ [LCE] 桌布上傳失敗:', e);
+        }
+    });
+
+    document.getElementById('lce-set-bgclear')?.addEventListener('click', async () => {
+        await deleteWallpaper();
+        S.settings.bgCustomUrl = '';
+        saveSettings();
+        if (urlIn) urlIn.value = '';
+        setHint('bg_empty_fallback');
+        applyBackground();
+    });
 }
 
 /** 建立語言 dropdown，優先取自 BC 原生 dropdown */
@@ -246,14 +331,20 @@ export function doLogin() {
         return;
     }
 
+    // 直接把帳密交給 BC 的登入函式，完全不碰它的 InputName / InputPassword。
+    // 這是 WCE 的作法（見 automaticReconnect.js）：只要密碼被寫進 BC 那組 DOM 欄位，
+    // 瀏覽器就會判定「使用者剛用這組帳密登入」而跳出記住密碼的提示 —— 而且那次填值
+    // 對登入本身毫無作用，LoginDoLogin 收的是參數，不是欄位值。
+    if (typeof LoginDoLogin === 'function') { LoginDoLogin(name, pass); return; }
+
+    // 退路：舊版 BC 沒有 LoginDoLogin，只能填欄位再按它的登入鈕。
+    // 這條路會跳記住密碼的提示，但總比登不進去好。
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
     const bcName = document.getElementById('InputName');
     const bcPass = document.getElementById('InputPassword');
     if (bcName && setter) { setter.call(bcName, name); bcName.dispatchEvent(new Event('input', { bubbles: true })); }
     if (bcPass && setter) { setter.call(bcPass, pass); bcPass.dispatchEvent(new Event('input', { bubbles: true })); }
-
-    if (typeof LoginDoLogin === 'function') LoginDoLogin(name, pass);
-    else document.getElementById('login-login-button')?.click();
+    document.getElementById('login-login-button')?.click();
 }
 
 // ── 狀態列同步（讀取 BC 登入狀態） ────────────────────────────────────────
@@ -340,6 +431,8 @@ export function lceApply() {
     applyBackground();
     applyShowSettings();
     if (S.stageEl) S.stageEl.style.display = '';
+    // 背景層不在 stage 裡，得自己開關 —— 忘了關的話登入後它會一直蓋在遊戲畫面上
+    document.getElementById('lce-bg-base')?.toggleAttribute('hidden', false);
     S.lastLayout      = null;
     S.lastStatusMsg   = null;
     S.lastStatusError = null;
@@ -354,6 +447,7 @@ export function lceRemove() {
     closeSettings();
     if (S.statusTimer) { clearInterval(S.statusTimer); S.statusTimer = null; }
     if (S.stageEl) S.stageEl.style.display = 'none';
+    document.getElementById('lce-bg-base')?.toggleAttribute('hidden', true);
 }
 
 /**
@@ -366,6 +460,7 @@ export function destroyLoginUI() {
     destroyCarousel();
     if (S.fusamObserver) { S.fusamObserver.disconnect(); S.fusamObserver = null; }
     document.getElementById('lce-stage')?.remove();
+    document.getElementById('lce-bg-base')?.remove();
     document.getElementById('lce-settings-overlay')?.remove();
     document.getElementById('lce-styles')?.remove();
     document.getElementById('lce-hide-thirdparty')?.remove();

@@ -21,7 +21,10 @@ import { installChatAugments } from './features/chat-augments.js';
 import { installPendingMessages } from './features/pending-messages.js';
 import { installFriendPresence } from './features/friend-presence.js';
 import { installLocalMessages } from './features/local-messages.js';
+import { installUiColors } from './features/ui-colors.js';
+import { installWelcome } from './features/welcome.js';
 import { installHello } from './features/hello.js';
+import { installBadges } from './features/badges.js';
 import { installPastProfiles } from './features/past-profiles.js';
 import { installInstantMessenger } from './features/instant-messenger.js';
 import { installCharTalk } from './features/char-talk.js';
@@ -32,7 +35,11 @@ import { installCheats } from './features/cheats.js';
 import { installMisc } from './features/misc.js';
 import { installWardrobe } from './features/wardrobe.js';
 import { installRelogin } from './features/relogin.js';
-import { installExpressions, isExpressionEngineStarted, debugExpressions } from './features/expressions.js';
+import {
+    installExpressions, isExpressionEngineStarted, debugExpressions,
+    getExpressionQueue, getExpressionHookOrder, faceComponents,
+} from './features/expressions.js';
+import { ArousalExpressionStages, EventExpressions, ActivityTriggers } from './features/expressions-data.js';
 import { installVertical } from './features/vertical/index.js';
 import { injectLoginStyles } from './loginpage/styles.js';
 import { refreshAccounts } from './loginpage/account-carousel.js';
@@ -49,6 +56,11 @@ if (LCE_ALREADY_LOADED) {
     // ui / theme 是全域共用設定，登入前就要讀得到（登入頁版面與染色都靠它）。
     // 必須在 installLoginPage() 之前，否則登入頁第一次套版時 getFeature 還是空的。
     initGlobalFeatures();
+
+    // LCE 自己的介面配色（登入介面、系統訊息、通知氣球）。
+    // 必須在 installLoginPage() 之前：登入頁的樣式吃 --lce-login-accent，
+    // 晚一步注入的話第一幀會閃一下 fallback 色。
+    installUiColors();
 
     // 安裝登入頁（註冊鉤子與視窗事件）
     installLoginPage();
@@ -83,7 +95,9 @@ if (LCE_ALREADY_LOADED) {
                 installPendingMessages();
                 installFriendPresence();
                 installLocalMessages();
+                installWelcome();
                 installHello();
+                installBadges();
                 installPastProfiles();
                 installInstantMessenger();
                 installCharTalk();
@@ -107,20 +121,37 @@ if (LCE_ALREADY_LOADED) {
             reloadSettings,
             refreshAccounts,
             captureProfile:  captureAndSaveProfile,
-            // 表情引擎診斷：debugExpressions(true) 後做一次活動即可看到完整流程
+            // 表情引擎診斷：debugExpressions(true) 後做一次活動即可看到完整流程；
+            // 表情不如預期時的順序 —— getExpressionHookOrder()（與其他模組衝突，
+            // 'Liko - LCE' 必須排最後）→ getExpressionQueue()（事件有沒有進來）
+            // → getFaceComponents()（該部位在不在引擎管轄內）
             isExpressionEngineStarted,
             debugExpressions,
+            getExpressionQueue,
+            getExpressionHookOrder,
+            getFaceComponents: faceComponents,
+            // 表情資料表（唯讀參考：什麼活動觸發什麼表情、各慾望階段對應的表情）
+            expressionData: Object.freeze({ ArousalExpressionStages, EventExpressions, ActivityTriggers }),
             teardownLoginUI: teardownLoginPage,
             // 功能設定
             getFeature,
             setFeature,
-            get settings() { return fSettings; },
             // 主題色 API
             getMainColor,
             getAccentColor,
             getTextColor,
             getPalette,
             isDarkTheme,
+        });
+
+        // settings 必須用 defineProperty 定義成真的 getter，不能寫在上面的 Object.assign 裡：
+        // Object.assign 會「呼叫」來源的 getter、把當下的『值』複製過去，getter 本身不會被搬過來。
+        // 而 loadFeatureSettings() 是非同步的、結束時會把 fSettings 換成一個全新物件
+        // （fSettings = settings），所以 Object.assign 抓到的是還沒載入前那個空殼 ——
+        // window.Liko.LCE.settings 會永遠指著一個被丟掉的舊物件，讀不到也改不動真正的設定。
+        Object.defineProperty(window.Liko.LCE, 'settings', {
+            get() { return fSettings; },
+            configurable: true,
         });
 
         console.log('🐈‍⬛ [LCE] Liko Club Extensions v' + MOD_VER + ' 已載入');

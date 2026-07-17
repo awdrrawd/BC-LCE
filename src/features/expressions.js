@@ -15,6 +15,16 @@
 //   • 每 250ms 掃佇列算出「此刻該是什麼表情/姿勢」，比對目前狀態後才送出變更
 //   • 玩家手動改的表情會記成 MANUAL_OVERRIDE 事件，不會被自動表情蓋掉
 //   • 姿勢與表情綁在一起（活動事件可同時帶 Poses），故姿勢引擎一併移植
+//
+// 與其他模組共存 —— 本檔的核心難題，改動前務必讀懂：
+//   接管 CharacterSetFacialExpression 會同時砍斷兩條別人賴以維生的路徑，
+//   因為鉤子不呼叫 next，BC 的函式本體從此不執行：
+//     1. 鉤子鏈：排在我們後面的模組再也收不到通知     → ENGINE_HOOK_PRIORITY
+//     2. BC 本體內的 Eyes → Eyes2 遞迴：只剩單眼會被通知 → 見 CharacterSetFacialExpression 鉤子
+//     3. 引擎自己的套用走 setExpression，根本不經過該函式 → notifyMods()
+//   三者缺一，靠鉤子鏡射自家群組的模組（如「服装拓展」的 左眼_Luzi/右眼_Luzi）
+//   就會壞掉，且症狀各不相同（全不動 / 只動一眼 / 只有手動能動）。
+//   WCE 這三項全錯，開了 animationEngine 就會鎖死這類模組的眼睛，別拿它當標準。
 // ════════════════════════════════════════════════════════════════════════════
 
 import modApi from '../modsdk.js';
@@ -47,14 +57,14 @@ const BASE_FACE_COMPONENTS = ['Eyes', 'Eyes2', 'Eyebrows', 'Mouth', 'Fluids', 'E
 /**
  * 本角色實際可用的表情部位 = 內建清單 ∪ 身上所有帶 AllowExpression 的群組。
  *
- * 這裡不能像 WCE 那樣寫死。BC 的表情面板是列出「所有帶 AllowExpression 的群組」，
- * 而其他模組會自己新增這種群組（例如 Luzi 的 左眼_Luzi / 右眼_Luzi，資產名「眼睛6」），
- * 面板點下去 BC 呼叫的就是 CharacterSetFacialExpression(C, "左眼_Luzi", ...)。
- * 引擎開著時我們的鉤子會攔下它且不呼叫 next，事件照樣進佇列 —— 但套用迴圈若只認寫死的
- * 8 個部位，這些群組就永遠寫不回去，表情進得去出不來，模組的眼睛被鎖死，
- * BC 內建的眼睛卻一切正常。（WCE 寫死同一份清單，此處是刻意的分歧，勿改回。）
+ * 不寫死的理由：模組會自己新增帶 AllowExpression 的群組（如「服装拓展」的
+ * 左眼_Luzi / 右眼_Luzi，資產名「眼睛6」），而 BC 的表情面板是列出所有這種群組。
+ * 只要有任何一通 CharacterSetFacialExpression 帶著這種群組名進到我們的鉤子，
+ * 引擎開著時就會被吃進佇列（鉤子不呼叫 next）—— 套用迴圈若只認寫死的 8 個部位，
+ * 它就永遠寫不回去，表情進得去出不來。凡是進得了佇列的部位，都必須出得來。
+ * （WCE 寫死同一份清單，此處是刻意的分歧，勿改回。）
  */
-function faceComponents() {
+export function faceComponents() {
     const found = new Set(BASE_FACE_COMPONENTS);
     for (const a of Player.Appearance ?? []) {
         const g = a.Asset?.Group;
@@ -237,6 +247,25 @@ export function debugExpressions(on = true) {
     return debugOn;
 }
 const dbg = (...a) => { if (debugOn) console.info(LOG, '[expr]', ...a); };
+
+/**
+ * 診斷用：目前佇列快照（深拷貝，改它不會影響引擎）。
+ * 表情不如預期時，先看事件到底有沒有進來、優先權與剩餘時間各是多少。
+ */
+export const getExpressionQueue = () => deepCopy(queue);
+
+/**
+ * 診斷用：本檔所有鉤子的實際執行順序（ModSDK 依優先權由大到小排序，此陣列即執行順序）。
+ *
+ * 這是與其他模組衝突時的第一個該看的地方 —— 我們的鉤子會終止呼叫鏈，
+ * 'Liko - LCE' 必須排在最後，否則排在我們後面的模組全部收不到通知。
+ * 排錯的症狀是「BC 內建的臉會動、模組加的臉不動」（見檔頭「與其他模組共存」）。
+ */
+export function getExpressionHookOrder() {
+    const info = bcModSdk.getPatchingInfo();
+    return ['CharacterSetFacialExpression', 'CharacterSetActivePose', 'PoseSetActive']
+        .reduce((a, fn) => { a[fn] = info.get(fn)?.hookedByMods ?? []; return a; }, {});
+}
 
 /** 收到聊天/活動訊息 → 比對觸發表 → 推送對應表情事件。 */
 function handleChatMessage(data) {
@@ -463,11 +492,9 @@ function customArousalExpression() {
 
     for (const t of faceParts) {
         // 內建部位一律由引擎作主：佇列沒東西就代表「該回到無表情」，強制歸零。
-        // 但模組新增的表情群組（如 左眼_Luzi）不能這樣對待 —— 那些群組是該模組自己在
-        // 維護的，它可能直接寫 Property 而從不經過我們的佇列。若比照內建部位歸零，
-        // 引擎每 250ms 就會把它剛鏡射過去的表情擦掉。故：佇列裡真的有事件才寫，
-        // 沒有就完全不碰。（若該模組是回頭呼叫 CharacterSetFacialExpression 來鏡射，
-        // 事件會進佇列，這裡照樣套用得到 —— 兩種寫法都撐得住。）
+        // 模組新增的群組不能這樣對待 —— 它們由該模組自己維護（「服装拓展」是在自己的
+        // 鉤子裡寫 Property，不經過我們的佇列）。若比照內建部位歸零，引擎每 250ms
+        // 就會把它剛鏡射過去的表情擦掉。故：佇列裡真的有事件才寫，沒有就完全不碰。
         if (!nextExpression[t] && !BASE_FACE_COMPONENTS.includes(t)) continue;
         const [exp] = expression(t);
         const nextExp = nextExpression[t] || { Duration: -1, Expression: null };

@@ -1,6 +1,13 @@
 // ════════════════════════════════════════════════════════════════════════════
-// i18n（內嵌字庫，依 BC 語言選擇；日後可改接共用引擎）
+// i18n（內嵌字庫，依 BC 語言選擇）
+//
+// 字庫是 LCE 自己的 —— 別的插件的字庫裡沒有我們的鍵，這部分共用不了。
+// 但「現在是什麼語言」的判斷會走 window.Liko.I18N 這個共用註冊處：
+// 誰先載入誰建立，之後所有 Liko 插件共用同一套語言判斷與切換通知。
+// 見 core/i18n-registry.js。
 // ════════════════════════════════════════════════════════════════════════════
+
+import { getSharedI18n } from './i18n-registry.js';
 
 const I18N = {
     'zh-TW': {
@@ -29,6 +36,14 @@ const I18N = {
         set_bg:         '背景',
         bg_random:      '隨機',
         bg_select:      '選擇',
+        bg_custom:      '自訂',
+        bg_url_ph:      '貼上圖片網址（https://…）',
+        bg_upload:      '上傳圖片',
+        bg_clear:       '清除',
+        bg_using_upload:'目前使用：已上傳的圖片',
+        bg_empty_fallback:'未設定，暫時使用內建背景',
+        bg_not_image:   '這不是圖片檔，請換一個',
+        bg_too_large:   '檔案太大（上限 12MB）',
         settings_close: '關閉',
     },
     'CN': {
@@ -57,6 +72,14 @@ const I18N = {
         set_bg:         '背景',
         bg_random:      '随机',
         bg_select:      '选择',
+        bg_custom:      '自定义',
+        bg_url_ph:      '粘贴图片网址（https://…）',
+        bg_upload:      '上传图片',
+        bg_clear:       '清除',
+        bg_using_upload:'当前使用：已上传的图片',
+        bg_empty_fallback:'未设置，暂时使用内置背景',
+        bg_not_image:   '这不是图片文件，请换一个',
+        bg_too_large:   '文件太大（上限 12MB）',
         settings_close: '关闭',
     },
     'EN': {
@@ -85,6 +108,14 @@ const I18N = {
         set_bg:         'Background',
         bg_random:      'Random',
         bg_select:      'Select',
+        bg_custom:      'Custom',
+        bg_url_ph:      'Paste an image URL (https://…)',
+        bg_upload:      'Upload image',
+        bg_clear:       'Clear',
+        bg_using_upload:'Currently using: uploaded image',
+        bg_empty_fallback:'Not set — using a built-in background for now',
+        bg_not_image:   'That is not an image file',
+        bg_too_large:   'File too large (max 12MB)',
         settings_close: 'Close',
     },
 };
@@ -98,7 +129,7 @@ const SETTINGS_I18N = {
         lce_settings_title:  'LCE 設定',
         lce_settings_button: 'LCE 設定',
         lce_click_hint:      '點擊設定項可查看說明',
-        cat_chat: '聊天與社交', cat_theme: '主題', cat_ui: 'UI 替換', cat_immersion: '沉浸體驗',
+        cat_chat: '聊天與社交', cat_theme: 'BC 主題', cat_ui: 'UI 設置', cat_immersion: '沉浸體驗',
         cat_wardrobe: '衣櫃', cat_performance: '性能', cat_cheats: '作弊與反作弊', cat_misc: '雜項',
         // select 選項
         so_g_none: '無', so_g_low: '低', so_g_medium: '中', so_g_high: '高', so_g_full: '完全', so_g_off: '關閉',
@@ -145,6 +176,9 @@ const SETTINGS_I18N = {
         domain_image: '圖片', domain_music: '音樂', domain_content: '內容',
         domain_trusted: '（此來源在可信任名單內）', domain_allow: '本次連線允許', domain_deny: '本次連線拒絕',
         perf_clear_cache: '[LCE] 清除並重載所有角色的繪圖緩存',
+        welcome_loaded: '🐈‍⬛ [LCE] Liko Club Extensions v$ver 已載入',
+        welcome_intro: '基於 WCE 下擴充與優化功能，並提供介面美化、沉浸感、性能等設置。',
+        welcome_hint: '請輸入 /lce 查看，或 /lcesetting 前往設置',
         sound_on: '音效：開（點此靜音）', sound_off: '音效：靜音（點此開啟）',
         friend_now_online: '目前上線：{list}', friend_now_offline: '目前離線：{list}',
         beep_from: '私訊來自 {name}({id})', beep_reply_hint: '點此回覆（/beep {id}）',
@@ -159,7 +193,7 @@ const SETTINGS_I18N = {
         pose_BaseLower: '站立', pose_LegsClosed: '併腿站立', pose_Kneel: '跪下',
         pose_KneelingSpread: '跪姿分腿', pose_AllFours: '趴跪',
         // theme
-        s_themeEnabled: '啟用主題染色', sd_themeEnabled: '主開關：對介面套用自訂主題色（預設採用預設色）。',
+        s_themeEnabled: '啟用主題染色', sd_themeEnabled: '主開關：對介面套用自訂主題色（預設採用預設色）。【共用設定】整個 BC 主題分類不分帳號共用，換帳號不必重設。',
         s_themeMode: '染色模式', sd_themeMode: '簡易：只填主色/強調色/文字色；進階：逐項填入所有顏色（按鈕、狀態等）。',
         s_themeFlatColor: '背景直接染色', sd_themeFlatColor: '開：選單背景直接填滿主色；關：保留原背景圖並以主色疊色。',
         s_c_main: '主色', s_c_accent: '強調色', s_c_text: '文字色',
@@ -183,7 +217,15 @@ const SETTINGS_I18N = {
         s_resetTheme: '恢復預設顏色', sd_resetTheme: '把所有主題色還原為預設值。',
         s_resetTheme_btn: '恢復', s_resetTheme_done: '已恢復',
         // ui
-        s_horizontalLogin: '橫式登入介面', sd_horizontalLogin: '橫向時使用 LCE 的登入版面；關閉則使用俱樂部原本的登入頁。',
+        s_horizontalLogin: '橫式登入介面', sd_horizontalLogin: '橫向時使用 LCE 的登入版面；關閉則使用俱樂部原本的登入頁。【共用設定】整個 UI 設置分類不分帳號共用（登入前就要讀得到，所以不能存在帳號裡）。',
+        s_loginAccentColor: '登入介面色系', sd_loginAccentColor: '登入介面的主色（外框、按鈕、選中的帳號卡都吃這個色）。登入頁的「設定」裡也能改，是同一份值。',
+        s_sysMsgBgColor: '系統信息底色', sd_sysMsgBgColor: 'LCE 系統訊息（指令回覆、好友通知等）在聊天室裡的底色。',
+        s_sysMsgTextColor: '系統信息文字顏色', sd_sysMsgTextColor: 'LCE 系統訊息的文字色。底色若改深，記得把這個改淺。',
+        s_commanderBtnColor: '指令面板按鈕顏色', sd_commanderBtnColor: '/lce 等指令面板裡可點擊文字的顏色。它疊在系統訊息底色上，兩個顏色要搭得起來才看得清。',
+        s_tooltipBgColor: '說明信息窗底色', sd_tooltipBgColor: 'LCE 設定頁下方那個說明框的底色。維持預設的黃色時，開啟 BC 主題會跟著染色；改成別的顏色就以你選的為準，主題不再插手。',
+        s_tooltipTextColor: '說明信息窗文字顏色', sd_tooltipTextColor: '說明框的文字與外框顏色。底色若改深，記得把這個改淺。',
+        s_notifyBubbleColor: '通知氣球顏色', sd_notifyBubbleColor: '畫面角落浮出的通知氣球底色（俱樂部的 beep 提示也吃這個色）。',
+        s_notifyBubbleTextColor: '通知氣球文字顏色', sd_notifyBubbleTextColor: '通知氣球的文字色。',
         s_verticalLogin: '直式登入介面', sd_verticalLogin: '直向時使用 LCE 的直式登入版面；關閉則使用俱樂部原本的登入頁。',
         s_verticalChatSearch: '直式房間搜尋介面', sd_verticalChatSearch: '直向時使用直式房間搜尋版面。',
         s_verticalChatRoom: '直式聊天室介面', sd_verticalChatRoom: '直向時使用直式聊天室版面。',
@@ -239,9 +281,15 @@ const SETTINGS_I18N = {
         // performance
         s_automateCacheClear: '每小時清除繪圖緩存', sd_automateCacheClear: '每小時自動清除繪圖快取，避免長時間遊玩記憶體暴增。',
         s_manualCacheClear: '添加清除加載繪圖緩存鈕', sd_manualCacheClear: '在聊天室選單新增清除／重載繪圖快取的按鈕。',
-        s_scrollMaxMessages: '優化聊天記錄條數上限', sd_scrollMaxMessages: '左側開關啟用後，右側選擇聊天室最多保留的可見訊息數（越少越省效能）。',
-        s_reduceTextureQuality: '降低角色分辨率', sd_reduceTextureQuality: '降低角色貼圖畫質以節省記憶體與效能。',
-        s_lowFrameRate: '低幀率模式', sd_lowFrameRate: '降低繪製幀率以節省效能（畫面較不流暢）。',
+        s_scrollMaxMessages: '聊天記錄可見數', sd_scrollMaxMessages: '只即時渲染最新的這幾則訊息，更舊的交給瀏覽器跳過繪製。訊息不會消失，往回捲看歷史時會自動全部展開。',
+        s_autoPruneMessages: '自動清除聊天記錄', sd_autoPruneMessages: '訊息數超過此值時，物理移除最舊的訊息以釋放記憶體，清完保留 300 則。一律停在目前房間的分隔線之前，往回看歷史時暫停。',
+        s_textureQuality: '降低角色分辨率', sd_textureQuality: '降低角色貼圖的解析度以節省記憶體與繪製時間（角色大小不變，只是變模糊）。普通 70%／低畫質 50%／最低 30%。',
+        s_lowFrameRateFps: '低幀率模式', sd_lowFrameRateFps: '限制遊戲繪製幀率以節省效能（畫面較不流暢）。只影響遊戲繪製，不影響其他插件。',
+        s_showFps: '顯示 FPS', sd_showFps: '在畫面上顯示目前幀率，右側選擇顯示位置。',
+        so_tq_normal: '普通 (70%)', so_tq_low: '低畫質 (50%)', so_tq_lowest: '最低 (30%)',
+        so_fp_tl: '左上', so_fp_ml: '左中', so_fp_bl: '左下',
+        so_fp_tc: '中上', so_fp_bc: '中下',
+        so_fp_tr: '右上', so_fp_mr: '右中', so_fp_br: '右下',
         // cheats
         s_antiCheatLevel: '啟用反作弊', sd_antiCheatLevel: '左側開關啟用後，右側選擇反作弊的作用對象門檻。',
         s_antiCheatBlacklist: '自動檢測並列入黑名單', sd_antiCheatBlacklist: '自動把偵測到的作弊者列入黑名單（白名單對象例外）。',
@@ -256,15 +304,15 @@ const SETTINGS_I18N = {
         // misc
         s_relogin: '斷線重連', sd_relogin: '斷線後自動重新輸入密碼登入（需已在登入頁保存密碼）。',
         s_confirmLeave: '離開遊戲時確認', sd_confirmLeave: '離開遊戲時先確認，避免誤關分頁。',
+        s_shareAddons: '共享插件清單', sd_shareAddons: '與同房其他 LCE 使用者共享你安裝的插件清單（/versions 查看）。關閉後仍會報上 LCE 版本（否則別人的 /versions 看不到你），只是不附完整清單。不會送給 WCE 使用者 —— 我們走的是 LCE 自己的頻道。',
         s_customContentDomainCheck: '加載三方時提示', sd_customContentDomainCheck: '載入第三方網域內容前先跳出確認。',
-        s_shareAddons: '共享插件', sd_shareAddons: '與同房其他使用者共享你安裝的插件清單（/versions 查看）。',
         s_ghostNewUsers: '不自然用戶無視並黑名單', sd_ghostNewUsers: '自動 ghost + 黑名單異常新帳號（防惡意機器人，一般不建議常開）。',
     },
     'CN': {
         lce_settings_title:  'LCE 设置',
         lce_settings_button: 'LCE 设置',
         lce_click_hint:      '点击设置项可查看说明',
-        cat_chat: '聊天与社交', cat_theme: '主题', cat_ui: 'UI 替换', cat_immersion: '沉浸体验',
+        cat_chat: '聊天与社交', cat_theme: 'BC 主题', cat_ui: 'UI 设置', cat_immersion: '沉浸体验',
         cat_wardrobe: '衣橱', cat_performance: '性能', cat_cheats: '作弊与反作弊', cat_misc: '杂项',
         so_g_none: '无', so_g_low: '低', so_g_medium: '中', so_g_high: '高', so_g_full: '完全', so_g_off: '关闭',
         so_t_remove: '移除', so_t_ignore: '忽略', so_t_preserve: '保留',
@@ -308,6 +356,9 @@ const SETTINGS_I18N = {
         domain_image: '图片', domain_music: '音乐', domain_content: '内容',
         domain_trusted: '（此来源在可信任名单内）', domain_allow: '本次连线允许', domain_deny: '本次连线拒绝',
         perf_clear_cache: '[LCE] 清除并重载所有角色的绘图缓存',
+        welcome_loaded: '🐈‍⬛ [LCE] Liko Club Extensions v$ver 已加载',
+        welcome_intro: '基于 WCE 下扩充与优化功能，并提供界面美化、沉浸感、性能等设置。',
+        welcome_hint: '请输入 /lce 查看，或 /lcesetting 前往设置',
         sound_on: '音效：开（点此静音）', sound_off: '音效：静音（点此开启）',
         friend_now_online: '当前上线：{list}', friend_now_offline: '当前离线：{list}',
         beep_from: '私讯来自 {name}({id})', beep_reply_hint: '点此回复（/beep {id}）',
@@ -321,7 +372,7 @@ const SETTINGS_I18N = {
         pose_BackBoxTie: '反绑双手', pose_BackElbowTouch: '肘部相触', pose_BackCuffs: '背后扣手',
         pose_BaseLower: '站立', pose_LegsClosed: '并腿站立', pose_Kneel: '跪下',
         pose_KneelingSpread: '跪姿分腿', pose_AllFours: '趴跪',
-        s_themeEnabled: '启用主题染色', sd_themeEnabled: '主开关：对界面套用自定义主题色（默认采用默认色）。',
+        s_themeEnabled: '启用主题染色', sd_themeEnabled: '主开关：对界面套用自定义主题色（默认采用默认色）。【共用设置】整个 BC 主题分类不分账号共用，换账号不必重设。',
         s_themeMode: '染色模式', sd_themeMode: '简易：只填主色/强调色/文字色；进阶：逐项填入所有颜色（按钮、状态等）。',
         s_themeFlatColor: '背景直接染色', sd_themeFlatColor: '开：菜单背景直接填满主色；关：保留原背景图并以主色叠色。',
         s_c_main: '主色', s_c_accent: '强调色', s_c_text: '文字色',
@@ -344,7 +395,15 @@ const SETTINGS_I18N = {
         s_loadThemeSlot_btn: '读取', s_loadThemeSlot_done: '已读取',
         s_resetTheme: '恢复默认颜色', sd_resetTheme: '把所有主题色还原为默认值。',
         s_resetTheme_btn: '恢复', s_resetTheme_done: '已恢复',
-        s_horizontalLogin: '横式登录界面', sd_horizontalLogin: '横向时使用 LCE 的登录版面；关闭则使用俱乐部原本的登录页。',
+        s_horizontalLogin: '横式登录界面', sd_horizontalLogin: '横向时使用 LCE 的登录版面；关闭则使用俱乐部原本的登录页。【共用设置】整个 UI 设置分类不分账号共用（登录前就要读得到，所以不能存在账号里）。',
+        s_loginAccentColor: '登录界面色系', sd_loginAccentColor: '登录界面的主色（外框、按钮、选中的账号卡都吃这个色）。登录页的「设置」里也能改，是同一份值。',
+        s_sysMsgBgColor: '系统信息底色', sd_sysMsgBgColor: 'LCE 系统消息（指令回复、好友通知等）在聊天室里的底色。',
+        s_sysMsgTextColor: '系统信息文字颜色', sd_sysMsgTextColor: 'LCE 系统消息的文字色。底色若改深，记得把这个改浅。',
+        s_commanderBtnColor: '指令面板按钮颜色', sd_commanderBtnColor: '/lce 等指令面板里可点击文字的颜色。它叠在系统消息底色上，两个颜色要搭得起来才看得清。',
+        s_tooltipBgColor: '说明信息窗底色', sd_tooltipBgColor: 'LCE 设置页下方那个说明框的底色。维持默认的黄色时，开启 BC 主题会跟着染色；改成别的颜色就以你选的为准，主题不再插手。',
+        s_tooltipTextColor: '说明信息窗文字颜色', sd_tooltipTextColor: '说明框的文字与外框颜色。底色若改深，记得把这个改浅。',
+        s_notifyBubbleColor: '通知气球颜色', sd_notifyBubbleColor: '画面角落浮出的通知气球底色（俱乐部的 beep 提示也吃这个色）。',
+        s_notifyBubbleTextColor: '通知气球文字颜色', sd_notifyBubbleTextColor: '通知气球的文字色。',
         s_verticalLogin: '竖式登录界面', sd_verticalLogin: '竖向时使用 LCE 的竖式登录版面；关闭则使用俱乐部原本的登录页。',
         s_verticalChatSearch: '竖式房间搜寻界面', sd_verticalChatSearch: '竖向时使用竖式房间搜寻版面。',
         s_verticalChatRoom: '竖式聊天室界面', sd_verticalChatRoom: '竖向时使用竖式聊天室版面。',
@@ -397,9 +456,15 @@ const SETTINGS_I18N = {
         s_grantWardrobe_btn: '获得衣橱', s_grantWardrobe_done: '已获得衣橱',
         s_automateCacheClear: '每小时清除绘图缓存', sd_automateCacheClear: '每小时自动清除绘图缓存，避免长时间游玩内存暴增。',
         s_manualCacheClear: '添加清除加载绘图缓存钮', sd_manualCacheClear: '在聊天室菜单新增清除／重载绘图缓存的按钮。',
-        s_scrollMaxMessages: '优化聊天记录条数上限', sd_scrollMaxMessages: '左侧开关启用后，右侧选择聊天室最多保留的可见消息数（越少越省性能）。',
-        s_reduceTextureQuality: '降低角色分辨率', sd_reduceTextureQuality: '降低角色贴图画质以节省内存与性能。',
-        s_lowFrameRate: '低帧率模式', sd_lowFrameRate: '降低绘制帧率以节省性能（画面较不流畅）。',
+        s_scrollMaxMessages: '聊天记录可见数', sd_scrollMaxMessages: '只即时渲染最新的这几条消息，更旧的交给浏览器跳过绘制。消息不会消失，往回滚看历史时会自动全部展开。',
+        s_autoPruneMessages: '自动清除聊天记录', sd_autoPruneMessages: '消息数超过此值时，物理移除最旧的消息以释放内存，清完保留 300 条。一律停在当前房间的分隔线之前，往回看历史时暂停。',
+        s_textureQuality: '降低角色分辨率', sd_textureQuality: '降低角色贴图的分辨率以节省内存与绘制时间（角色大小不变，只是变模糊）。普通 70%／低画质 50%／最低 30%。',
+        s_lowFrameRateFps: '低帧率模式', sd_lowFrameRateFps: '限制游戏绘制帧率以节省性能（画面较不流畅）。只影响游戏绘制，不影响其他插件。',
+        s_showFps: '显示 FPS', sd_showFps: '在画面上显示当前帧率，右侧选择显示位置。',
+        so_tq_normal: '普通 (70%)', so_tq_low: '低画质 (50%)', so_tq_lowest: '最低 (30%)',
+        so_fp_tl: '左上', so_fp_ml: '左中', so_fp_bl: '左下',
+        so_fp_tc: '中上', so_fp_bc: '中下',
+        so_fp_tr: '右上', so_fp_mr: '右中', so_fp_br: '右下',
         s_antiCheatLevel: '启用反作弊', sd_antiCheatLevel: '左侧开关启用后，右侧选择反作弊的作用对象门槛。',
         s_antiCheatBlacklist: '自动检测并列入黑名单', sd_antiCheatBlacklist: '自动把检测到的作弊者列入黑名单（白名单对象例外）。',
         ac_rejected: '[反作弊] $name 尝试进行可疑的变更！外观变更已被拒绝。可以请对方停手；若是信任的朋友可加入白名单；若持续发生可将其列入黑名单（指令：/blacklistadd $num）。',
@@ -412,15 +477,15 @@ const SETTINGS_I18N = {
         s_allowIMBypassBCX: '绕过 BCXBEEP 限制', sd_allowIMBypassBCX: '允许即时通讯绕过 BCX 的 beep 限制。',
         s_relogin: '断线重连', sd_relogin: '断线后自动重新输入密码登入（需已在登入页保存密码）。',
         s_confirmLeave: '离开游戏时确认', sd_confirmLeave: '离开游戏时先确认，避免误关分页。',
+        s_shareAddons: '共享插件列表', sd_shareAddons: '与同房其他 LCE 用户共享你安装的插件列表（/versions 查看）。关闭后仍会报上 LCE 版本（否则别人的 /versions 看不到你），只是不附完整列表。不会送给 WCE 用户 —— 我们走的是 LCE 自己的频道。',
         s_customContentDomainCheck: '加载三方时提示', sd_customContentDomainCheck: '加载第三方域名内容前先弹出确认。',
-        s_shareAddons: '共享插件', sd_shareAddons: '与同房其他用户共享你安装的插件列表（/versions 查看）。',
         s_ghostNewUsers: '不自然用户无视并黑名单', sd_ghostNewUsers: '自动 ghost + 黑名单异常新账号（防恶意机器人，一般不建议常开）。',
     },
     'EN': {
         lce_settings_title:  'LCE Settings',
         lce_settings_button: 'LCE Settings',
         lce_click_hint:      'Click a setting to see its description',
-        cat_chat: 'Chat & Social', cat_theme: 'Theme', cat_ui: 'UI Replacement', cat_immersion: 'Immersion',
+        cat_chat: 'Chat & Social', cat_theme: 'BC Theme', cat_ui: 'UI Settings', cat_immersion: 'Immersion',
         cat_wardrobe: 'Wardrobe', cat_performance: 'Performance', cat_cheats: 'Cheats & Anti-Cheat', cat_misc: 'Misc',
         so_g_none: 'none', so_g_low: 'low', so_g_medium: 'medium', so_g_high: 'high', so_g_full: 'full', so_g_off: 'off',
         so_t_remove: 'remove', so_t_ignore: 'ignore', so_t_preserve: 'preserve',
@@ -464,6 +529,9 @@ const SETTINGS_I18N = {
         domain_image: 'image', domain_music: 'music', domain_content: 'content',
         domain_trusted: '(This origin is on the trusted list)', domain_allow: 'Allow for session', domain_deny: 'Deny for session',
         perf_clear_cache: '[LCE] clear and reload the drawing cache of all characters',
+        welcome_loaded: '🐈‍⬛ [LCE] Liko Club Extensions v$ver loaded',
+        welcome_intro: 'Extends and optimises WCE, adding UI polish, immersion and performance settings.',
+        welcome_hint: 'Type /lce to browse, or /lcesetting to open the settings.',
         sound_on: 'Sound: on (click to mute)', sound_off: 'Sound: muted (click to enable)',
         friend_now_online: 'Now online: {list}', friend_now_offline: 'Now offline: {list}',
         beep_from: 'Beep from {name}({id})', beep_reply_hint: 'Click to reply (/beep {id})',
@@ -477,7 +545,7 @@ const SETTINGS_I18N = {
         pose_BackBoxTie: 'Box Tie', pose_BackElbowTouch: 'Elbow Touch', pose_BackCuffs: 'Back Cuffs',
         pose_BaseLower: 'Standing', pose_LegsClosed: 'Legs Closed', pose_Kneel: 'Kneeling',
         pose_KneelingSpread: 'Kneeling Spread', pose_AllFours: 'All Fours',
-        s_themeEnabled: 'Enable theme coloring', sd_themeEnabled: 'Master switch: apply custom theme colors (sensible defaults).',
+        s_themeEnabled: 'Enable theme coloring', sd_themeEnabled: 'Master switch: apply custom theme colors (sensible defaults). [Shared] The whole BC Theme category is shared across accounts.',
         s_themeMode: 'Coloring mode', sd_themeMode: 'Simple: only main/accent/text; Advanced: set every color (buttons, states, etc.).',
         s_themeFlatColor: 'Flat background color', sd_themeFlatColor: 'On: fill the menu background with the main color; Off: keep the original image and tint it with main.',
         s_c_main: 'Main', s_c_accent: 'Accent', s_c_text: 'Text',
@@ -500,7 +568,15 @@ const SETTINGS_I18N = {
         s_loadThemeSlot_btn: 'Load', s_loadThemeSlot_done: 'Loaded',
         s_resetTheme: 'Reset to defaults', sd_resetTheme: 'Restore all theme colors to their default values.',
         s_resetTheme_btn: 'Reset', s_resetTheme_done: 'Reset',
-        s_horizontalLogin: 'Horizontal login UI', sd_horizontalLogin: "Use LCE's login layout in landscape; off falls back to the club's own login page.",
+        s_horizontalLogin: 'Horizontal login UI', sd_horizontalLogin: "Use LCE's login layout in landscape; off falls back to the club's own login page. [Shared] The whole UI Settings category is shared across accounts (it must be readable before login).",
+        s_loginAccentColor: 'Login UI accent colour', sd_loginAccentColor: "The login screen's main colour (frames, buttons and the selected account card all use it). Also editable from the login page's Settings — same value.",
+        s_sysMsgBgColor: 'System message background', sd_sysMsgBgColor: 'Background colour of LCE system messages (command replies, friend notifications) in the chat log.',
+        s_sysMsgTextColor: 'System message text', sd_sysMsgTextColor: 'Text colour of LCE system messages. If you darken the background, lighten this.',
+        s_commanderBtnColor: 'Command panel button colour', sd_commanderBtnColor: 'Colour of the clickable text in command panels such as /lce. It sits on the system message background, so the two need to work together.',
+        s_tooltipBgColor: 'Description box background', sd_tooltipBgColor: "Background of the description box at the bottom of the LCE settings page. Left at the default yellow it follows the BC theme; pick anything else and your choice wins - the theme stops touching it.",
+        s_tooltipTextColor: 'Description box text', sd_tooltipTextColor: 'Text and border colour of the description box. If you darken the background, lighten this.',
+        s_notifyBubbleColor: 'Notification bubble colour', sd_notifyBubbleColor: "Background of the toast bubbles in the screen corner (the club's own beep alerts use it too).",
+        s_notifyBubbleTextColor: 'Notification bubble text', sd_notifyBubbleTextColor: 'Text colour of the notification bubbles.',
         s_verticalLogin: 'Vertical login UI', sd_verticalLogin: "Use LCE's vertical login layout in portrait; off falls back to the club's own login page.",
         s_verticalChatSearch: 'Vertical room search UI', sd_verticalChatSearch: 'Vertical room search layout in portrait.',
         s_verticalChatRoom: 'Vertical chatroom UI', sd_verticalChatRoom: 'Vertical chatroom layout in portrait.',
@@ -553,9 +629,15 @@ const SETTINGS_I18N = {
         s_grantWardrobe_btn: 'Grant', s_grantWardrobe_done: 'Granted',
         s_automateCacheClear: 'Clear drawing cache hourly', sd_automateCacheClear: 'Clear the drawing cache each hour to curb memory growth.',
         s_manualCacheClear: 'Add clear-cache button', sd_manualCacheClear: 'Adds a button to clear/reload the drawing cache in the chat menu.',
-        s_scrollMaxMessages: 'Chat log length limit', sd_scrollMaxMessages: 'Enable via the left toggle, then pick the max visible messages kept in the chatroom (fewer = faster).',
-        s_reduceTextureQuality: 'Reduce character resolution', sd_reduceTextureQuality: 'Lower character texture quality to save memory and performance.',
-        s_lowFrameRate: 'Low frame rate mode', sd_lowFrameRate: 'Lower the draw frame rate to save performance (less smooth).',
+        s_scrollMaxMessages: 'Chat log visible messages', sd_scrollMaxMessages: 'Only the newest messages stay eagerly rendered; older ones let the browser skip painting. Nothing is deleted, and scrolling back expands everything again.',
+        s_autoPruneMessages: 'Auto-prune chat log', sd_autoPruneMessages: 'Once the message count passes this value, the oldest messages are removed to free memory, keeping 300. Always stops before the current room separator, and pauses while reading history.',
+        s_textureQuality: 'Reduce character resolution', sd_textureQuality: 'Lower character texture resolution to save memory and draw time (characters keep their size, they just get blurrier). Normal 70% / Low 50% / Lowest 30%.',
+        s_lowFrameRateFps: 'Low frame rate mode', sd_lowFrameRateFps: 'Cap the game draw rate to save performance (less smooth). Only affects the game itself, not other addons.',
+        s_showFps: 'Show FPS', sd_showFps: 'Display the current frame rate on screen; pick the position on the right.',
+        so_tq_normal: 'Normal (70%)', so_tq_low: 'Low (50%)', so_tq_lowest: 'Lowest (30%)',
+        so_fp_tl: 'Top left', so_fp_ml: 'Middle left', so_fp_bl: 'Bottom left',
+        so_fp_tc: 'Top center', so_fp_bc: 'Bottom center',
+        so_fp_tr: 'Top right', so_fp_mr: 'Middle right', so_fp_br: 'Bottom right',
         s_antiCheatLevel: 'Enable anti-cheat', sd_antiCheatLevel: 'Enable via the left toggle, then pick the threshold on the right.',
         s_antiCheatBlacklist: 'Auto-blacklist detected cheaters', sd_antiCheatBlacklist: 'Automatically blacklist detected cheaters (whitelisted are exempt).',
         ac_rejected: '[Anti-Cheat] $name tried to make suspicious changes! Appearance changes rejected. Consider telling them to stop, whitelisting them (if a trusted friend), or blacklisting them if it continues (command: /blacklistadd $num).',
@@ -568,8 +650,8 @@ const SETTINGS_I18N = {
         s_allowIMBypassBCX: 'Let IMs bypass BCX beep limits', sd_allowIMBypassBCX: 'Allow instant messages to bypass BCX beep restrictions.',
         s_relogin: 'Automatic relogin on disconnect', sd_relogin: 'Re-enter your password automatically after a disconnect (needs saved password).',
         s_confirmLeave: 'Confirm leaving the game', sd_confirmLeave: 'Prompt to confirm before leaving to avoid closing the tab by accident.',
+        s_shareAddons: 'Share addon list', sd_shareAddons: 'Share your installed addon list with other LCE users in the room (/versions). Turning it off still reports your LCE version (otherwise you are invisible to their /versions), just without the full list. WCE users never receive it — LCE uses its own channel.',
         s_customContentDomainCheck: 'Prompt for 3rd party content', sd_customContentDomainCheck: 'Confirm before loading content from a 3rd party domain.',
-        s_shareAddons: 'Share addons', sd_shareAddons: 'Share your installed addons with others in the room (/versions).',
         s_ghostNewUsers: 'Ghost+blocklist unnatural new users', sd_ghostNewUsers: 'Auto ghost+blocklist abnormally new accounts (anti-bot; not recommended normally).',
     },
 };
@@ -577,6 +659,20 @@ const SETTINGS_I18N = {
 // 併入主字庫（三語）
 for (const lang of Object.keys(SETTINGS_I18N)) {
     Object.assign(I18N[lang], SETTINGS_I18N[lang]);
+}
+
+// ── 共用註冊處 ────────────────────────────────────────────────────────────
+// 字表還是我們自己的（別人的字庫沒有我們的鍵），共用的只有「現在是什麼語言」
+// 這套判斷。詳見 core/i18n-registry.js 的說明。
+//
+// 對外註冊時把語系碼正規化成 BC/AEE 用的那組（zh-TW → TW），
+// 內部字庫的鍵不動 —— 沒必要為了對外的命名去翻整份字庫。
+const NAMESPACE = 'LCE';
+const shared = getSharedI18n();
+if (shared) {
+    shared.register(NAMESPACE, { TW: I18N['zh-TW'], CN: I18N.CN, EN: I18N.EN });
+    // 語言被切換時把畫面上帶 i18n 標記的節點重刷一次
+    shared.onChange(() => { try { refreshI18n(); } catch { /* ignore */ } });
 }
 
 /** 取得目前 BC 語言碼並映射到字庫（TW→zh-TW，CN→CN，其餘→EN） */
@@ -588,8 +684,12 @@ function getLang() {
     return I18N[code] ? code : 'EN';
 }
 
-/** 翻譯函式：找不到 key 時回傳 key 本身 */
+/**
+ * 翻譯函式：找不到 key 時回傳 key 本身。
+ * 有共用註冊處就走它（語言判斷跟其他 Liko 插件一致），沒有就用自己的字庫。
+ */
 export function T(key) {
+    if (shared) return shared.t(NAMESPACE, key);
     const table = I18N[getLang()] || I18N.EN;
     return table[key] ?? I18N.EN[key] ?? key;
 }

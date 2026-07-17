@@ -338,15 +338,22 @@ function versions(args) {
     function modInfo(character) {
         const bcVersion = character.OnlineSharedSettings?.GameVersion ?? 'R0';
         const BCXi = window.bcx?.getCharacterVersion?.(character.MemberNumber) ? ` BCX ${window.bcx.getCharacterVersion(character.MemberNumber) ?? '?'}` : '';
-        // FBC 是 BCEMsg 打招呼帶來的版本（見 features/hello.js）。LCE 與 WCE 共用這個欄位，
-        // 光看版本號分不出對方跑的是哪一個，所以從插件清單裡認。
-        const addons = character.FBCOtherAddons ?? [];
-        const named = addons.find(m => m.name === 'LCE' || m.name === 'WCE' || m.name === 'FBC');
-        const ce = character.FBC ? `\n${named?.name ?? 'WCE/LCE'} v${character.FBC}` : '';
+
+        // 兩個獨立來源，見 features/hello.js：
+        //   FBC ← BCEMsg（WCE 的頻道，我們只收）
+        //   LCE ← LCEMsg（我們自己的頻道）
+        // 兩個都有值 = 對方同時裝了 WCE 和 LCE，兩行都該列出來。
+        // WCE 主版號 1~5 是舊名 FBC，之後才改叫 WCE（判斷方式同 WCE 自己的徽章）。
+        const wceLabel = character.FBC && ['1', '2', '3', '4', '5'].includes(character.FBC.split('.')[0]) ? 'FBC' : 'WCE';
+        const wce = character.FBC ? `\n${wceLabel} v${character.FBC}` : '';
+        const lce = character.LCE ? `\nLCE v${character.LCE}` : '';
+
+        // 兩邊送的都是 bcModSdk.getModsInfo()，內容一樣；有 LCE 的就用 LCE 那份
+        const addons = character.LCEOtherAddons ?? character.FBCOtherAddons ?? [];
         const others = addons.length
             ? `\nAddons:\n- ${addons.map(m => `${m.name} v${m.version} ${m.repository ?? ''}`).join('\n- ')}`
             : '';
-        return `${CharacterNickname(character)} (${character.MemberNumber ?? ''}) club ${bcVersion}${BCXi}${ce}${others}`;
+        return `${CharacterNickname(character)} (${character.MemberNumber ?? ''}) club ${bcVersion}${BCXi}${wce}${lce}${others}`;
     }
     const printList = findDrawnCharacters(args.length > 0 ? args[0] : null, true);
     lceChatNotify(printList.map(modInfo).filter(Boolean).join('\n\n'));

@@ -1,6 +1,6 @@
 // ════════════════════════════════════════════════════════════════════════════
 // 雜項
-//   shareAddons              與同房其他人共享已安裝的插件清單（/versions 可看）
+//   shareAddons              與同房其他 LCE 使用者共享已安裝的插件清單（/versions 可看）
 //   ghostNewUsers            自動 ghost + 黑名單「異常新」的帳號（防惡意機器人）
 //   customContentDomainCheck 房間自訂背景/音樂來自第三方網域時先確認再載入
 // （confirmLeave 在 behaviors.js；relogin 見說明）
@@ -8,12 +8,13 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 import modApi from '../modsdk.js';
+import { MOD_VER } from '../core/constants.js';
 import { getFeature } from '../core/feature-settings.js';
 import { T } from '../core/i18n.js';
 // 與聊天嵌入共用同一份「本次連線已授權來源」名單（WCE 也是共用同一個 map），
 // 在聊天嵌入授權過的來源，這裡就不會再問一次。
 import { sessionCustomOrigins } from './chat-augments.js';
-import { sendHello } from './hello.js';
+import { sendLceHello } from './hello.js';
 
 const LOG = '🐈‍⬛ [LCE]';
 const NEW_ACCOUNT_MS = 30000;              // 建立不到 30 秒就進房 = 異常新（同 WCE）
@@ -52,17 +53,19 @@ export function installMisc() {
     installed = true;
 
     // ── 共享插件清單 ──
-    // 只寫 Player.FBCOtherAddons 是不夠的 —— 那只是自己看得到的本地欄位。
-    // 別人的 /versions 是靠 BCEMsg 廣播（features/hello.js）才填得到 FBCOtherAddons，
-    // 所以清單有變動時要重新打一次招呼，格式與 WCE 相同，兩邊互通。
+    // 先把自己的欄位填好，/versions 看自己時才列得出來（本地欄位，別人看不到）。
+    if (typeof Player !== 'undefined' && Player) Player.LCE = MOD_VER;
+
+    // 清單有變動時重新報一次名。只寫本地欄位是不夠的 —— 別人的 /versions 要靠
+    // LCEMsg 廣播（features/hello.js）才填得到。走的是 LCE 自己的頻道，
+    // 不是 WCE 的 BCEMsg，所以不會被別人的 WCE 認成 WCE 使用者。
     setInterval(() => {
         try {
-            if (!getFeature('shareAddons')) return;
             if (!(typeof ServerIsConnected !== 'undefined' && ServerIsConnected && ServerPlayerIsInChatRoom())) return;
             const loaded = window.bcModSdk?.getModsInfo?.() ?? [];
-            if (JSON.stringify(loaded) === JSON.stringify(Player.FBCOtherAddons)) return;
-            Player.FBCOtherAddons = loaded;
-            sendHello(null, false);
+            if (JSON.stringify(loaded) === JSON.stringify(Player.LCEOtherAddons)) return;
+            Player.LCEOtherAddons = loaded;
+            if (getFeature('shareAddons')) sendLceHello(null, false);
         } catch { /* ignore */ }
     }, 5000);
 

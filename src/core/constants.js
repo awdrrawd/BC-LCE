@@ -22,6 +22,20 @@ export const IDB_NAME      = 'mpl-profiles';   // IndexedDB 資料庫
 export const IDB_STORE     = 'profiles';       // 角色快照 ObjectStore
 export const IDB_KEY_STORE = 'cryptokeys';     // AES-GCM 金鑰 ObjectStore
 
+// LCE 專屬的 IndexedDB（自訂桌布）。
+// 刻意「不」塞進上面的 mpl-profiles：那個庫是跟 MPL 共用的，版本停在 2。
+// 要加 ObjectStore 就得把版本升到 3，而 MPL 仍以 open(mpl-profiles, 2) 開啟 ——
+// 開一個版本比現況低的庫會直接丟 VersionError，等於把 MPL 的帳號/頭像全部弄壞。
+// 自己的東西放自己的庫，兩邊互不干涉。
+export const ASSET_IDB_NAME  = 'lce-assets';
+export const ASSET_IDB_STORE = 'wallpapers';
+/** 自訂桌布在 ASSET_IDB_STORE 裡的固定鍵（只留最新一張）。 */
+export const WALLPAPER_KEY = 'custom';
+/** bgCustomUrl 存這個值 = 「用上傳到 DB 的那張」，而不是一個真的網址。 */
+export const WALLPAPER_UPLOAD_SENTINEL = 'lce://uploaded';
+/** 上傳桌布的大小上限：再大就只是塞爆瀏覽器配額，畫面也不會更好看。 */
+export const WALLPAPER_MAX_BYTES = 12 * 1024 * 1024;
+
 // LCE 專屬設定（不與 MPL 共用）—— 登入頁的全域設定（登入時尚無帳號，故不分帳號）
 export const SETTINGS_KEY = 'lce_settings';
 
@@ -64,8 +78,11 @@ export const DEFAULT_SETTINGS = {
     showAvatar:   true,      // 2a. 顯示頭像（預設啟用）
     showAccount:  true,      // 2b. 顯示帳號（預設啟用）
     showName:     true,      // 2c. 顯示名稱（預設啟用）
-    bgMode:       'random',  // 3. 背景：'random' | 'select'（預設隨機）
+    bgMode:       'random',  // 3. 背景：'random' | 'select' | 'custom'（預設隨機）
     bgName:       'BG-01',   // bgMode='select' 時使用的背景名稱（Images/ 內的檔名，去副檔名）
+    // bgMode='custom' 時的來源：一個圖片網址，或 WALLPAPER_UPLOAD_SENTINEL
+    // （代表改用上傳進 lce-assets 那張）。空字串 = 還沒設，會退回隨機。
+    bgCustomUrl:  '',
     lastAccount:  '',        // 上次成功登入的帳號名稱（下次開啟登入頁時自動選定）
 };
 

@@ -9,7 +9,7 @@
 
 import modApi from '../modsdk.js';
 import { S, saveSettings } from '../core/state.js';
-import { captureAndSaveProfile } from '../core/storage.js';
+import { scheduleProfileCapture } from '../core/storage.js';
 import {
     checkScene, lceRemove, lceLayout, handleResize, destroyLoginUI,
 } from './login-ui.js';
@@ -31,7 +31,8 @@ export function installLoginPage() {
                 const name = args[0].AccountName || document.getElementById('lce-input-name')?.value || '';
                 if (name) { S.settings.lastAccount = name; saveSettings(); }
             } catch { /* ignore */ }
-            setTimeout(captureAndSaveProfile, 5000); // 等角色資料/外觀載入後擷取頭像
+            // 等角色資料/外觀載入後擷取頭像；拍到空白會自己重試，不必賭這一發
+            setTimeout(scheduleProfileCapture, 5000);
             setTimeout(teardownLoginPage, 800);      // 之後不再需要登入介面，釋放資源
         }
         return result;
