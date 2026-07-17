@@ -116,11 +116,40 @@ function messageReplacements(msg) {
     return { msg: newWords.join(''), hasStuttered };
 }
 
+/**
+ * 這則訊息是不是「純粹一個網址」（前後空白不算）。
+ * 只認 http/https，避免把普通句子誤判成網址。
+ */
+function isPureUrl(text) {
+    const word = String(text ?? '').trim();
+    if (!word || /[\s\r\n]/u.test(word)) return false;
+    try {
+        const url = new URL(word);
+        return ['http:', 'https:'].includes(url.protocol);
+    } catch { return false; }
+}
+
 let installed = false;
 
 export function installAntiGarble() {
     if (installed) return;
     installed = true;
+
+    // ── 純網址自動當 OOC 送出 ──
+    // 口堵/結巴/寶寶語都是逐字改寫，會把網址整個打爛（對方既點不開也嵌不出圖）。
+    // 包成 OOC 的 ( ) 之後 BC 就不會做任何語音變形，而 chat-augments 的 parseUrl
+    // 本來就會剝掉外層括號，所以圖片嵌入照常運作。
+    hook('ChatRoomSendChat', 100, (args, next) => {
+        try {
+            if (!getFeature('urlAsOoc')) return next(args);
+            const text = ElementValue('InputChat');
+            // 已經是 OOC 或指令就別動
+            if (!text || text.startsWith('(') || text.startsWith('/') || text.startsWith('*')) return next(args);
+            if (!isPureUrl(text)) return next(args);
+            ElementValue('InputChat', `(${text.trim()})`);
+        } catch (e) { console.warn(LOG, 'urlAsOoc 失敗:', e); }
+        return next(args);
+    });
 
     // 送出端：附上未混淆（或較低混淆）的版本供對方顯示
     hook('ChatRoomGenerateChatRoomChatMessage', 100, (args, next) => {

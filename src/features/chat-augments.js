@@ -136,7 +136,10 @@ export function processChatAugmentsForLine(el, scrollToEnd, isChat) {
                                     const parent = target.parentElement;
                                     if (!parent) return;
                                     parent.removeChild(target);
-                                    const name = parent.querySelector('.ChatMessageName');
+                                    // 下面會清空 parent 重建，得先把名稱節點撈出來保住。
+                                    // 聊天室的名稱是 .ChatMessageName，即時通信的是 .lce-msg-sender —— 兩邊都要認，
+                                    // 只認前者的話 IM 的名稱會被 innerHTML='' 清掉且補不回來。
+                                    const name = parent.querySelector('.ChatMessageName, .lce-msg-sender');
                                     parent.innerHTML = '';
                                     if (name) { parent.appendChild(name); parent.appendChild(document.createTextNode(' ')); }
                                     const ogText = (isChat ? parent.parentElement : parent)?.getAttribute('lce-original-text');

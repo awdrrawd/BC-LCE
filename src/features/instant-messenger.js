@@ -77,7 +77,11 @@ function injectStyle() {
 .lce-friend-history{overflow-y:scroll;overflow-x:hidden;height:100%;}
 .lce-msg{padding:0.2em 0.4em;position:relative;white-space:pre-wrap;}
 .lce-msg::before{content:attr(data-time);float:right;color:gray;font-size:0.5em;margin-right:0.2em;font-style:italic;}
-.lce-msg-sender{text-shadow:0.05em 0.05em var(--lce-text,#eee);font-weight:bold;}
+.lce-msg-sender{text-shadow:0.05em 0.05em var(--lce-text,#eee);font-weight:bold;vertical-align:top;}
+/* 只有圖片的訊息：圖片是 inline 且 .lce-img-link 有 vertical-align:top，
+   名字若留在基線就會被擠到整張圖的最下緣，看起來像沒有名字。
+   讓名字自己佔一行，維持「玩家: 圖片」的閱讀順序。 */
+.lce-msg:has(> .lce-img-link) > .lce-msg-sender{display:block;}
 .lce-msg-Emote,.lce-msg-Action{font-style:italic;color:gray;}
 .lce-msg-divider{margin:0.5em 2em;border-bottom:0.2em solid var(--lce-accent,#fff);}
 `;

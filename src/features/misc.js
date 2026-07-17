@@ -13,6 +13,7 @@ import { T } from '../core/i18n.js';
 // 與聊天嵌入共用同一份「本次連線已授權來源」名單（WCE 也是共用同一個 map），
 // 在聊天嵌入授權過的來源，這裡就不會再問一次。
 import { sessionCustomOrigins } from './chat-augments.js';
+import { sendHello } from './hello.js';
 
 const LOG = '🐈‍⬛ [LCE]';
 const NEW_ACCOUNT_MS = 30000;              // 建立不到 30 秒就進房 = 異常新（同 WCE）
@@ -51,7 +52,9 @@ export function installMisc() {
     installed = true;
 
     // ── 共享插件清單 ──
-    // 寫進 Player.FBCOtherAddons：與 WCE 同一個欄位，所以 WCE 使用者的 /versions 也看得到我們。
+    // 只寫 Player.FBCOtherAddons 是不夠的 —— 那只是自己看得到的本地欄位。
+    // 別人的 /versions 是靠 BCEMsg 廣播（features/hello.js）才填得到 FBCOtherAddons，
+    // 所以清單有變動時要重新打一次招呼，格式與 WCE 相同，兩邊互通。
     setInterval(() => {
         try {
             if (!getFeature('shareAddons')) return;
@@ -59,6 +62,7 @@ export function installMisc() {
             const loaded = window.bcModSdk?.getModsInfo?.() ?? [];
             if (JSON.stringify(loaded) === JSON.stringify(Player.FBCOtherAddons)) return;
             Player.FBCOtherAddons = loaded;
+            sendHello(null, false);
         } catch { /* ignore */ }
     }, 5000);
 

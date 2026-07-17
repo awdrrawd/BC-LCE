@@ -21,6 +21,7 @@ import { installChatAugments } from './features/chat-augments.js';
 import { installPendingMessages } from './features/pending-messages.js';
 import { installFriendPresence } from './features/friend-presence.js';
 import { installLocalMessages } from './features/local-messages.js';
+import { installHello } from './features/hello.js';
 import { installPastProfiles } from './features/past-profiles.js';
 import { installInstantMessenger } from './features/instant-messenger.js';
 import { installCharTalk } from './features/char-talk.js';
@@ -31,7 +32,7 @@ import { installCheats } from './features/cheats.js';
 import { installMisc } from './features/misc.js';
 import { installWardrobe } from './features/wardrobe.js';
 import { installRelogin } from './features/relogin.js';
-import { installExpressions } from './features/expressions.js';
+import { installExpressions, isExpressionEngineStarted, debugExpressions } from './features/expressions.js';
 import { installVertical } from './features/vertical/index.js';
 import { injectLoginStyles } from './loginpage/styles.js';
 import { refreshAccounts } from './loginpage/account-carousel.js';
@@ -82,6 +83,7 @@ if (LCE_ALREADY_LOADED) {
                 installPendingMessages();
                 installFriendPresence();
                 installLocalMessages();
+                installHello();
                 installPastProfiles();
                 installInstantMessenger();
                 installCharTalk();
@@ -105,6 +107,9 @@ if (LCE_ALREADY_LOADED) {
             reloadSettings,
             refreshAccounts,
             captureProfile:  captureAndSaveProfile,
+            // 表情引擎診斷：debugExpressions(true) 後做一次活動即可看到完整流程
+            isExpressionEngineStarted,
+            debugExpressions,
             teardownLoginUI: teardownLoginPage,
             // 功能設定
             getFeature,

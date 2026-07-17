@@ -253,17 +253,44 @@ export const DEFAULT_FEATURE_SETTINGS = {
     },
 
     // ───────────────────────── immersion 沉浸體驗 ─────────────────────────
+    // 表情引擎總開關。開啟後 LCE 會接管 BC 的表情與姿勢系統：CharacterSetFacialExpression
+    // 被改導進 250ms 佇列引擎，BC 原本的函式本體不再執行。因此預設關閉、需明示同意，
+    // 下面兩項表情功能也必須靠它才能開（同 WCE 的 animationEngine）。
+    animationEngine: {
+        label: 's_animationEngine', desc: 'sd_animationEngine',
+        type: 'checkbox', value: false, category: 'immersion', disabled: () => false,
+        sideEffects: (newValue, init, s) => {
+            // 接管後 BC 原生的慾望表情會與引擎互搶同一張臉
+            if (newValue && Player?.ArousalSettings) Player.ArousalSettings.AffectExpression = false;
+            // 使用者「手動」關掉總開關時，一併關掉附屬功能。
+            // 絕不可在 init 時做：postFeatureSettings 每次載入都會用當下值跑一次
+            // sideEffects 並存檔，而本開關是後加的、預設 false —— 舊存檔的
+            // activityExpressions=true 會在每次登入被靜靜清成 false，表情引擎形同永久停用。
+            // （附屬功能留著 true 也無害：disabled 會擋 UI，engineOn 會擋執行。）
+            if (!init && !newValue) {
+                s.autoArousalExpression = false;
+                s.activityExpressions = false;
+            }
+            if (!init) console.debug('🐈‍⬛ [LCE] setting changed: animationEngine =', newValue);
+        },
+    },
     autoArousalExpression: {
         label: 's_autoArousalExpression', desc: 'sd_autoArousalExpression',
-        type: 'checkbox', value: false, category: 'immersion', disabled: () => false, sideEffects: todo('autoArousalExpression'),
+        type: 'checkbox', value: false, category: 'immersion',
+        disabled: (s) => !s.animationEngine, sideEffects: todo('autoArousalExpression'),
     },
     autoMouthOnTalk: {
         label: 's_autoMouthOnTalk', desc: 'sd_autoMouthOnTalk',
         type: 'checkbox', value: false, category: 'immersion', disabled: () => false, sideEffects: todo('autoMouthOnTalk'),
     },
+    urlAsOoc: {
+        label: 's_urlAsOoc', desc: 'sd_urlAsOoc',
+        type: 'checkbox', value: true, category: 'immersion', disabled: () => false, sideEffects: todo('urlAsOoc'),
+    },
     activityExpressions: {
         label: 's_activityExpressions', desc: 'sd_activityExpressions',
-        type: 'checkbox', value: false, category: 'immersion', disabled: () => false, sideEffects: todo('activityExpressions'),
+        type: 'checkbox', value: false, category: 'immersion',
+        disabled: (s) => !s.animationEngine, sideEffects: todo('activityExpressions'),
     },
     arousalGrowthAmount: {
         // 左側開關（arousalGrowthAmountEnabled），關閉時右側無法填值。0~100，100 = 原本 10 倍。

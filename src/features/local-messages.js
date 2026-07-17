@@ -41,6 +41,27 @@ function injectStyle() {
         .ChatMessage.ChatMessageLocalMessage:has(> .${LOCAL_MARKER}) a {
             color: #4b0082 !important;
         }
+
+        /* 指令面板（/lce、/lcesetlist）的可點文字。
+           不畫按鈕外框 —— 跟 beep 連結一樣用染色文字表示可點，融進聊天訊息裡。 */
+        .ChatMessage .lce-cmd-btn {
+            display: inline;
+            margin: 0;
+            padding: 0;
+            border: none;
+            background: none;
+            color: #4b0082;
+            font: inherit;
+            font-weight: bold;
+            line-height: inherit;
+            text-align: left;
+            cursor: pointer;
+        }
+        .ChatMessage .lce-cmd-btn:hover { text-decoration: underline; }
+        .ChatMessage .lce-del-btn { color: #a00; }
+        .ChatMessage .lce-help-row,
+        .ChatMessage .lce-setlist-row { margin: 2px 0; }
+        .ChatMessage .lce-confirm-bar { margin-top: 4px; }
     `;
     document.head.appendChild(s);
 }

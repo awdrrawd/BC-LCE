@@ -5,6 +5,7 @@
 // 由 misc 的 `commander` 設定開關；於登入後、Commands 就緒時註冊。
 // ════════════════════════════════════════════════════════════════════════════
 
+import modApi from '../modsdk.js';
 import { MOD_VER, LCE_EXT_KEY } from '../core/constants.js';
 import { getFeature } from '../core/feature-settings.js';
 import { isExpressionEngineStarted } from '../features/expressions.js';
@@ -47,17 +48,52 @@ function findDrawnCharacters(target, limitVisible = false) {
     return members.filter(Boolean);
 }
 
-/** 移植自 WCE bceGotoRoom：無視限制切換/離開房間。 */
+/**
+ * 無視限制切換/離開房間。
+ *
+ * 不走 WCE 的 ChatRoomJoinLeash + 搜尋那條路 —— 那條路會 race：
+ * ChatSearchQuery 是 `await ServerRoomSearch(...)`，而 ServerRoomSearch 對「同一個查詢
+ * 還在進行中」會直接回 ServerInProgressError，ChatSearchQuery 收到 err 就 return，
+ * 於是 ChatSearchResultResponse 沒被呼叫 → ChatSearchAutoJoinRoom 沒跑 → leash 沒人理，
+ * 人離開了房間卻停在搜尋頁。ChatSearchLoad 自己也會送查詢，所以撞不撞得到看運氣，
+ * 這就是「有時候可以、有時候不行」的來源。
+ *
+ * 改用 BC 自己的加入機制 ServerRoomJoin()：直接送 ChatRoomJoin 並等 "JoinedRoom"，
+ * 成功後伺服器的 ChatRoomSync 會自己把畫面切進房間。這正是 BC 重新登入時
+ * 回到原房間用的流程（見 Server.js 的 ServerRoomJoin 呼叫處），與搜尋完全無關，
+ * 房名大小寫也由伺服器比對。
+ */
 function gotoRoom(roomName) {
-    if (typeof ChatRoomJoinLeash !== 'undefined') ChatRoomJoinLeash = roomName;
+    // 確保 BC 的 leash 自動加入不會插手
+    if (typeof ChatRoomJoinLeash !== 'undefined') ChatRoomJoinLeash = '';
     if (typeof DialogLeave === 'function') DialogLeave();
     if (CurrentScreen === 'ChatRoom' && typeof ChatRoomLeave === 'function') ChatRoomLeave(false);
-    if (roomName) {
-        ChatSearchStart('X', ['Room', 'MainHall'], { Background: 'Introduction', BackgroundTagList: typeof BackgroundsTagList !== 'undefined' ? BackgroundsTagList : [] });
-    } else {
-        if (typeof ChatRoomSetLastChatRoom === 'function') ChatRoomSetLastChatRoom(null);
+
+    // 我們是刻意要去別的地方，所以把「上一個房間」清掉：
+    // 否則 ChatSearchAutoJoinRoom 的 ReturnToChatRoom 分支會搶著把你拉回剛離開的房間。
+    if (typeof ChatRoomSetLastChatRoom === 'function') ChatRoomSetLastChatRoom(null);
+
+    if (!roomName) {
         CommonSetScreen('Room', 'MainHall');
+        return;
     }
+
+    if (typeof ServerRoomJoin !== 'function') {
+        lceChatNotify('此 BC 版本沒有 ServerRoomJoin，無法直接前往房間。');
+        CommonSetScreen('Room', 'MainHall');
+        return;
+    }
+
+    // 先落到大廳畫面再送加入請求：失敗時人就停在搜尋頁，跟 BC 重登的行為一致。
+    Promise.resolve(CommonSetScreen('Online', 'ChatSearch'))
+        .then(() => ServerRoomJoin(roomName))
+        .then((ret) => {
+            if (ret?.err) {
+                console.warn(LOG, 'gotoroom 加入失敗:', ret.error);
+                lceChatNotify(`無法加入房間 "${roomName}"：${ret.error?.message ?? ret.error?.name ?? '未知錯誤'}`);
+            }
+        })
+        .catch(e => console.warn(LOG, 'gotoroom 失敗:', e));
 }
 
 /**
@@ -82,20 +118,24 @@ function openSettings() {
 
 const extSettings = () => (typeof Player !== 'undefined' && Player?.ExtensionSettings) || null;
 
-/** 依大小排序的 [鍵名, 位元組]；編號即此順序（/lcesetdel 可用編號指定）。 */
+/** 依大小排序的 [鍵名, 位元組]。 */
 function extRows(ext) {
     return Object.entries(ext)
         .map(([k, v]) => [k, typeof v === 'string' ? v.length : JSON.stringify(v ?? '').length])
         .sort((a, b) => b[1] - a[1]);
 }
 
-/**
- * 從原始指令字串取出參數。
- * 不能用 BC 傳進來的 args —— 那會被正規化成小寫，鍵名（例如 BCC）就對不上了。
- */
-const rawArg = (command) => String(command ?? '').replace(/^\s*\/?\S+\s*/, '').trim();
+/** 聊天室裡的小按鈕。chat-room-div 本身就是 DOM 容器，不需要另外開彈窗。 */
+function chatButton(label, onClick, cls = 'lce-cmd-btn') {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = cls;
+    b.textContent = label;
+    b.onclick = (e) => { e.preventDefault(); onClick(b); };
+    return b;
+}
 
-/** 列出目前帳號上所有 ExtensionSettings 及其大小，方便找出誰把空間吃光。 */
+/** 列出目前帳號上所有 ExtensionSettings 及其大小，每列附一顆刪除鈕。 */
 function listExtSettings() {
     const ext = extSettings();
     if (!ext) { lceChatNotify('讀不到 Player.ExtensionSettings。'); return; }
@@ -103,77 +143,67 @@ function listExtSettings() {
     if (!rows.length) { lceChatNotify('目前沒有任何 ExtensionSettings。'); return; }
 
     const total = rows.reduce((s, [, n]) => s + n, 0);
-    const lines = [`ExtensionSettings（共 ${rows.length} 筆，合計 ${(total / 1024).toFixed(1)}KB）：`];
-    rows.forEach(([k, n], i) => lines.push(`${i + 1}. ${k} — ${(n / 1024).toFixed(1)}KB`));
-    lines.push('刪除：/lcesetdel <編號或鍵名>（例：/lcesetdel 4 或 /lcesetdel BCC）');
-
     const wrap = document.createElement('div');
-    for (const line of lines) {
-        const d = document.createElement('div');
-        d.textContent = line;
-        wrap.appendChild(d);
+
+    const head = document.createElement('div');
+    head.textContent = `ExtensionSettings（共 ${rows.length} 筆，合計 ${(total / 1024).toFixed(1)}KB）：`;
+    wrap.appendChild(head);
+
+    for (const [key, n] of rows) {
+        const row = document.createElement('div');
+        row.className = 'lce-setlist-row';
+        row.appendChild(chatButton('✖', () => confirmDelete(key), 'lce-cmd-btn lce-del-btn'));
+        const text = document.createElement('span');
+        text.textContent = ` ${key} — ${(n / 1024).toFixed(1)}KB`;
+        row.appendChild(text);
+        wrap.appendChild(row);
     }
     lceChatNotify(wrap);
 }
 
-/** 把使用者輸入（編號 / 鍵名 / 大小寫不符的鍵名）解析成實際鍵名。 */
-function resolveExtKey(ext, arg) {
-    if (!arg) return { error: '用法：/lcesetdel <編號或鍵名>；先用 /lcesetlist 查看有哪些。' };
-
-    if (/^\d+$/.test(arg)) {
-        const rows = extRows(ext);
-        const key = rows[parseInt(arg, 10) - 1]?.[0];
-        return key ? { key } : { error: `編號 ${arg} 超出範圍（目前共 ${rows.length} 筆）。` };
-    }
-    if (arg in ext) return { key: arg };
-
-    // 指令參數可能被轉小寫，故再做一次不分大小寫比對
-    const hits = Object.keys(ext).filter(k => k.toLowerCase() === arg.toLowerCase());
-    if (hits.length === 1) return { key: hits[0] };
-    if (hits.length > 1) return { error: `"${arg}" 對應到多個鍵（${hits.join(', ')}），請改用編號。` };
-    return { error: `找不到 "${arg}"，請用 /lcesetlist 確認（可直接用編號）。` };
-}
-
 /**
  * 刪除指定的 ExtensionSettings。
- * 這會動到「其他插件」存在伺服器上的資料且無法復原，所以一律要求二次確認。
+ * 這會動到「其他插件」存在伺服器上的資料且無法復原，所以一律要求二次確認 ——
+ * 確認本身也直接輸出成一則本地訊息，用按鈕控制，不開彈窗。
  */
-function delExtSetting(arg) {
+function confirmDelete(key) {
     const ext = extSettings();
     if (!ext) { lceChatNotify('讀不到 Player.ExtensionSettings。'); return; }
-
-    const { key, error } = resolveExtKey(ext, arg);
-    if (error) { lceChatNotify(error); return; }
+    if (!(key in ext)) { lceChatNotify(`"${key}" 已經不存在了，請重新執行 /lcesetlist。`); return; }
 
     const size = ((typeof ext[key] === 'string' ? ext[key].length : 0) / 1024).toFixed(1);
-    const doDelete = () => {
-        try {
-            // ServerPlayerExtensionSettingsSync 只能 $set 單一鍵（送 "" 只是把值清空，鍵還在）。
-            // 要讓「鍵本身」從伺服器消失，必須整包重送 ExtensionSettings 覆蓋掉整個欄位。
-            // 代價是這一次的 AccountUpdate 會比較大（等同目前所有 ExtensionSettings 的總和），
-            // 但只有刪除時才發生一次。
-            delete Player.ExtensionSettings[key];
-            if (typeof ServerSend === 'function') {
-                ServerSend('AccountUpdate', { ExtensionSettings: Player.ExtensionSettings });
-            }
-            const left = extRows(Player.ExtensionSettings).reduce((s, [, n]) => s + n, 0);
-            lceChatNotify(`已移除 "${key}"（釋出約 ${size}KB，剩餘合計 ${(left / 1024).toFixed(1)}KB）。`
-                + ' 該插件下次載入時會重建自己的預設值。可用 /lcesetlist 確認。');
-        } catch (e) {
-            console.warn(LOG, '刪除失敗:', e);
-            lceChatNotify(`刪除 "${key}" 失敗，詳見 console。`);
-        }
-    };
+    const wrap = document.createElement('div');
 
-    if (typeof FUSAM === 'object' && FUSAM?.modals) {
-        FUSAM.modals.open({
-            prompt: `確定要刪除 "${key}"（約 ${size}KB）嗎？\n這會清掉該插件存在伺服器上的資料，且無法復原。`,
-            callback: (act) => { if (act === 'submit') doDelete(); },
-            buttons: { cancel: '取消', submit: '刪除' },
-        });
-    } else {
-        // 沒有 FUSAM 對話框時退回瀏覽器原生確認，確保不會誤刪
-        if (window.confirm(`確定要刪除 ExtensionSettings "${key}"（約 ${size}KB）？此操作無法復原。`)) doDelete();
+    const q = document.createElement('div');
+    q.textContent = `確定要刪除 "${key}"（約 ${size}KB）嗎？這會清掉該插件存在伺服器上的資料，且無法復原。`;
+    wrap.appendChild(q);
+
+    const bar = document.createElement('div');
+    bar.className = 'lce-confirm-bar';
+    const done = (msg) => { bar.replaceChildren(); const d = document.createElement('span'); d.textContent = msg; bar.appendChild(d); };
+    bar.appendChild(chatButton('刪除', () => { doDelete(key, size); done('（已刪除）'); }, 'lce-cmd-btn lce-del-btn'));
+    bar.appendChild(chatButton('取消', () => done('（已取消）')));
+    wrap.appendChild(bar);
+
+    lceChatNotify(wrap);
+}
+
+function doDelete(key, size) {
+    try {
+        // ServerPlayerExtensionSettingsSync 只能 $set 單一鍵（送 "" 只是把值清空，鍵還在）。
+        // 要讓「鍵本身」從伺服器消失，必須整包重送 ExtensionSettings 覆蓋掉整個欄位。
+        // 代價是這一次的 AccountUpdate 會比較大（等同目前所有 ExtensionSettings 的總和），
+        // 但只有刪除時才發生一次。
+        delete Player.ExtensionSettings[key];
+        if (typeof ServerSend === 'function') {
+            ServerSend('AccountUpdate', { ExtensionSettings: Player.ExtensionSettings });
+        }
+        const left = extRows(Player.ExtensionSettings).reduce((s, [, n]) => s + n, 0);
+        lceChatNotify(`已移除 "${key}"（釋出約 ${size}KB，剩餘合計 ${(left / 1024).toFixed(1)}KB）。`
+            + ' 該插件下次載入時會重建自己的預設值。可用 /lcesetlist 確認。');
+    } catch (e) {
+        console.warn(LOG, '刪除失敗:', e);
+        lceChatNotify(`刪除 "${key}" 失敗，詳見 console。`);
     }
 }
 
@@ -308,27 +338,32 @@ function versions(args) {
     function modInfo(character) {
         const bcVersion = character.OnlineSharedSettings?.GameVersion ?? 'R0';
         const BCXi = window.bcx?.getCharacterVersion?.(character.MemberNumber) ? ` BCX ${window.bcx.getCharacterVersion(character.MemberNumber) ?? '?'}` : '';
-        const others = character.FBCOtherAddons?.length
-            ? `\nAddons:\n- ${character.FBCOtherAddons.map(m => `${m.name} v${m.version} ${m.repository ?? ''}`).join('\n- ')}`
+        // FBC 是 BCEMsg 打招呼帶來的版本（見 features/hello.js）。LCE 與 WCE 共用這個欄位，
+        // 光看版本號分不出對方跑的是哪一個，所以從插件清單裡認。
+        const addons = character.FBCOtherAddons ?? [];
+        const named = addons.find(m => m.name === 'LCE' || m.name === 'WCE' || m.name === 'FBC');
+        const ce = character.FBC ? `\n${named?.name ?? 'WCE/LCE'} v${character.FBC}` : '';
+        const others = addons.length
+            ? `\nAddons:\n- ${addons.map(m => `${m.name} v${m.version} ${m.repository ?? ''}`).join('\n- ')}`
             : '';
-        return `${CharacterNickname(character)} (${character.MemberNumber ?? ''}) club ${bcVersion}${BCXi}${others}`;
+        return `${CharacterNickname(character)} (${character.MemberNumber ?? ''}) club ${bcVersion}${BCXi}${ce}${others}`;
     }
     const printList = findDrawnCharacters(args.length > 0 ? args[0] : null, true);
     lceChatNotify(printList.map(modInfo).filter(Boolean).join('\n\n'));
 }
 
 // 指令清單（同時供 CommandCombine 註冊與 /lce 說明列出）
+// NeedsArg：這些指令要接參數，/lce 的按鈕只把指令填進輸入框讓你接著打，不直接執行。
 const COMMAND_LIST = [
     { Tag: 'lce', Description: '檢視所有 LCE 指令與功能說明', Action: () => { showHelp(); } },
     { Tag: 'lcesetting', Description: '快速前往 LCE 設定頁', Action: () => { openSettings(); } },
     { Tag: 'lcedebug', Description: '取得除錯資訊並複製到剪貼簿', Action: () => { lceDebug(); } },
-    { Tag: 'lcesetlist', Description: '列出帳號上所有 ExtensionSettings 與其大小', Action: () => { listExtSettings(); } },
-    { Tag: 'lcesetdel', Description: '[編號或鍵名]：刪除指定的 ExtensionSettings（例：/lcesetdel 4 或 /lcesetdel BCC）', Action: (_, command) => { delExtSetting(rawArg(command)); } },
-    { Tag: 'lcegotoroom', Description: '[房名或空]：無視限制切換房間，空白則離開', Action: (_, command) => { gotoRoom(command.substring(12).trim()); } },
-    { Tag: 'exportlooks', Description: '[會員編號]：複製你或他人的外觀字串（可用 LCE/BCX 匯入）', Action: (_, _c, [target]) => { exportLooks(target); } },
+    { Tag: 'lcesetlist', Description: '列出帳號上所有 ExtensionSettings 與其大小（可直接按鈕刪除）', Action: () => { listExtSettings(); } },
+    { Tag: 'lcegotoroom', NeedsArg: true, Description: '[房名或空]：無視限制切換房間，空白則離開', Action: (_, command) => { gotoRoom(command.substring(12).trim()); } },
+    { Tag: 'exportlooks', NeedsArg: true, Description: '[會員編號]：複製你或他人的外觀字串（可用 LCE/BCX 匯入）', Action: (_, _c, [target]) => { exportLooks(target); } },
     { Tag: 'importlooks', Description: '從字串匯入外觀（LCE/BCX 匯出）', Action: () => { importLooks(); } },
-    { Tag: 'beep', Description: '[會員編號] [訊息]：beep 某人', Action: (_, command, [target]) => { beep(command, target); } },
-    { Tag: 'w', Description: '[名稱] [訊息]：悄悄話房間內第一個符合名稱的人', Action: (_, command, args) => { whisper(command, args); } },
+    { Tag: 'beep', NeedsArg: true, Description: '[會員編號] [訊息]：beep 某人', Action: (_, command, [target]) => { beep(command, target); } },
+    { Tag: 'w', NeedsArg: true, Description: '[名稱] [訊息]：悄悄話房間內第一個符合名稱的人', Action: (_, command, args) => { whisper(command, args); } },
     { Tag: 'versions', Description: '顯示房間內玩家的俱樂部/BCX/插件版本', Action: (_, _c, args) => { versions(args); } },
     { Tag: 'cum', Description: '引起高潮', Action: () => { doOrgasm(); } },
 ];
@@ -342,20 +377,36 @@ function doOrgasm() {
     } catch (e) { console.warn(LOG, '/cum 失敗:', e); }
 }
 
-/** 組出 /lce 的說明內容：只列 Commander 指令。 */
-function buildHelpLines() {
-    const lines = [`LCE v${MOD_VER} — 指令清單`];
-    for (const c of COMMAND_LIST) lines.push(`/${c.Tag} — ${c.Description}`);
-    return lines;
-}
-
-/** 在聊天室輸出說明（每行一個 div，確保換行）。 */
+/**
+ * 在聊天室輸出說明：每個指令一顆按鈕，免得要一個字一個字打。
+ * 不用帶參數的直接執行；要帶參數的只把 "/指令 " 填進輸入框並聚焦，讓使用者接著打。
+ */
 function showHelp() {
     const wrap = document.createElement('div');
-    for (const line of buildHelpLines()) {
-        const d = document.createElement('div');
-        d.textContent = line;
-        wrap.appendChild(d);
+
+    const head = document.createElement('div');
+    head.textContent = `LCE v${MOD_VER} — 指令清單`;
+    wrap.appendChild(head);
+
+    for (const c of COMMAND_LIST) {
+        const row = document.createElement('div');
+        row.className = 'lce-help-row';
+        row.appendChild(chatButton(`/${c.Tag}`, () => {
+            if (c.NeedsArg) {
+                // 只填指令前綴：參數還得靠使用者自己打
+                try {
+                    ElementValue('InputChat', `/${c.Tag} `);
+                    document.getElementById('InputChat')?.focus();
+                } catch { /* ignore */ }
+            } else {
+                try { c.Action.call(c, '', `/${c.Tag}`, []); }
+                catch (e) { console.warn(LOG, `/${c.Tag} 失敗:`, e); }
+            }
+        }));
+        const desc = document.createElement('span');
+        desc.textContent = ` — ${c.Description}`;
+        row.appendChild(desc);
+        wrap.appendChild(row);
     }
     lceChatNotify(wrap);
 }

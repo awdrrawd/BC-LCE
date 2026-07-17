@@ -2,8 +2,12 @@
 // 自動慾望表情（autoArousalExpression）＋ 活動表示（activityExpressions）
 // 移植自 WCE automaticExpressions.js（資料表見 expressions-data.js）
 //
-// 依需求簡化：WCE 原本有 animationEngine 總開關，這裡砍掉 —— 引擎內建，
-// 只要上述兩項任一啟用就運作，各自控制自己的事件類型（見 pushEvent）。
+// animationEngine 是總開關，且必須存在：引擎一旦運作就會接管整張臉 ——
+// CharacterSetFacialExpression 被改導進佇列（鉤子不呼叫 next），BC 的函式本體
+// 從此不再執行，連 BC 自己的表情面板都只能透過佇列生效。這種程度的接管必須由
+// 使用者明示同意，故預設關閉；上述兩項功能只在它開啟時可用，各自控制自己的
+// 事件類型（見 pushEvent）。
+// （曾為「簡化」而砍掉此開關，導致只勾活動表示就整臉被鎖死，勿再移除。）
 // 未移植：/r、/anim、/pose 指令（依需求排除）。
 //
 // 機制：
@@ -26,7 +30,38 @@ const MANUAL_EVT = 'ManualOverride';
 const POST_ORGASM_EVT = 'PostOrgasm';
 
 const MODIFIER_MAP = Object.freeze({ Blush: [null, 'Low', 'Medium', 'High', 'VeryHigh', 'Extreme'] });
-const FACE_COMPONENTS = ['Eyes', 'Eyes2', 'Eyebrows', 'Mouth', 'Fluids', 'Emoticon', 'Blush', 'Pussy'];
+
+// 引擎的表情／姿勢鉤子專用優先權：務必排在所有模組之後。
+//
+// ModSDK 依優先權由大到小串接鉤子，而這些鉤子在引擎開啟時「不呼叫 next」——
+// 排在我們後面的模組會一個都跑不到。其他模組正是靠掛在這些函式上做自己的事，
+// 例如「服装拓展」把 Eyes 的表情鏡射到它自己新增的 左眼_Luzi / 右眼_Luzi 群組。
+// WCE 用 OverrideBehaviour(10) 搶在最前面，實測 hookedByMods 為
+// ['WCE', 'LSCG', '服装拓展'] —— 它把後兩者活活餓死，開了 animationEngine 後
+// 模組的眼睛就不會動。這是 WCE 的缺陷，不要對齊它。
+// 我們終止呼叫鏈，就必須讓所有人先跑完；負值確保排在最末端（BC 本體仍在我們之後）。
+const ENGINE_HOOK_PRIORITY = -100;
+// BC 內建的表情部位（＝WCE 的 faceComponents）。當保底用，實際清單見 faceComponents()。
+const BASE_FACE_COMPONENTS = ['Eyes', 'Eyes2', 'Eyebrows', 'Mouth', 'Fluids', 'Emoticon', 'Blush', 'Pussy'];
+
+/**
+ * 本角色實際可用的表情部位 = 內建清單 ∪ 身上所有帶 AllowExpression 的群組。
+ *
+ * 這裡不能像 WCE 那樣寫死。BC 的表情面板是列出「所有帶 AllowExpression 的群組」，
+ * 而其他模組會自己新增這種群組（例如 Luzi 的 左眼_Luzi / 右眼_Luzi，資產名「眼睛6」），
+ * 面板點下去 BC 呼叫的就是 CharacterSetFacialExpression(C, "左眼_Luzi", ...)。
+ * 引擎開著時我們的鉤子會攔下它且不呼叫 next，事件照樣進佇列 —— 但套用迴圈若只認寫死的
+ * 8 個部位，這些群組就永遠寫不回去，表情進得去出不來，模組的眼睛被鎖死，
+ * BC 內建的眼睛卻一切正常。（WCE 寫死同一份清單，此處是刻意的分歧，勿改回。）
+ */
+function faceComponents() {
+    const found = new Set(BASE_FACE_COMPONENTS);
+    for (const a of Player.Appearance ?? []) {
+        const g = a.Asset?.Group;
+        if (g?.AllowExpression?.length) found.add(g.Name);
+    }
+    return [...found];
+}
 const POSE_CATEGORIES = {
     BodyFull: { Conflicts: ['BodyUpper', 'BodyLower', 'BodyAddon'] },
     BodyUpper: { Conflicts: ['BodyFull'] },
@@ -40,6 +75,8 @@ let lastUniqueId = 0;
 let lastOrgasm = 0, orgasmCount = 0, wasDefault = false;
 let PreviousArousal = null;
 let PreviousDirection = DIR.Up;
+let engineStarted = false;   // 進過聊天室、250ms 迴圈已在跑（engineOn 用）
+let notifying = false;       // 引擎正在通知其他模組，此時鉤子必須放行（見 notifyMods）
 
 // ───────────────────────── 小工具 ─────────────────────────
 const newUniqueId = () => (lastUniqueId = (lastUniqueId + 1) % (Number.MAX_SAFE_INTEGER - 1));
@@ -48,8 +85,13 @@ const isString = (s) => typeof s === 'string';
 const isCharacter = (c) => !!c && typeof c === 'object' && typeof c.MemberNumber !== 'undefined';
 const mustNum = (v, d = 0) => (typeof v === 'number' && !isNaN(v) ? v : d);
 
-/** 引擎是否運作：兩項功能任一啟用即可（取代 WCE 的 animationEngine 總開關）。 */
-const engineOn = () => !!getFeature('autoArousalExpression') || !!getFeature('activityExpressions');
+/**
+ * 引擎是否運作。兩個條件缺一不可：
+ *   1. 使用者開了總開關 —— 沒開就完全不碰 BC 的表情系統。
+ *   2. 引擎真的啟動了（已進過聊天室）—— 否則鉤子會吞掉表情變更卻沒有引擎能套用，
+ *      表情就這樣憑空消失。未啟動時一律讓 BC 走自己的原生路徑。
+ */
+const engineOn = () => engineStarted && !!getFeature('animationEngine');
 
 function hook(name, priority, fn) {
     try { modApi.hookFunction(name, priority, fn); }
@@ -71,6 +113,27 @@ function setExpression(t, n, color) {
         if (color) a.Color = color;
         break;
     }
+}
+
+/**
+ * 引擎套用完表情後，通知其他掛在 CharacterSetFacialExpression 上的模組。
+ *
+ * 引擎是直接寫 Player.Appearance（setExpression），不經過 CharacterSetFacialExpression，
+ * 所以像「服装拓展」那種靠鉤子把 Eyes 鏡射到自家群組（左眼_Luzi/右眼_Luzi）的模組
+ * 完全收不到通知 —— 手動點面板會動，但打屁股之類由引擎驅動的表情就不會鏡射。
+ * 這裡補一通完整的鉤子鏈呼叫；notifying 期間我們自己的鉤子會放行（否則引擎的每個
+ * 表情都會被自己當成手動覆寫再推回佇列，變成無窮迴圈）。
+ *
+ * 必須在 setExpression 之後呼叫：Property 已是目標值，BC 本體會在
+ * `item.Property.Expression == Expression` 早退而不重複刷新，但排在我們前面的
+ * 模組鉤子早已跑完 —— 通知到了，副作用是零。
+ */
+function notifyMods(t, expression, color) {
+    if (notifying) return;
+    notifying = true;
+    try { CharacterSetFacialExpression(Player, t, expression, undefined, color); }
+    catch (e) { console.warn(LOG, '通知其他模組表情變更失敗:', t, e); }
+    finally { notifying = false; }
 }
 
 const getPoseCategory = (pose) => PoseFemale3DCG.find(a => a.Name === pose)?.Category;
@@ -162,22 +225,43 @@ function resetExpressionQueue(types, skippedTypes = []) {
 const dictHasPlayerTarget = (dict) =>
     dict?.some(t => t && 'TargetCharacter' in t && t.TargetCharacter === Player.MemberNumber) || false;
 
+/**
+ * 診斷用：在 console 執行 `Liko.LCE.debugExpressions(true)` 就會把
+ * 「收到什麼活動訊息 / 有沒有配到觸發 / 最後套用了什麼表情」全部印出來。
+ * 預設關閉，不影響效能。
+ */
+let debugOn = false;
+export function debugExpressions(on = true) {
+    debugOn = !!on;
+    console.info(LOG, `表情診斷 ${debugOn ? '開啟' : '關閉'}`);
+    return debugOn;
+}
+const dbg = (...a) => { if (debugOn) console.info(LOG, '[expr]', ...a); };
+
 /** 收到聊天/活動訊息 → 比對觸發表 → 推送對應表情事件。 */
 function handleChatMessage(data) {
-    if (!getFeature('activityExpressions')) return;
+    if (debugOn && (data?.Type === 'Activity' || data?.Type === 'Action')) {
+        dbg('收到', data.Type, data.Content, 'Dictionary=', data.Dictionary);
+    }
+    if (!getFeature('activityExpressions')) { dbg('activityExpressions 關閉，略過'); return; }
     activityTriggers:
     for (const trigger of ActivityTriggers.filter(t => t.Type === data.Type)) {
         for (const matcher of trigger.Matchers) {
             if (!matcher.Tester.test(data.Content)) continue;
+            dbg(`Tester 命中 ${trigger.Event}（${matcher.Tester}）`);
             if (matcher.Criteria) {
-                if (matcher.Criteria.SenderIsPlayer && data.Sender !== Player.MemberNumber) continue;
-                if (matcher.Criteria.TargetIsPlayer && !dictHasPlayerTarget(data.Dictionary)) continue;
+                if (matcher.Criteria.SenderIsPlayer && data.Sender !== Player.MemberNumber) { dbg('  ✗ SenderIsPlayer 不符'); continue; }
+                if (matcher.Criteria.TargetIsPlayer && !dictHasPlayerTarget(data.Dictionary)) { dbg('  ✗ TargetIsPlayer 不符'); continue; }
                 if (matcher.Criteria.DictionaryMatchers
-                    && !matcher.Criteria.DictionaryMatchers.some(m => data.Dictionary?.find(t => Object.keys(m).every(k => m[k] === t[k])))) continue;
+                    && !matcher.Criteria.DictionaryMatchers.some(m => data.Dictionary?.find(t => Object.keys(m).every(k => m[k] === t[k])))) { dbg('  ✗ DictionaryMatchers 不符'); continue; }
+                dbg(`  ✓ 推送事件 ${trigger.Event}`, EventExpressions[trigger.Event]);
                 pushEvent(EventExpressions[trigger.Event]);
             } else if (data.Sender === Player.MemberNumber || dictHasPlayerTarget(data.Dictionary)) {
+                dbg(`  ✓ 推送事件 ${trigger.Event}`, EventExpressions[trigger.Event]);
                 pushEvent(EventExpressions[trigger.Event]);
                 break activityTriggers;
+            } else {
+                dbg('  ✗ 玩家既不是發送者也不是目標');
             }
         }
     }
@@ -188,9 +272,12 @@ function customArousalExpression() {
     if (!engineOn() || !Player?.AppearanceLayers || !Player.ArousalSettings) return;
     if (!PreviousArousal) PreviousArousal = { ...Player.ArousalSettings };
 
-    // 我們自己管理計時，清掉 BC 的移除計時器
+    const faceParts = faceComponents();
+
+    // 我們自己管理計時，清掉 BC 的移除計時器。
+    // 只碰內建部位：模組新增的表情群組由該模組自己維護，它的計時器不歸我們管。
     Player.Appearance
-        .filter(a => FACE_COMPONENTS.includes(a.Asset.Group.Name) && a.Property?.RemoveTimer)
+        .filter(a => BASE_FACE_COMPONENTS.includes(a.Asset.Group.Name) && a.Property?.RemoveTimer)
         .forEach(a => { delete a.Property.RemoveTimer; });
 
     Player.ArousalSettings.AffectExpression = false;   // 取代 BC 原生的慾望表情
@@ -199,9 +286,9 @@ function customArousalExpression() {
     if (orgasmCount < oCount) orgasmCount = oCount;
     else if (orgasmCount > oCount) { Player.ArousalSettings.OrgasmCount = orgasmCount; ActivityChatRoomArousalSync(Player); }
 
-    // 臉部完全恢復預設時，重設佇列
+    // 臉部完全恢復預設時，重設佇列（只看內建部位，模組群組不該讓佇列一直活著）
     let isDefault = true;
-    for (const t of FACE_COMPONENTS) if (expression(t)[0]) isDefault = false;
+    for (const t of BASE_FACE_COMPONENTS) if (expression(t)[0]) isDefault = false;
     if (isDefault) {
         PreviousArousal.Progress = 0;
         PreviousDirection = DIR.Up;
@@ -374,7 +461,14 @@ function customArousalExpression() {
         }
     }
 
-    for (const t of FACE_COMPONENTS) {
+    for (const t of faceParts) {
+        // 內建部位一律由引擎作主：佇列沒東西就代表「該回到無表情」，強制歸零。
+        // 但模組新增的表情群組（如 左眼_Luzi）不能這樣對待 —— 那些群組是該模組自己在
+        // 維護的，它可能直接寫 Property 而從不經過我們的佇列。若比照內建部位歸零，
+        // 引擎每 250ms 就會把它剛鏡射過去的表情擦掉。故：佇列裡真的有事件才寫，
+        // 沒有就完全不碰。（若該模組是回頭呼叫 CharacterSetFacialExpression 來鏡射，
+        // 事件會進佇列，這裡照樣套用得到 —— 兩種寫法都撐得住。）
+        if (!nextExpression[t] && !BASE_FACE_COMPONENTS.includes(t)) continue;
         const [exp] = expression(t);
         const nextExp = nextExpression[t] || { Duration: -1, Expression: null };
         if (nextExp.Expression !== exp && typeof nextExp.Expression !== 'undefined') desiredExpression[t] = { ...nextExp };
@@ -382,10 +476,12 @@ function customArousalExpression() {
 
     // 套用表情
     if (Object.keys(desiredExpression).length > 0) {
+        dbg('套用表情', JSON.parse(JSON.stringify(desiredExpression)), '佇列長度=', queue.length);
         let refreshScreen = false;
         for (const t of Object.keys(desiredExpression)) {
             if (bcxRule('block_changing_emoticon')?.isEnforced && t === 'Emoticon') continue;
             setExpression(t, desiredExpression[t].Expression ?? null, desiredExpression[t].Color);
+            notifyMods(t, desiredExpression[t].Expression ?? null, desiredExpression[t].Color);
             ServerSend('ChatRoomCharacterExpressionUpdate', {
                 Name: desiredExpression[t].Expression ?? null, Group: t,
                 Appearance: ServerAppearanceBundle(Player.Appearance),
@@ -496,7 +592,6 @@ function installPatches() {
 }
 
 let installed = false;
-let engineStarted = false;
 
 /** 供 /lcedebug 檢查引擎是否已經啟動。 */
 export const isExpressionEngineStarted = () => engineStarted;
@@ -519,7 +614,7 @@ export function installExpressions() {
         // 初始化時把目前臉部記成手動覆寫，避免一開場就被自動表情蓋掉
         pushEvent({
             Type: MANUAL_EVT, Duration: -1,
-            Expression: FACE_COMPONENTS
+            Expression: faceComponents()
                 .map(t => [t, expression(t)[0]])
                 .filter(v => v[1] !== null)
                 .reduce((a, [k, v]) => { a[k] = [{ Expression: v }]; return a; }, {}),
@@ -550,8 +645,9 @@ export function installExpressions() {
 
     // 玩家手動改姿勢 → 記成手動覆寫。
     // 少了這段，引擎每 250ms 會把 ActivePose 打回預設的 BaseUpper/BaseLower，姿勢根本改不動。
+    // 優先權見 ENGINE_HOOK_PRIORITY 的說明，勿調高。
     for (const poseFunc of ['CharacterSetActivePose', 'PoseSetActive']) {
-        hook(poseFunc, 20, (args, next) => {
+        hook(poseFunc, ENGINE_HOOK_PRIORITY, (args, next) => {
             const [C, Pose] = args;
             if (!isCharacter(C) || (!isStringOrStringArray(Pose) && Pose !== null) || !C.IsPlayer() || !engineOn()) {
                 return next(args);
@@ -571,16 +667,28 @@ export function installExpressions() {
         return next(args);
     });
 
-    // 玩家手動改表情 → 記成手動覆寫，之後不被自動表情蓋掉
-    hook('CharacterSetFacialExpression', 20, (args, next) => {
+    // 玩家手動改表情 → 記成手動覆寫，之後不被自動表情蓋掉。
+    // 優先權見 ENGINE_HOOK_PRIORITY 的說明，勿調高。
+    hook('CharacterSetFacialExpression', ENGINE_HOOK_PRIORITY, (args, next) => {
         let [C, AssetGroup, Expression, Timer, Color] = args;
+        // notifying：這通是引擎自己發的通知（見 notifyMods），一律放行，不可再入佇列
         if (!isCharacter(C) || !isString(AssetGroup) || (!isString(Expression) && Expression !== null)
-            || !C.IsPlayer() || !engineOn()) {
+            || !C.IsPlayer() || !engineOn() || notifying) {
             return next(args);
         }
         const duration = typeof Timer === 'number' && Timer > 0 ? Timer * 1000 : -1;
         const e = {};
-        const types = AssetGroup === 'Eyes' ? ['Eyes', 'Eyes2'] : AssetGroup === 'Eyes1' ? ['Eyes'] : [AssetGroup];
+
+        // BC 的本體開頭會在 AssetGroup==="Eyes" 時遞迴呼叫自己處理 "Eyes2"（左眼帶右眼）。
+        // 我們攔截後不呼叫 next，本體不再執行，這個遞迴就跟著消失 —— 排在我們前面的模組
+        // （如「服装拓展」的 左眼_Luzi / 右眼_Luzi）只會收到 "Eyes"，於是只有左眼跟著變，
+        // 右眼永遠停在原表情。這裡把遞迴補回來：走完整的鉤子鏈重新發一次 "Eyes2"，
+        // 讓它們也收得到。"Eyes2" 不會再觸發這個分支，不會無限遞迴。
+        // （WCE 直接把 Eyes2 併進 types 了事，只顧自己的兩眼，模組的右眼就是這樣被漏掉的。）
+        if (AssetGroup === 'Eyes') CharacterSetFacialExpression(C, 'Eyes2', Expression, Timer, Color);
+
+        // 上面那通已經連同鉤子鏈處理完 Eyes2，這裡只剩自己這一邊（比照 BC：Eyes1 即左眼）
+        const types = AssetGroup === 'Eyes1' ? ['Eyes'] : [AssetGroup];
         if (!Color || !CommonColorIsValid(Color)) Color = undefined;
         for (const t of types) {
             e[t] = [{ Expression, Duration: duration, Color }];
