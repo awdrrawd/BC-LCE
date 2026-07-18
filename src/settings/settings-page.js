@@ -449,6 +449,5 @@ export function installSettingsPage() {
         });
         document.addEventListener('keydown', keyHandler, true);
         installed = true;
-        console.debug('🐈‍⬛ [LCE] 設定頁已註冊');
     })();
 }

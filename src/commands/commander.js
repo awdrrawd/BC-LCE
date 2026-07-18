@@ -449,6 +449,5 @@ export function installCommander() {
         }
         CommandCombine(COMMAND_LIST);
         installed = true;
-        console.debug(LOG, '指令系統已註冊');
     })();
 }

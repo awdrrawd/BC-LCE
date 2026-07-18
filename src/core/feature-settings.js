@@ -155,7 +155,6 @@ export async function loadFeatureSettings() {
     settings.version = FEATURE_SETTINGS_VERSION;
 
     fSettings = settings;
-    console.debug(LOG, '功能設定已載入', fSettings);
     return fSettings;
 }
 
