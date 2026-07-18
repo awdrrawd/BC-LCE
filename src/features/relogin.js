@@ -96,6 +96,7 @@ export function installRelogin() {
     hook('RelogExit', 100, (args, next) => {
         breakCircuit = false;
         breakCircuitFull = false;
+        loginError = null;   // 離開重連畫面 → 清掉上一次的斷線原因（同 WCE）
         return next(args);
     });
 
@@ -108,4 +109,42 @@ export function installRelogin() {
         } catch { /* ignore */ }
         return next(args);
     });
+
+    // ── 異地登入 / 限流的強制斷線處理（移植 WCE automaticReconnect 的 ServerDisconnect hook）──
+    // 「被踢下線」的真正原因只會從 ServerDisconnect（force=true）帶進來，不會經過 LoginResponse；
+    // 少了這個 hook，就抓不到「在別處登入」，兩邊會不停互相把對方踢掉、輪流搶登。
+    //   • ErrorDuplicatedLogin（在別處登入）→ 永久停止自動重連（breakCircuitFull），只提示一次。
+    //   • ErrorRateLimited（被限流）→ 隔 3~6 秒（隨機抖動，避開同時重連）再連一次。
+    hook('ServerDisconnect', 6, (args, next) => {
+        const [error, force] = args;
+        // 交回 BC 時把 force 改成 false：避免 BC 直接進入它自己的強制斷線流程，改由我們接管重連。
+        const ret = next([error, false]);
+        if (force) {
+            console.warn(LOG, '被強制斷線:', error);
+            try { ServerSocket?.disconnect(); } catch { /* ignore */ }
+            if (typeof error === 'string' && (error === 'ErrorDuplicatedLogin' || error === 'ErrorRateLimited')) {
+                loginError = error;
+                if (error === 'ErrorDuplicatedLogin') {
+                    if (!breakCircuitFull) notify(T('relogin_error'), T('relogin_duplicate'));
+                    breakCircuit = true;
+                    breakCircuitFull = true;   // 不再自動重連，避免互踢；使用者重整頁面即可恢復
+                } else {
+                    console.warn(LOG, '被限流，數秒後重新連線…');
+                    setTimeout(() => { try { if (typeof ServerInit === 'function') ServerInit(); } catch { /* ignore */ } },
+                        3000 + Math.round(Math.random() * 3000));
+                }
+            }
+        }
+        return ret;
+    });
+
+    // socket 重新連上 → 重置斷路器與上次錯誤（同 WCE registerSocketListener("connect")）
+    (function bindConnect(n = 240) {
+        if (typeof ServerSocket === 'undefined' || !ServerSocket) {
+            if (n <= 0) return;
+            setTimeout(() => bindConnect(n - 1), 500);
+            return;
+        }
+        try { ServerSocket.on('connect', () => { breakCircuit = false; loginError = null; }); } catch { /* ignore */ }
+    })();
 }

@@ -238,8 +238,12 @@ export function applyExtendedWardrobe() {
     try {
         if (!Player?.Wardrobe) return;
         if (getFeature('extendedWardrobe')) {
+            // 只把額外格載入記憶體（顯示/使用），**不要**回頭呼叫 CharacterCompressWardrobe：
+            // 那等於每次登入就把剛載入的衣櫃原封再存一次，會把 sanitizeBundles 補上的 TypeRecord
+            // （比舊的 Property.Type 字串肥很多）永久寫回 FBCWardrobe，讓精簡的舊存檔一次膨脹好幾倍
+            // （50K→200K 的元凶），還有「伺服器暫時讀不到時反手覆蓋雲端」的資料遺失風險。
+            // 存檔交給使用者實際變更衣櫃時 BC 觸發的 CharacterCompressWardrobe 即可（同 WCE：載入只載入）。
             loadExtendedWardrobe(Player.Wardrobe)
-                .then(w => CharacterCompressWardrobe(w))
                 .catch(e => console.warn(LOG, '拓展衣櫃初始化失敗:', e));
         } else {
             // 關閉 → 還原成 BC 預設的 24 格

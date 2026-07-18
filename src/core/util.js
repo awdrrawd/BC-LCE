@@ -55,6 +55,21 @@ export function injectStyle(id, css) {
 /** 移除指定 id 的 <style> */
 export function removeStyle(id) { document.getElementById(id)?.remove(); }
 
+const _utf8Encoder = typeof TextEncoder !== 'undefined' ? new TextEncoder() : null;
+
+/**
+ * 資料實際送出的 UTF-8 位元組數（字串直接量，其餘先 JSON 化）。
+ * 與伺服器實際收到的大小、以及 BCX measureDataSize / 「巨大訊息報告」的算法一致。
+ * 注意：不能用 str.length —— LZString.compressToUTF16 把資料塞進高位碼點，一個 code unit
+ * 送出後往往佔 2~3 個 UTF-8 位元組，用 .length 會少算一半（就是「查 100K、報告 200K」的原因）。
+ */
+export function byteSize(data) {
+    try {
+        const s = typeof data === 'string' ? data : (JSON.stringify(data) || '');
+        return _utf8Encoder ? _utf8Encoder.encode(s).byteLength : s.length;
+    } catch { return 0; }
+}
+
 /**
  * 依 canvas 邏輯座標放置一個 stage 元素。
  * @param {HTMLElement} el

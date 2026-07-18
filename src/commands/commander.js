@@ -7,6 +7,7 @@
 
 import modApi from '../modsdk.js';
 import { MOD_VER, LCE_EXT_KEY } from '../core/constants.js';
+import { byteSize } from '../core/util.js';
 import { getFeature } from '../core/feature-settings.js';
 import { isExpressionEngineStarted } from '../features/expressions.js';
 import { LOCAL_MARKER } from '../features/local-messages.js';
@@ -123,11 +124,12 @@ function openSettings() {
 
 const extSettings = () => (typeof Player !== 'undefined' && Player?.ExtensionSettings) || null;
 
-/** 依大小排序的 [鍵名, 位元組]。已被清成 null/空字串的鍵（我們刪除後留下的 null 佔位）不列出。 */
+/** 依大小排序的 [鍵名, UTF-8 位元組]。已被清成 null/空字串的鍵（刪除後留下的 null 佔位）不列出。
+ *  用 byteSize（實際送出位元組）而非 str.length，才會跟伺服器/「巨大訊息報告」的數字對得上。 */
 function extRows(ext) {
     return Object.entries(ext)
         .filter(([, v]) => v != null && v !== '')
-        .map(([k, v]) => [k, typeof v === 'string' ? v.length : JSON.stringify(v).length])
+        .map(([k, v]) => [k, byteSize(v)])
         .sort((a, b) => b[1] - a[1]);
 }
 
@@ -177,7 +179,7 @@ function confirmDelete(key) {
     if (!ext) { lceChatNotify('讀不到 Player.ExtensionSettings。'); return; }
     if (!(key in ext)) { lceChatNotify(`"${key}" 已經不存在了，請重新執行 /lcesetlist。`); return; }
 
-    const size = ((typeof ext[key] === 'string' ? ext[key].length : 0) / 1024).toFixed(1);
+    const size = (byteSize(ext[key]) / 1024).toFixed(1);   // 用 UTF-8 位元組，與清單/伺服器一致
     const wrap = document.createElement('div');
 
     const q = document.createElement('div');
