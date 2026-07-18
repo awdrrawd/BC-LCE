@@ -1,7 +1,7 @@
 {
   "name": "bc-lce",
   "private": true,
-  "version": "0.1.2",
+  "version": "0.1.3",
   "type": "module",
   "description": "Liko Club Extensions - horizontal login UI and club extensions for Bondage Club",
   "scripts": {
