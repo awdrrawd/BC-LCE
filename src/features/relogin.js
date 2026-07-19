@@ -20,6 +20,17 @@ let breakCircuit = false;       // 單次重連進行中
 let breakCircuitFull = false;   // 永久停止（重整前不再嘗試）
 let loginError = null;
 
+// ── 重試節流 ──
+// 症狀：連線不穩時 socket.io 會反覆 connect/disconnect，而我們的 'connect' 監聽每次都把 breakCircuit
+// 重置，於是 RelogRun 立刻又送一次 LoginDoLogin。登入請求擠成一團 → 反而更容易踩到伺服器的限流
+// （ErrorRateLimited），最後 breakCircuit 卡住、使用者只好自己重打密碼。
+// 對策：兩次「真正送出登入」之間至少間隔 backoff；失敗就把間隔加倍（指數退避），成功則歸零。
+// 這樣 socket 一直閃，登入嘗試也不會比 backoff 更密。
+const RELOG_MIN_INTERVAL = 5000;    // 最短重試間隔
+const RELOG_MAX_INTERVAL = 60000;   // 退避上限
+let lastAttempt = 0;
+let backoff = RELOG_MIN_INTERVAL;
+
 function hook(name, priority, fn) {
     try { modApi.hookFunction(name, priority, fn); }
     catch (e) { console.warn(LOG, 'relogin hook 未掛上:', name, e?.message ?? e); }
@@ -50,7 +61,12 @@ async function relog() {
     if (!Player?.AccountName || LoginSubmitted || breakCircuit || breakCircuitFull) return;
     if (typeof ServerSocket === 'undefined' || !ServerSocket?.connected) return;
 
+    // 節流：距上次送出登入還不到 backoff 就先不試（不設 breakCircuit，讓下一幀再來檢查）。
+    // 這一步擋住了「socket 一 connect 就立刻再登一次」的連環轟炸。
+    if (Date.now() - lastAttempt < backoff) return;
+
     breakCircuit = true;
+    lastAttempt = Date.now();
     const pass = await savedPassword(Player.AccountName);
     if (!pass) {
         console.warn(LOG, '沒有保存的密碼，無法自動重連:', Player.AccountName, '（請先在登入頁保存此帳號）');
@@ -70,8 +86,14 @@ async function relog() {
             setTimeout(wait, 500);
         })();
     });
-    if (!ok) { console.warn(LOG, '自動重連失敗'); return; }
+    if (!ok) {
+        // 失敗 → 拉長下次間隔，避免持續失敗時愈試愈密
+        backoff = Math.min(backoff * 2, RELOG_MAX_INTERVAL);
+        console.warn(LOG, `自動重連失敗，下次至少間隔 ${backoff / 1000}s`);
+        return;
+    }
 
+    backoff = RELOG_MIN_INTERVAL;   // 成功 → 退避歸零
     setTimeout(() => notify(T('relogin_title'), T('relogin_done')), 500);
 }
 
@@ -105,7 +127,7 @@ export function installRelogin() {
         try {
             const r = args[0];
             loginError = typeof r === 'string' ? r : null;
-            if (r && typeof r === 'object') breakCircuit = false;   // 登入成功 → 重置斷路器
+            if (r && typeof r === 'object') { breakCircuit = false; backoff = RELOG_MIN_INTERVAL; }   // 登入成功 → 重置斷路器與退避
         } catch { /* ignore */ }
         return next(args);
     });

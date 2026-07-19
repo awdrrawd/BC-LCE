@@ -357,9 +357,9 @@ function versions(args) {
         const bcVersion = character.OnlineSharedSettings?.GameVersion ?? 'R0';
         const BCXi = window.bcx?.getCharacterVersion?.(character.MemberNumber) ? ` BCX ${window.bcx.getCharacterVersion(character.MemberNumber) ?? '?'}` : '';
 
-        // 兩個獨立來源，見 features/hello.js：
-        //   FBC ← BCEMsg（WCE 的頻道，我們只收）
-        //   LCE ← LCEMsg（我們自己的頻道）
+        // 兩個獨立來源，見 features/hello.js（都走 WCE 的 BCEMsg 頻道，靠 lce 標記區分）：
+        //   FBC ← 沒有 lce 標記的 BCEMsg（WCE 送的）
+        //   LCE ← 夾了 lce 標記的 BCEMsg，或舊版 LCEMsg
         // 兩個都有值 = 對方同時裝了 WCE 和 LCE，兩行都該列出來。
         // WCE 主版號 1~5 是舊名 FBC，之後才改叫 WCE（判斷方式同 WCE 自己的徽章）。
         const wceLabel = character.FBC && ['1', '2', '3', '4', '5'].includes(character.FBC.split('.')[0]) ? 'FBC' : 'WCE';

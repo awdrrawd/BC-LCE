@@ -3,6 +3,8 @@
 束縛俱樂部（Bondage Club）的功能擴充 **mega-addon**：整合並優化了介面染色、即時通訊、表情/姿勢、效能、反作弊、衣櫃等一系列功能，並提供一套橫式登入介面。定位是 **WCE 的替代品**（移植了 WCE / Themed / Responsive / NotifyPlus 等的功能），與 [Liko - MPL](./Liko%20-%20MPL.main.user.js)（直式手機佈局）互補：**橫向啟用 LCE 版面、直向啟用 MPL 版面**，帳號 / 頭像 / 密碼儲存雙向共用。
 
 > **與 WCE 資料互通**：刻意沿用 WCE 的 `ExtensionSettings` 鍵與欄位名（衣櫃 `FBCWardrobe`、圖層隱藏 `WCEOverrides` + `item.Property.wceOverrideHide`），裝過 WCE 的存檔可直接讀取。
+>
+> **徽章 / `/versions` 走同一條頻道**：頭頂徽章與版本查詢用的打招呼訊息，與 WCE 同走 `BCEMsg` 這條 Hidden 頻道，額外夾一個 `lce` 標記讓兩邊能區分 LCE 與 WCE。因此 WCE 使用者也查得到 LCE 的人（會以 WCE 徽章 + `Other Addons` 清單呈現）；LCE 之間則正確顯示 LCE 徽章。詳見 [`src/features/hello.js`](src/features/hello.js) 開頭說明。
 
 ## 功能總覽
 

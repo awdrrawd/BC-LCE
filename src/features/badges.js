@@ -4,9 +4,10 @@
 // 徽章的用途是「一眼看出對方裝了什麼」。沒有它，/versions 就形同虛設 ——
 // 你得先知道對方有裝，才會想去查；不知道就不會查，那查得到也沒意義。
 //
-// 兩種徽章，資料來自 features/hello.js 的兩個頻道：
-//   WCE / FBC ← character.FBC   （BCEMsg，我們只收不送）
-//   LCE       ← character.LCE   （LCEMsg，LCE 自己的頻道）
+// 兩種徽章，資料由 features/hello.js 寫進角色物件：
+//   WCE / FBC ← character.FBC   （沒有 lce 標記的 BCEMsg）
+//   LCE       ← character.LCE   （夾了 lce 標記的 BCEMsg，或舊版 LCEMsg）
+// 兩者都走 WCE 的 BCEMsg 頻道，靠 payload 裡的 lce 標記區分（見 hello.js 的說明）。
 //
 // 兩個都有 = 對方同時裝了 WCE 和 LCE，兩枚都畫，由 slot 往下疊，不會重疊。
 // 裝了 WCE 時第 0 格讓給它自己畫（見 wceDrawsItself），我們只補 LCE 那枚。

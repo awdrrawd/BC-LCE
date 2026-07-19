@@ -250,12 +250,37 @@ function pruneOldest(targetRemoveCount) {
     return removed;
 }
 
+/**
+ * 即時模式下把捲軸釘在底部。
+ *
+ * 為什麼需要這個：BC 的 ChatRoomAppendChat 是「先判斷 wasAtEnd → append → 若在底部就捲到底」，
+ * 這一切在同一個同步區塊內完成。但我們的 MutationObserver 是在那之後才跑，這時才把上面的舊訊息
+ * 掛上 content-visibility（高度從實際值塌成估計值），內容整段往上位移 → 剛捲到底的位置就跑掉了，
+ * 於是「開了信息節能後新訊息不自動捲到最新」。所以只要還在即時模式（沒在往回讀歷史），
+ * 每次有新訊息、且我們動過版面後，就重新把捲軸釘回底部。
+ *
+ * 用 requestAnimationFrame 合併同一幀內的多則新訊息（進房大量灌訊息時只釘一次），
+ * 也讓 content-visibility 造成的版面變動先結算完再讀 scrollHeight。
+ */
+let pinScheduled = false;
+function schedulePinToBottom() {
+    if (pinScheduled) return;
+    pinScheduled = true;
+    requestAnimationFrame(() => {
+        pinScheduled = false;
+        if (readingMode) return;   // 這一幀之間使用者往回捲了 → 尊重他，不要拉回底部
+        const log = chatLogEl();
+        if (log) log.scrollTop = log.scrollHeight;
+    });
+}
+
 /** 每則新訊息進 DOM 後呼叫一次。閱讀模式下只更新計數。 */
 function onMessageAppended() {
     liveCount++;
     if (readingMode) return;
     applyLazyIncremental();
     if (pruneOn() && liveCount > hardLimit()) pruneOldest(liveCount - pruneFloor());
+    schedulePinToBottom();
 }
 
 function startObserver() {

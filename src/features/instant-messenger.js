@@ -69,7 +69,9 @@ function injectStyle() {
 .lce-friend-entry-name{font-weight:bold;display:flex;flex-direction:column;}
 .lce-friend-selected{font-style:italic;border-top:0.1em solid var(--lce-accent,#fff);
   border-bottom:0.1em solid var(--lce-accent,#fff);background-color:var(--lce-element,#222);}
-.lce-friend-unread{background-color:var(--lce-accent,#a22);}
+/* 未讀通知刻意用寫死的紅色，不吃 --lce-accent —— 主題染色會把 accent 染成紫色，
+   讓「有新訊息」這個提示看起來像一般選中狀態。訊息通知要一眼認得出來，不該被主題蓋過。 */
+.lce-friend-unread{background-color:#c62828 !important;}
 .lce-friend-offline{text-decoration:line-through;color:var(--lce-text-disabled,gray);}
 #lce-im-messages{width:100%;height:90%;font-size:1.5rem;font-family:Arial,sans-serif;}
 #lce-im-input{width:100%;height:10%;border:0;padding:0;margin:0;

@@ -1,29 +1,33 @@
 // ════════════════════════════════════════════════════════════════════════════
-// 打招呼協定 —— 雙頻道：收 WCE 的，送自己的
+// 打招呼協定 —— 與 WCE 同一條頻道（BCEMsg），靠夾帶標記區分 LCE / WCE
 //
 // BC 伺服器不提供「對方裝了什麼插件」的欄位，所以這類資訊得靠玩家之間自己用
 // Type="Hidden" 的聊天訊息互報。Hidden 訊息不會顯示在聊天室裡（BC 的
 // ChatRoomMessage 一看到 Type="Hidden" 就 return，連渲染都不進去），BC 自己也是
 // 這樣傳 TakeSuitcase / RuleInfoGet 之類的內部訊息的，是個既有的慣例。
 //
-// ── 為什麼要兩個頻道 ──
-// Content="BCEMsg" 是 WCE 的頻道。我們照著它送，對方的 WCE 就會把我們寫進
-// character.FBC，在我們頭上畫一個「WCE + LCE 的版本號」—— 頂著別人的名義對外
-// 宣傳，不是我們要的。但完全不送的話，LCE 使用者之間也就互相看不到，/versions
-// 只剩 WCE 的人。
+// ── 為什麼走 WCE 的頻道 ──
+// LCE 是從 WCE 分流下來的，理應彼此看得到對方的版本/徽章。WCE 的接收端只認
+// Content="BCEMsg"（見其 hiddenMessageHandler.ts 的 `if (data.Content === "BCEMsg")`），
+// 所以要讓 WCE 使用者也查得到我們，就必須送 BCEMsg —— 這是唯一的路。
 //
-// 所以拆成兩條：
-//   BCEMsg（WCE 的）  只收不送 → 看得到 WCE/FBC 的人，但他們看不到我們
-//   LCEMsg（我們的）  收送都做 → LCE 使用者互相看得到
+// 代價：WCE 收到 BCEMsg 後一律 `sender.FBC = version`，會在我們頭上畫「WCE vX」徽章、
+// /versions 也列成 WCE。我們無法改 WCE 的顯示，這一點是刻意接受的取捨。
 //
-// WCE 的接收端寫的是 `if (data.Content === "BCEMsg")`（見其
-// hiddenMessageHandler.ts），所以 LCEMsg 對它來說完全不存在 —— 這正是我們要的：
-// 分享的是 LCE 的身分，不是冒充 WCE。
+// ── 怎麼區分是 LCE 還是 WCE 送的 ──
+// Hidden 訊息的 payload 是自由 JSON，可以夾任意欄位；WCE 的 processHello 只讀它認得的
+// 幾個鍵，其餘一概忽略。所以我們在 BCEMsg 裡多夾一個 `lce`（= LCE 版本字串）當標記：
+//   • WCE 端：看不懂 `lce`，照舊把我們當 WCE（版本用我們一起送的 `version`）。
+//   • LCE 端：看到 `lce` → 認定這是 LCE 的招呼，寫進 character.LCE、畫 LCE 徽章，
+//             不去動 character.FBC（所以純 LCE 使用者在彼此眼中只有 LCE 徽章，不會誤標 WCE）。
+//   • 同時裝了 WCE + LCE 的人：WCE 送一則沒有 `lce` 的 BCEMsg（→ FBC），
+//             LCE 送一則有 `lce` 的 BCEMsg（→ LCE），兩枚徽章各自成立。
 //
-// 註：不送 BCEMsg 也照樣收得到 WCE 的人。WCE 有兩個自己會開口的時機：
-//   ChatRoomSyncMemberJoin → 有人進房時主動對新人送一則定向 Hello
-//   ChatRoomSync           → 房間同步時廣播（成員進出都會觸發）
-// 我們一進房，房裡的 WCE 使用者就會自動報上名來，不必先問。
+// 相容性：舊版 LCE 走的是獨立的 LCEMsg 頻道，這裡仍保留「收」LCEMsg（見 onMessage），
+// 讓還沒更新的 LCE 使用者依舊被認得；但我們自己只送 BCEMsg。
+//
+// 註：進房後不必先問，房裡的人（WCE 或 LCE）在 ChatRoomSync / MemberJoin 時都會自報，
+// 我們自己進房也會廣播並要求既有的 LCE 使用者回報一次。
 // ════════════════════════════════════════════════════════════════════════════
 
 import modApi from '../modsdk.js';
@@ -33,8 +37,8 @@ import { getFeature } from '../core/feature-settings.js';
 const LOG = '🐈‍⬛ [LCE]';
 
 const HIDDEN = 'Hidden';
-const BCE_MSG = 'BCEMsg';   // WCE / FBC 的頻道 —— 只收不送
-const LCE_MSG = 'LCEMsg';   // LCE 自己的頻道 —— 收送都做
+const BCE_MSG = 'BCEMsg';   // WCE 的頻道 —— 收送都做（送的訊息夾 lce 標記讓 LCE 端能區分）
+const LCE_MSG = 'LCEMsg';   // 舊版 LCE 的獨立頻道 —— 只保留「收」以相容尚未更新的使用者
 const MSG_HELLO = 'Hello';
 
 const inChatRoom = () =>
@@ -51,7 +55,12 @@ export function sendLceHello(target = null, requestReply = false) {
     try {
         const payload = {
             type: MSG_HELLO,
+            // version：WCE 端會讀這個並顯示「WCE vX」。一起送真實版本，WCE 使用者的 /versions
+            //          才查得到我們的版本號（而不是 0.0）。
             version: MOD_VER,
+            // lce：LCE 端專用的標記（WCE 忽略）。有它 = 這是 LCE 送的，LCE 端據此畫 LCE 徽章、
+            //      不去動 character.FBC。值就放版本，省得再開一個欄位。
+            lce: MOD_VER,
             replyRequested: requestReply,
         };
         // 能力宣告：讓對方知道我們支援哪些「需要雙方都裝才看得到」的功能（沿用 WCE 的
@@ -60,13 +69,14 @@ export function sendLceHello(target = null, requestReply = false) {
         const caps = [];
         if (getFeature('layeringHide')) caps.push('layeringHide');
         if (caps.length) payload.capabilities = caps;
-        // 版本一律送（/versions 要靠它才看得到 LCE 的人）；完整插件清單則看使用者願不願意
+        // 完整插件清單看使用者願不願意分享；送出時 LCE 本身也在其中，
+        // 於是 WCE 的 /versions 會把 LCE 列進「Other Addons」，等於在 WCE 那邊也認得出 LCE。
         if (getFeature('shareAddons')) {
             payload.otherAddons = window.bcModSdk?.getModsInfo?.() ?? [];
         }
         const message = {
             Type: HIDDEN,
-            Content: LCE_MSG,
+            Content: BCE_MSG,   // 與 WCE 同頻道
             Sender: Player.MemberNumber,
             Dictionary: [{ message: payload }],
         };
@@ -84,9 +94,10 @@ function parseMessage(data) {
 }
 
 /**
- * WCE/FBC 的人報到。
- * 註：WCE 的 processHello 在這裡還會處理 replyRequested 並回送一則 BCEMsg——
- * 我們刻意不回。在那個頻道上回覆就等於自稱 WCE。
+ * WCE/FBC 的人報到（沒有 lce 標記的 BCEMsg）。
+ * 註：這裡刻意不理 replyRequested。要讓 WCE 看到我們，靠的是自己在 ChatRoomSync 的廣播，
+ * 每收到一則 WCE 招呼就回一則是多餘的（WCE 之間也只在自己人之間互回）。
+ * LCE 之間的定向回覆由 processLceHello 處理。
  */
 function processWceHello(sender, msg) {
     sender.FBC = msg.version ?? '0.0';
@@ -94,9 +105,9 @@ function processWceHello(sender, msg) {
     sender.FBCOtherAddons = msg.otherAddons;
 }
 
-/** LCE 的人報到。這是我們自己的頻道，該回就回。 */
+/** LCE 的人報到。版本優先取 lce 標記（新版），退回 version（相容舊 LCEMsg）。 */
 function processLceHello(sender, msg) {
-    sender.LCE = msg.version ?? '0.0';
+    sender.LCE = (typeof msg.lce === 'string' ? msg.lce : null) ?? msg.version ?? '0.0';
     sender.LCEOtherAddons = msg.otherAddons;
     // 能力清單放進 BCECapabilities（與 WCE 同欄位）：圖層隱藏的設定框靠它判斷該不該顯示。
     sender.BCECapabilities = Array.isArray(msg.capabilities) ? msg.capabilities : [];
@@ -116,8 +127,13 @@ function onMessage(data) {
         if (!sender) return;
         const msg = parseMessage(data);
         if (msg.type !== MSG_HELLO) return;
-        if (data.Content === BCE_MSG) processWceHello(sender, msg);
-        else processLceHello(sender, msg);
+        // BCEMsg 同時承載 WCE 與 LCE 的招呼：夾了 lce 標記的是 LCE，其餘視為 WCE。
+        // LCEMsg 是舊版 LCE 的獨立頻道，一律當 LCE。
+        if (data.Content === LCE_MSG || (data.Content === BCE_MSG && msg.lce != null)) {
+            processLceHello(sender, msg);
+        } else {
+            processWceHello(sender, msg);
+        }
     } catch (e) {
         console.warn(LOG, '處理 Hidden 打招呼訊息失敗:', e);
     }
