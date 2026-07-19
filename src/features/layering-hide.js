@@ -28,11 +28,10 @@ const OVERRIDE_KEY = 'WCEOverrides';   // ExtensionSettings 鍵（與 WCE 相同
 const HIDE_PROP = 'wceOverrideHide';   // item.Property 欄位（與 WCE 相同，勿改）
 const STYLE_ID = 'lce-layering-hide';
 
-// BC 原生的 #layering 是 CSS grid，grid-template 裡沒有「隱藏設定」用的兩列(header/grid)。
-// 只把 header + 勾選表單塞進 root、卻不補這兩列的話，它們沒有 grid-area 可放 → 位置錯亂
-// （這就是「按鈕座標怪怪的」的成因）。這段 CSS 移植自 WCE wceStyles，補上 layer-hide-header /
-// layer-hide-grid 兩列並指派 grid-area，讓設定框落在圖層清單下方。
-// 只在功能開啟時注入、關閉時移除，避免影響沒用這功能的人的分層選單版面。
+// ⚠ 只適用於「舊版 R129」的 #layering（它是自訂 CSS grid，grid-template 裡沒有隱藏設定用的兩列）。
+// R130 起 BC 把 #layering 改成 Screen 元件框架（.screen > .screen-main-container > main.screen-main），
+// 版面由框架自己管；若在新版還去覆寫 #layering 的 grid-template，整個選單會被擠爆（＝UI變形）。
+// 所以這段 CSS 只在 R129 注入（見 applyLayeringStyle），新版一律不注入、改把設定框塞進 .screen-main。
 const LAYERING_CSS = `
 #layering {
     grid-template:
@@ -56,10 +55,13 @@ const LAYERING_CSS = `
     align-self: self-start;
 }`;
 
-/** 依設定注入/移除分層選單的版面 CSS。 */
+/** 依設定注入/移除分層選單的版面 CSS（只有舊版 R129 需要；R130+ 交給 Screen 框架）。 */
 function applyLayeringStyle() {
-    if (getFeature(CAP)) injectStyle(STYLE_ID, LAYERING_CSS);
-    else removeStyle(STYLE_ID);
+    if (getFeature(CAP) && typeof GameVersion !== 'undefined' && GameVersion === 'R129') {
+        injectStyle(STYLE_ID, LAYERING_CSS);
+    } else {
+        removeStyle(STYLE_ID);
+    }
 }
 
 let installed = false;
@@ -141,39 +143,71 @@ export function installLayeringHide() {
 
             const root = document.getElementById(Layering.ID.root);
             if (!root) return ret;
-            root.classList.add('scroll-box');
-            root.querySelector('#layering-layer-div')?.classList.remove('scroll-box');
+            // 已存在就不重覆注入：避免與 WCE（或自己上一次的殘留）撞 id
+            // layering-wce-hide-div / layering-wce-hide-cb-*，那會把彼此的勾選框搶走、版面也會亂。
+            if (root.querySelector('#layering-wce-hide-div')) return ret;
 
-            ElementCreate({ tag: 'h1', attributes: { id: 'layering-hide-header' }, parent: root, children: [T('layeringHide_header')] });
-            ElementCreate({
-                tag: 'form',
-                attributes: { id: 'layering-wce-hide-div' },
-                classList: ['layering-layer-inner-grid'],
-                parent: root,
-                children: defaultItemHide.map(h => ({
-                    tag: 'div',
-                    classList: ['layering-pair'],
-                    children: [
-                        ElementCheckbox.Create(
-                            `layering-wce-hide-cb-${h}`,
-                            () => {
-                                const hideForm = document.getElementById('layering-wce-hide-div');
-                                if (!hideForm || !Layering.Item) return;
-                                Layering.Item.Property ??= {};
-                                Layering.Item.Property[HIDE_PROP] = new FormData(hideForm).getAll('checkbox-hide');
-                                // 勾好勾滿（等於預設）就把 override 刪掉，回歸物品原本的 Hide，別佔空間。
-                                if (defaultItemHide.length === Layering.Item.Property[HIDE_PROP].length) {
-                                    delete Layering.Item.Property[HIDE_PROP];
-                                }
-                                Layering._CharacterRefresh(Layering.Character, false, false);
-                            },
-                            { value: h, disabled: Layering.Readonly, checked: overrideItemHide.includes(h) },
-                            { checkbox: { attributes: { name: 'checkbox-hide' } } }
-                        ),
-                        { tag: 'span', classList: ['layering-pair-text'], children: [h] },
-                    ],
-                })),
+            // 勾選框變動時的共用處理：把目前勾選的部位寫進 override；勾好勾滿(等於預設)就刪掉回歸原本 Hide。
+            const onHideChange = () => {
+                if (!Layering.Item) return;
+                const checked = document.getElementById('layering-wce-hide-div')
+                    ?.querySelectorAll("input[type='checkbox']:checked");
+                Layering.Item.Property ??= {};
+                Layering.Item.Property[HIDE_PROP] = Array.from(checked ?? []).map(inp => inp.value);
+                if (defaultItemHide.length === Layering.Item.Property[HIDE_PROP].length) {
+                    delete Layering.Item.Property[HIDE_PROP];
+                }
+                Layering._CharacterRefresh(Layering.Character, false, false);
+            };
+            const makePair = (h) => ({
+                tag: 'div',
+                classList: ['layering-pair'],
+                children: [
+                    ElementCheckbox.Create(
+                        `layering-wce-hide-cb-${h}`,
+                        onHideChange,
+                        { value: h, disabled: Layering.Readonly, checked: overrideItemHide.includes(h) },
+                        { checkbox: { attributes: { name: 'checkbox-hide' } } }
+                    ),
+                    { tag: 'label', classList: ['layering-pair-text'], children: [h], attributes: { for: `layering-wce-hide-cb-${h}` } },
+                ],
             });
+
+            const screenMain = root.querySelector('.screen-main');
+            if (screenMain) {
+                // ── R130+：Screen 框架。把設定框當成 <fieldset> 塞進 .screen-main，版面交給 BC 自己管 ──
+                ElementCreate({
+                    tag: 'fieldset',
+                    attributes: {
+                        name: 'wce-hide', id: 'layering-wce-hide-div',
+                        'aria-labelledby': 'layering-hide-header', disabled: Layering.Readonly,
+                    },
+                    parent: screenMain,
+                    children: [
+                        { tag: 'h2', attributes: { id: 'layering-hide-header' }, children: [T('layeringHide_header')] },
+                        {
+                            tag: 'fieldset',
+                            classList: ['layering-layer-inner-grid'],
+                            children: [
+                                { tag: 'legend', children: ['Layers'] },
+                                ...defaultItemHide.map(makePair),
+                            ],
+                        },
+                    ],
+                });
+            } else {
+                // ── 舊版 R129：#layering 是自訂 grid，沿用 root append + <h1> + <form>（配合 LAYERING_CSS）──
+                root.classList.add('scroll-box');
+                root.querySelector('#layering-layer-div')?.classList.remove('scroll-box');
+                ElementCreate({ tag: 'h1', attributes: { id: 'layering-hide-header' }, parent: root, children: [T('layeringHide_header')] });
+                ElementCreate({
+                    tag: 'form',
+                    attributes: { id: 'layering-wce-hide-div' },
+                    classList: ['layering-layer-inner-grid'],
+                    parent: root,
+                    children: defaultItemHide.map(makePair),
+                });
+            }
         } catch (e) { console.warn(LOG, 'layeringHide UI 建立失敗:', e); }
         return ret;
     });
