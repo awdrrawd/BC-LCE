@@ -48,7 +48,12 @@ function sanitizeBundles(list) {
 }
 
 // ───────────────────────── 拓展衣櫃 ─────────────────────────
-export async function loadExtendedWardrobe(wardrobe) {
+/**
+ * @param {boolean} init 是否為登入/啟動時自動套用（true），還是使用者在設定裡手動開啟（false）。
+ *   只影響「找不到資料」時的提示文案（同 WCE）：登入時用較強的警告（可能是伺服器暫時讀不到，
+ *   別急著建空衣櫃覆蓋雲端）；手動開啟時用較輕的提示（第一次啟用，想從別的裝置匯入就選取消）。
+ */
+export async function loadExtendedWardrobe(wardrobe, init = false) {
     if (!getFeature('extendedWardrobe')) return wardrobe;
 
     const wData = Player.ExtensionSettings?.[WARDROBE_KEY];
@@ -60,7 +65,7 @@ export async function loadExtendedWardrobe(wardrobe) {
         // 直接建立空衣櫃會覆蓋掉雲端既有資料，所以先問過再說（同 WCE）。
         if (typeof FUSAM === 'object' && FUSAM?.modals) {
             const [answ] = await FUSAM.modals.openAsync({
-                prompt: T('wardrobe_new_prompt'),
+                prompt: T(init ? 'wardrobe_new_prompt' : 'wardrobe_new_prompt_toggle'),
                 buttons: { cancel: T('wardrobe_cancel'), submit: T('wardrobe_ok') },
             });
             if (answ === 'submit') extendedLoaded = true;
@@ -225,16 +230,19 @@ export function installWardrobe() {
             setTimeout(() => wait(n - 1), 500);
             return;
         }
-        applyExtendedWardrobe();
+        applyExtendedWardrobe(true);   // 登入/啟動時自動套用 → init=true
     })();
 
     window.addEventListener(SETTING_CHANGED_EVENT, (e) => {
-        if (e.detail?.key === 'extendedWardrobe') applyExtendedWardrobe();
+        if (e.detail?.key === 'extendedWardrobe') applyExtendedWardrobe(false);   // 使用者手動切換 → init=false
     });
 }
 
-/** 依目前設定套用/還原拓展衣櫃格數。可重複呼叫。 */
-export function applyExtendedWardrobe() {
+/**
+ * 依目前設定套用/還原拓展衣櫃格數。可重複呼叫。
+ * @param {boolean} init 見 loadExtendedWardrobe：只影響「找不到資料」時的提示文案。
+ */
+export function applyExtendedWardrobe(init = false) {
     try {
         if (!Player?.Wardrobe) return;
         if (getFeature('extendedWardrobe')) {
@@ -243,7 +251,7 @@ export function applyExtendedWardrobe() {
             // （比舊的 Property.Type 字串肥很多）永久寫回 FBCWardrobe，讓精簡的舊存檔一次膨脹好幾倍
             // （50K→200K 的元凶），還有「伺服器暫時讀不到時反手覆蓋雲端」的資料遺失風險。
             // 存檔交給使用者實際變更衣櫃時 BC 觸發的 CharacterCompressWardrobe 即可（同 WCE：載入只載入）。
-            loadExtendedWardrobe(Player.Wardrobe)
+            loadExtendedWardrobe(Player.Wardrobe, init)
                 .catch(e => console.warn(LOG, '拓展衣櫃初始化失敗:', e));
         } else {
             // 關閉 → 還原成 BC 預設的 24 格

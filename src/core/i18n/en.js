@@ -130,6 +130,7 @@ export default {
     wardrobe_exclude_body: "Exclude body parts",
     wardrobe_override_confirm: "Do you really want to override this wardrobe outfit?",
     wardrobe_new_prompt: "No extended wardrobe data found for this character. Create a new empty extended wardrobe? Warning: if you expect existing data in the cloud (the server may have failed to load temporarily), choose Cancel to avoid permanent data loss.",
+    wardrobe_new_prompt_toggle: "You just enabled the extended wardrobe for the first time on this character. Proceeding creates a new empty extended wardrobe. If you expect an existing extended wardrobe to be imported from another device, choose Cancel instead.",
     wardrobe_ok: "Create",
     wardrobe_cancel: "Cancel",
     domain_prompt: "Do you want to allow 3rd party {content} to be loaded from {origin}? {trusted}",

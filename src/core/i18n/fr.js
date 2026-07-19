@@ -135,6 +135,7 @@ export default {
     wardrobe_exclude_body: "Exclure les parties du corps",
     wardrobe_override_confirm: "Voulez-vous vraiment écraser cette tenue de la garde-robe ?",
     wardrobe_new_prompt: "Aucune donnée de garde-robe étendue trouvée pour ce personnage. Créer une nouvelle garde-robe étendue vide ? Attention : si vous attendez des données existantes dans le cloud (le serveur a peut-être échoué à les charger temporairement), choisissez Annuler pour éviter une perte de données définitive.",
+    wardrobe_new_prompt_toggle: "Vous venez d'activer la garde-robe étendue pour la première fois sur ce personnage. Continuer créera une nouvelle garde-robe étendue vide. Si vous attendez l'import d'une garde-robe étendue existante depuis un autre appareil, choisissez plutôt Annuler.",
     wardrobe_ok: "Créer",
     wardrobe_cancel: "Annuler",
     domain_prompt: "Voulez-vous autoriser le chargement de {content} tiers depuis {origin} ? {trusted}",

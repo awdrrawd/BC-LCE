@@ -130,6 +130,7 @@ export default {
     wardrobe_exclude_body: "排除身體部位",
     wardrobe_override_confirm: "確定要覆蓋這格衣櫃服裝嗎？",
     wardrobe_new_prompt: "找不到此角色的拓展衣櫃資料。要建立一個新的空拓展衣櫃嗎？注意：若你預期雲端已有資料（可能只是伺服器暫時讀取失敗），請選取消，以免永久覆蓋既有衣櫃。",
+    wardrobe_new_prompt_toggle: "你剛在此角色上第一次啟用拓展衣櫃。繼續會建立一個新的空拓展衣櫃。若你預期要從其他裝置匯入既有的拓展衣櫃，請改選取消。",
     wardrobe_ok: "建立",
     wardrobe_cancel: "取消",
     domain_prompt: "要允許從 {origin} 載入第三方{content}嗎？{trusted}",

@@ -136,6 +136,7 @@ export default {
     wardrobe_exclude_body: "Körperteile ausschließen",
     wardrobe_override_confirm: "Willst du dieses Kleiderschrank-Outfit wirklich überschreiben?",
     wardrobe_new_prompt: "Keine erweiterten Kleiderschrank-Daten für diesen Charakter gefunden. Einen neuen leeren erweiterten Kleiderschrank erstellen? Warnung: Falls du vorhandene Daten in der Cloud erwartest (der Server konnte sie evtl. nur vorübergehend nicht laden), wähle Abbrechen, um dauerhaften Datenverlust zu vermeiden.",
+    wardrobe_new_prompt_toggle: "Du hast den erweiterten Kleiderschrank für diesen Charakter gerade zum ersten Mal aktiviert. Beim Fortfahren wird ein neuer leerer erweiterter Kleiderschrank erstellt. Falls du erwartest, dass ein vorhandener erweiterter Kleiderschrank von einem anderen Gerät importiert wird, wähle stattdessen Abbrechen.",
     wardrobe_ok: "Erstellen",
     wardrobe_cancel: "Abbrechen",
     domain_prompt: "Möchtest du zulassen, dass Drittanbieter-{content} von {origin} geladen wird? {trusted}",
