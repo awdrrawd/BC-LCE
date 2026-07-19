@@ -219,6 +219,16 @@ export function crRemove() {
     clearCanvasStyle();
     removeStyle('lce-v-cr');
 
+    // 清掉 crMaintain 經由 ElementPositionFix 加在頂部選單上的 inline 樣式。
+    // 新版 BC 的 #chat-room-top-menu 是 #chat-room-div 的 flex 子元素，橫向時本來
+    // 沒有任何 inline style、BC 也不會重設它，不清就會卡在直式座標導致轉橫向錯位。
+    const topMenu = document.getElementById('chat-room-top-menu');
+    if (topMenu) {
+        for (const p of ['position', 'left', 'top', 'width', 'height', 'font-size', 'font-family']) {
+            topMenu.style.removeProperty(p);
+        }
+    }
+
     if (crOrigRect && typeof ChatRoomDivRect !== 'undefined') {
         for (let i = 0; i < 4; i++) ChatRoomDivRect[i] = crOrigRect[i];
     }

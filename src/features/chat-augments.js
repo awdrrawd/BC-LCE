@@ -15,6 +15,10 @@ const CHATLOG = 'TextAreaChatLog';
 
 const EMBED = { Image: 'img', None: '', Untrusted: 'none-img' };
 
+// 要處理連結/嵌入的訊息類型（對應 BC 的 ChatMessage${Type} class）。
+// Emote(*…*) 與 Action(…) 的網址也轉連結。
+const MSG_CLASSES = ['ChatMessageChat', 'ChatMessageWhisper', 'ChatMessageEmote', 'ChatMessageAction'];
+
 // 本次連線內被使用者授權的來源（同 WCE 的 sessionCustomOrigins；不持久化）
 export const sessionCustomOrigins = new Map();
 
@@ -29,6 +33,10 @@ const TRUSTED_HOSTS = [
 ];
 
 function parseUrl(word) {
+    // Emote 整段包在 *…* 內，URL 落在頭/尾時會沾到星號；星號不是合法 URL 邊界字元，去掉再解析。
+    const star = word.replace(/^\*+/u, '').replace(/\*+$/u, '');
+    if (star !== word) return parseUrl(star);
+    // Action 整段包在 (…) 內
     const t = /^\((.+)\)$/.exec(word);
     if (t) return parseUrl(t[1]);
     try {
@@ -184,13 +192,17 @@ function scan() {
     const unhandled = document.querySelectorAll(`.ChatMessage:not([${HANDLED_ATTR}=true])`);
     for (const msgEl of unhandled) {
         msgEl.setAttribute(HANDLED_ATTR, 'true');
-        const content = msgEl.querySelector('.chat-room-message-content');
-        if (!content) continue;
-        if (!(msgEl.classList.contains('ChatMessageChat') || msgEl.classList.contains('ChatMessageWhisper'))) continue;
+        if (!MSG_CLASSES.some((c) => msgEl.classList.contains(c))) continue;
         if (msgEl.classList.contains('lce-pending')) continue;
 
+        // 有 msgId 的訊息文字包在 .chat-room-message-content span 內；
+        // 沒有 msgId 的 Action/Emote，BC 直接把文字掛在訊息 div 底下，沒有 span，
+        // 這時退而處理整個訊息 div（.chat-room-metadata 是元素節點，不會被 linkify）。
+        const contentSpan = msgEl.querySelector('.chat-room-message-content');
+        const content = contentSpan || msgEl;
+
         const scrolledToEnd = ElementIsScrolledToEnd(CHATLOG);
-        processChatAugmentsForLine(content, () => { if (scrolledToEnd) ElementScrollToEnd(CHATLOG); }, true);
+        processChatAugmentsForLine(content, () => { if (scrolledToEnd) ElementScrollToEnd(CHATLOG); }, !!contentSpan);
         if (scrolledToEnd) ElementScrollToEnd(CHATLOG);
     }
 }

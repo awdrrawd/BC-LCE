@@ -2,7 +2,7 @@
 // @name         Liko - LCE - Loader
 // @name:zh      Liko的俱樂部擴充 - 載入器
 // @namespace    https://github.com/awdrrawd/BC-LCE
-// @version      0.1.3
+// @version      0.1.4
 // @description  Liko Club Extensions - horizontal login UI and club extensions for Bondage Club.
 // @author       Likolisu
 // @include      /^https:\/\/(www\.)?bondage(projects\.elementfx|-(europe|asia))\.com\/.*/

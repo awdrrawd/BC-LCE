@@ -90,10 +90,9 @@ export function installVertical() {
 
     injectChatRoomStyles();
 
-    hook('ChatRoomTopMenuPosition', 0, (args, next) => {
-        if (isCrActive()) { crMaintain(); return; }
-        return next(args);
-    });
+    // 註：新版 BC 已移除 ChatRoomTopMenuPosition（頂部選單改為 #chat-room-div 內的
+    // flex 子元素、由 CSS 排版），不再有「單獨定位頂部選單」的函式可攔。重新套用直式
+    // 版面的責任由下面的 ChatRoomResize hook 與 resize 監聽器承擔。
     hook('ChatRoomResize', 0, (args, next) => { const r = next(args); crMaintain(); return r; });
     hook('ChatRoomLeave', 0, (args, next) => { crRemove(); return next(args); });
 
