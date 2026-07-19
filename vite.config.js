@@ -37,7 +37,8 @@ export default defineConfig({
     // 背景圖體積大，輸出成獨立的 hash 檔（可被瀏覽器快取），不要內嵌進 main.js —— 否則
     // loader 的 ?v=timestamp 會讓整包含圖每次登入都重抓。小圖示（SVG 等）仍用預設內嵌。
     assetsInlineLimit: (filePath) => {
-      if (/\.(jpe?g|png|webp|gif|avif)$/i.test(filePath)) return false;
+      // 背景圖與背景影片都體積大，一律輸出成獨立 hash 檔，不要內嵌進 main.js。
+      if (/\.(jpe?g|png|webp|gif|avif|mp4|webm)$/i.test(filePath)) return false;
       return undefined;
     },
     rollupOptions: {

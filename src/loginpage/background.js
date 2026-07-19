@@ -15,13 +15,34 @@ import { loadWallpaper } from '../core/storage.js';
 // 路徑相對本檔（src/loginpage/）→ 專案根的 Images/ 需回上兩層。
 const _modules = import.meta.glob('../../Images/*.{jpg,jpeg,png,webp}', { eager: true, import: 'default' });
 
-/** @type {{ name: string, url: string }[]} 依檔名排序的自訂背景清單 */
+// 背景影片（可選）：命名規則 BGV-XX.mp4，對應同號的圖片 BG-XX.jpg。
+// 有對應影片的背景會「先出圖、影片載好再淡入」（見 applyVideo）；沒有影片的就純圖片。
+const _videoModules = import.meta.glob('../../Images/*.{mp4,webm}', { eager: true, import: 'default' });
+
+/** @type {Record<string,string>} 影片名（去副檔名）→ 輸出檔 URL，例如 'BGV-01' → 'assets/BGV-01-xxxx.mp4' */
+const VIDEO_BY_NAME = {};
+for (const path of Object.keys(_videoModules)) {
+    const n = path.split('/').pop().replace(/\.[^.]+$/, '');
+    VIDEO_BY_NAME[n] = _videoModules[path];
+}
+
+/**
+ * 找出某張圖片對應的背景影片：BG-01 → BGV-01。
+ * 只把 BG 前綴換成 BGV、其餘（-01）照舊，所以編號一致才會配對到；沒有就回 null。
+ */
+function videoFor(imgName) {
+    const m = /^BG(.*)$/.exec(imgName);
+    if (!m) return null;
+    return VIDEO_BY_NAME['BGV' + m[1]] || null;
+}
+
+/** @type {{ name: string, url: string, video: string|null }[]} 依檔名排序的自訂背景清單 */
 export const CUSTOM_BACKGROUNDS = Object.keys(_modules)
     .sort()
-    .map(path => ({
-        name: path.split('/').pop().replace(/\.[^.]+$/, ''),
-        url:  _modules[path],
-    }));
+    .map(path => {
+        const name = path.split('/').pop().replace(/\.[^.]+$/, '');
+        return { name, url: _modules[path], video: videoFor(name) };
+    });
 
 /** @returns {string[]} 可選背景名稱清單（供設定下拉使用） */
 export function getBackgroundList() {
@@ -48,6 +69,53 @@ function releaseUploadedUrl() {
     if (uploadedObjectUrl) { URL.revokeObjectURL(uploadedObjectUrl); uploadedObjectUrl = null; }
 }
 
+// ── 背景影片（漸進式增強）────────────────────────────────────────────────
+// 圖片一律先鋪上（applyBackground 做的），影片在背景默默下載，載到能流暢播放
+// （canplaythrough）才淡入蓋住圖片；下載失敗或太慢就維持圖片，不拖累整體體驗。
+// 每次切背景都換一個 token：上一支影片若在切換後才下載完，它的 canplaythrough
+// 會因 token 不符而被忽略，不會誤蓋到新背景上。
+let videoToken = 0;
+
+/** 停播並清空背景影片（切成純圖片 / 自訂桌布 / 退回內建圖時呼叫）。load() 才會真的中止下載。 */
+function clearVideo() {
+    videoToken++;
+    const v = document.getElementById('lce-bg-video');
+    if (!v) return;
+    v.oncanplaythrough = null;
+    v.onerror = null;
+    try { v.pause(); } catch { /* ignore */ }
+    v.removeAttribute('src');
+    v.style.opacity = '0';
+    v.style.display = 'none';
+    try { v.load(); } catch { /* ignore */ }
+}
+
+/** 掛上一支背景影片：圖片已在畫面上，這裡只負責「準備好就靜音淡入」。 */
+function applyVideo(url) {
+    const v = document.getElementById('lce-bg-video');
+    if (!v || !url) return;
+    const token = ++videoToken;
+    v.style.display = '';
+    v.style.opacity = '0';
+
+    v.oncanplaythrough = () => {
+        if (token !== videoToken) return;                 // 已被下一次切背景取代
+        if (!document.getElementById('lce-bg-video')) return;
+        v.style.opacity = '1';                            // 淡入蓋住圖片（CSS transition）
+        // 靜音影片本就允許自動播放；被瀏覽器擋下也只是留在圖片，不需處理。
+        v.play?.().catch(() => {});
+    };
+    v.onerror = () => {
+        if (token !== videoToken) return;                 // 圖床砍檔/防盜連 → 靜靜退回圖片
+        v.removeAttribute('src');
+        v.style.opacity = '0';
+        v.style.display = 'none';
+    };
+
+    v.src = url;
+    try { v.load(); } catch { /* ignore */ }
+}
+
 /** 這一輪是否已經退回過內建背景（見 handleBackgroundError）。 */
 let fellBack = false;
 
@@ -62,6 +130,7 @@ export function handleBackgroundError() {
     if (fellBack) { img.style.display = 'none'; return; }
     fellBack = true;
     releaseUploadedUrl();
+    clearVideo();   // 圖片都載不出來了，影片也一併收掉，退回單純的內建圖
     const bg = pickBackground();
     if (bg) { img.src = bg.url; return; }
     img.style.display = 'none';
@@ -93,6 +162,7 @@ export async function applyBackground() {
         if (url) {
             // 換過去之前先確定 img 還在（等 DB 的期間使用者可能已經登入、UI 被拆掉了）
             if (!document.getElementById('lce-bg-img')) { releaseUploadedUrl(); return; }
+            clearVideo();   // 自訂桌布（網址/上傳）只有圖片，沒有對應影片
             img.style.display = '';
             if (img.src !== url) img.src = url;
             return;
@@ -102,7 +172,10 @@ export async function applyBackground() {
 
     releaseUploadedUrl();
     const bg = pickBackground();
-    if (!bg) return; // Images/ 為空時，僅保留暗化遮罩
+    if (!bg) { clearVideo(); return; } // Images/ 為空時，僅保留暗化遮罩
     img.style.display = '';
     if (img.src !== bg.url) img.src = bg.url;
+    // 有對應影片 → 準備好就淡入；沒有 → 收掉上一支、維持純圖片
+    if (bg.video) applyVideo(bg.video);
+    else clearVideo();
 }

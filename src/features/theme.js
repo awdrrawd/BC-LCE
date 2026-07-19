@@ -39,9 +39,24 @@ let patched = false;
 const C = { Base: '~', Hover: '-', Disabled: '=', Active: '+', NoDraw: '!', Custom: '%', FromButton: '@' };
 const BUTTON_STATES = [C.Hover, C.Disabled, C.Base];
 
+// 除錯用臨時覆蓋（/lceThemetest 浮球）：null = 依實際設定；true/false = 強制開/關。
+// 只影響當下這次執行，不會寫進存檔 —— 收起浮球就還原成使用者真正的設定。
+let themeDebugOverride = null;
+
+/** 目前主題是否該生效：優先看除錯覆蓋，否則看實際設定。 */
+export function isThemeActive() {
+    return themeDebugOverride !== null ? themeDebugOverride : !!getFeature('themeEnabled');
+}
+
+/** 除錯浮球用：強制開/關主題（true/false），或還原成實際設定（null）。會立即重新套用。 */
+export function setThemeDebugOverride(value) {
+    themeDebugOverride = value;
+    applyTheme();
+}
+
 /** 染色是否生效（移植 Themed doRedraw）。ClubCard 畫面不染，避免卡片配色被破壞。 */
 function doRedraw() {
-    return !!getFeature('themeEnabled') && (typeof CurrentScreen === 'undefined' || CurrentScreen !== 'ClubCard');
+    return isThemeActive() && (typeof CurrentScreen === 'undefined' || CurrentScreen !== 'ClubCard');
 }
 
 // BC 常見的寫死色 → 語意色（移植自 Themed draw_rect.ts 的對照表）
@@ -72,7 +87,7 @@ export function installThemeEngine() {
 
 export function applyTheme() {
     let style = document.getElementById(STYLE_ID);
-    if (!getFeature('themeEnabled')) {
+    if (!isThemeActive()) {
         if (style) style.remove();
         document.body?.removeAttribute('data-lce-theme-type');
         // patch 會把 BC 原始碼的顏色換成 %token，而關閉時 DrawRect 是直接 passthrough，

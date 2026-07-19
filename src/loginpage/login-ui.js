@@ -34,8 +34,13 @@ export function buildUI() {
     const bgImg = mk('img', '', { id: 'lce-bg-img', alt: '' });
     // 自訂網址載不出來時退回內建背景，而不是直接把背景藏掉開天窗
     bgImg.onerror = () => handleBackgroundError();
+    // 背景影片：疊在圖片上方，僅在有對應 BGV-XX 且載入完成時由 background.js 淡入。
+    // muted 兼顧兩件事：使用者不要音樂，且靜音才允許自動播放。
+    const bgVideo = mk('video', '', { id: 'lce-bg-video', muted: true, loop: true, playsInline: true, preload: 'auto' });
+    bgVideo.setAttribute('playsinline', '');   // iOS/Safari 需要屬性形式才不會全螢幕接管
     const bgOverlay = mk('div', '', { id: 'lce-bg-overlay' });
     stage.appendChild(bgImg);
+    stage.appendChild(bgVideo);
     stage.appendChild(bgOverlay);
 
     // ── 標題 / 歡迎 / 狀態 ──

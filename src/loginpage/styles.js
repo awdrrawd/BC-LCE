@@ -47,6 +47,15 @@ export function injectLoginStyles() {
     object-fit:cover; object-position:center;
     pointer-events:none; user-select:none;
 }
+/* 背景影片：與背景圖同框，疊在圖片上方（DOM 順序在 img 之後、overlay 之前）。
+   平常 opacity:0 藏著，載好才由 background.js 設 opacity:1 淡入蓋住圖片。 */
+#lce-bg-video {
+    position:absolute; left:-1px; top:-1px;
+    width:${CANVAS_W + 2}px; height:${CANVAS_H + 2}px;
+    object-fit:cover; object-position:center;
+    pointer-events:none; user-select:none;
+    opacity:0; transition:opacity 0.6s ease;
+}
 #lce-bg-overlay {
     position:absolute; left:-1px; top:-1px;
     width:${CANVAS_W + 2}px; height:${CANVAS_H + 2}px;
@@ -306,13 +315,14 @@ export function injectLoginStyles() {
 }
 /* 背景圖與遮罩維持絕對定位、滿版（直向的 stage 本身就是滿版，不吃 canvas 座標） */
 #lce-stage[data-orient="portrait"] #lce-bg-img,
+#lce-stage[data-orient="portrait"] #lce-bg-video,
 #lce-stage[data-orient="portrait"] #lce-bg-overlay {
     position:absolute !important; inset:0 !important;
     width:100% !important; height:100% !important;
     object-fit:cover; object-position:center;
 }
 #lce-stage[data-orient="portrait"] #lce-bg-overlay { background:rgba(0,0,0,0.38); z-index:0; }
-#lce-stage[data-orient="portrait"] > *:not(#lce-bg-img):not(#lce-bg-overlay) { position:relative; z-index:1; }
+#lce-stage[data-orient="portrait"] > *:not(#lce-bg-img):not(#lce-bg-video):not(#lce-bg-overlay) { position:relative; z-index:1; }
 
 /* ── 頂部：標題 + 歡迎 + 狀態 ──
    標題與底部列各掛一個 margin-top:auto：flex 會把剩餘空間平均分給所有 auto 邊距，

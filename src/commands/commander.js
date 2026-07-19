@@ -11,6 +11,7 @@ import { byteSize } from '../core/util.js';
 import { getFeature } from '../core/feature-settings.js';
 import { isExpressionEngineStarted } from '../features/expressions.js';
 import { LOCAL_MARKER } from '../features/local-messages.js';
+import { toggleThemeTestBalloon } from '../features/theme-test.js';
 
 const LOG = '🐈‍⬛ [LCE]';
 
@@ -383,6 +384,7 @@ const COMMAND_LIST = [
     { Tag: 'lce', Description: '檢視所有 LCE 指令與功能說明', Action: () => { showHelp(); } },
     { Tag: 'lcesetting', Description: '快速前往 LCE 設定頁', Action: () => { openSettings(); } },
     { Tag: 'lcedebug', Description: '取得除錯資訊並複製到剪貼簿', Action: () => { lceDebug(); } },
+    { Tag: 'lceThemetest', Description: '除錯：浮空氣球，點擊即時開/關主題（不動存檔設定），再次輸入收起', Action: () => { toggleThemeTestBalloon(); } },
     { Tag: 'lcesetlist', Description: '列出帳號上所有 ExtensionSettings 與其大小（可直接按鈕刪除）', Action: () => { listExtSettings(); } },
     { Tag: 'lcegotoroom', NeedsArg: true, Description: '[房名或空]：無視限制切換房間，空白則離開', Action: (_, command) => { gotoRoom(command.substring(12).trim()); } },
     { Tag: 'exportlooks', NeedsArg: true, Description: '[會員編號]：複製你或他人的外觀字串（可用 LCE/BCX 匯入）', Action: (_, _c, [target]) => { exportLooks(target); } },
