@@ -90,6 +90,10 @@ async function relog() {
         // 失敗 → 拉長下次間隔，避免持續失敗時愈試愈密
         backoff = Math.min(backoff * 2, RELOG_MAX_INTERVAL);
         console.warn(LOG, `自動重連失敗，下次至少間隔 ${backoff / 1000}s`);
+        // 失敗也要放開斷路器，否則 breakCircuit 卡在 true，之後每次 relog() 都在開頭直接 return，
+        // 斷路器永遠關不掉、再也不會重連（過去要靠 connect 監聽來放開，但那個監聽在 ServerInit
+        // 換掉 socket 後就失效了 —— 見下方 bindConnect）。節流仍由 lastAttempt/backoff 把關，不會狂送。
+        breakCircuit = false;
         return;
     }
 
@@ -160,13 +164,27 @@ export function installRelogin() {
         return ret;
     });
 
-    // socket 重新連上 → 重置斷路器與上次錯誤（同 WCE registerSocketListener("connect")）
-    (function bindConnect(n = 240) {
+    // socket 重新連上 → 重置斷路器與上次錯誤（同 WCE registerSocketListener("connect")）。
+    //
+    // 關鍵修正：ServerInit() 會 `ServerSocket = io(...)` 建立「全新的 socket」，舊 socket 上的
+    // 監聽全部作廢。若只在啟動時綁一次（過去的寫法），那麼——特別是我們自己在「被限流」時呼叫的
+    // ServerInit——換掉 socket 之後，這個 connect 監聽就再也不會觸發，breakCircuit / loginError
+    // 便永遠不會被重置：斷路器一旦關上就卡死，自動重連停擺，使用者只能手動重打密碼。
+    // 這正是「限流後就要手動輸入密碼」的根因。
+    //
+    // 對策與其他模組一致（expressions / hello / misc / friend-presence 都這樣做，也就是 WCE
+    // appendSocketListenersToInit 的做法）：每次 ServerInit 後把監聽重新掛到新的 socket 上。
+    const bindConnect = () => {
+        try { ServerSocket?.on('connect', () => { breakCircuit = false; loginError = null; }); }
+        catch { /* ignore */ }
+    };
+    (function wait(n = 240) {
         if (typeof ServerSocket === 'undefined' || !ServerSocket) {
             if (n <= 0) return;
-            setTimeout(() => bindConnect(n - 1), 500);
+            setTimeout(() => wait(n - 1), 500);
             return;
         }
-        try { ServerSocket.on('connect', () => { breakCircuit = false; loginError = null; }); } catch { /* ignore */ }
+        bindConnect();
+        hook('ServerInit', 10, (args, next) => { const r = next(args); bindConnect(); return r; });
     })();
 }
