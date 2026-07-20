@@ -105,7 +105,7 @@ export default {
     s_pendingMessages: "等待伺服器時顯示已發送的信息",
     sd_pendingMessages: "等待伺服器回應時先顯示你已送出的訊息。",
     s_safewordKeepPermission: "安全詞不變更互動權限",
-    sd_safewordKeepPermission: "預設關閉。開啟後，使用安全詞（回復）時不會把互動權限自動收緊到「白名單以上」——例如原本設「所有人／黑名單除外」會維持不變。",
+    sd_safewordKeepPermission: "使用安全詞時，不會自動將互動權限收緊到「白名單以上」（原本設定為「所有人／黑名單除外」將維持不變）。",
     augment_embed: "(嵌入)",
     augment_trust_session: "本次連線信任此來源",
     augment_trust_prompt: "要把 {origin} 加入信任來源嗎？（僅本次連線）",

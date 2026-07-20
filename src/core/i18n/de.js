@@ -111,7 +111,7 @@ export default {
     s_pendingMessages: "Gesendete Nachrichten beim Warten anzeigen",
     sd_pendingMessages: "Zeigt von dir gesendete Nachrichten an, während auf den Server gewartet wird.",
     s_safewordKeepPermission: "Safeword ändert Interaktionsrechte nicht",
-    sd_safewordKeepPermission: "Standardmäßig aus. Wenn an, verschärft die Nutzung des Safewords (Zurücksetzen) deine Interaktionsrechte nicht automatisch auf \"Whitelist und höher\" — z. B. \"alle außer Blacklist\" bleibt unverändert.",
+    sd_safewordKeepPermission: "Bei Verwendung eines Safewords wird die Interaktionsberechtigung nicht automatisch auf „nur Whitelist“ eingeschränkt (die ursprüngliche Einstellung „Alle / außer Blacklist“ bleibt unverändert).",
     augment_embed: "(Einbettung)",
     augment_trust_session: "Dieser Sitzung vertrauen",
     augment_trust_prompt: "Möchtest du {origin} zu den vertrauenswürdigen Quellen hinzufügen? (nur diese Sitzung)",

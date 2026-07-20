@@ -105,7 +105,7 @@ export default {
     s_pendingMessages: "Show sent messages while waiting",
     sd_pendingMessages: "Show messages you sent while waiting for the server.",
     s_safewordKeepPermission: "Safeword keeps interaction permission",
-    sd_safewordKeepPermission: "Off by default. When on, using the safeword (revert) will not automatically tighten your interaction permission to \"whitelist and up\" — e.g. \"everyone except blacklist\" stays as it is.",
+    sd_safewordKeepPermission: "When using a safe word, the interaction permissions will not be automatically tightened to “whitelist and above” (the original setting of “everyone / except blacklist” will remain unchanged).",
     augment_embed: "(embed)",
     augment_trust_session: "Trust this session",
     augment_trust_prompt: "Do you want to add {origin} to trusted origins? (this session only)",

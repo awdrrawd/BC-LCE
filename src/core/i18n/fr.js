@@ -110,7 +110,7 @@ export default {
     s_pendingMessages: "Afficher les messages envoyés pendant l'attente",
     sd_pendingMessages: "Affiche les messages que vous avez envoyés en attendant le serveur.",
     s_safewordKeepPermission: "Le safeword ne change pas les permissions",
-    sd_safewordKeepPermission: "Désactivé par défaut. Une fois activé, l'utilisation du safeword (retour) ne resserre plus automatiquement vos permissions d'interaction à « liste blanche et plus » — par ex. « tout le monde sauf liste noire » reste inchangé.",
+    sd_safewordKeepPermission: "Lors de l’utilisation d’un mot de sécurité, les autorisations d’interaction ne seront pas automatiquement restreintes à « liste blanche et au-dessus » (le paramètre d’origine « tout le monde / sauf liste noire » restera inchangé).",
     augment_embed: "(intégration)",
     augment_trust_session: "Faire confiance à cette session",
     augment_trust_prompt: "Voulez-vous ajouter {origin} aux origines de confiance ? (cette session uniquement)",
