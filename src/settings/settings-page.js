@@ -4,7 +4,7 @@
 // 透過 PreferenceRegisterExtensionSetting 註冊，繪製走 BC 全域 DrawText/DrawButton/…。
 // ════════════════════════════════════════════════════════════════════════════
 
-import { CATEGORIES, DEFAULT_FEATURE_SETTINGS, clampBar } from '../core/settings-schema.js';
+import { CATEGORIES, DEFAULT_FEATURE_SETTINGS, clampBar, gameLanguages } from '../core/settings-schema.js';
 import { SETTING_CHANGED_EVENT } from '../core/constants.js';
 import { fSettings, saveFeatureSettings } from '../core/feature-settings.js';
 import { T } from '../core/i18n.js';
@@ -348,7 +348,11 @@ function drawInputControl(key, def, y, disabled) {
             DrawButton(SEL_OFFSET + hexW, y, SWATCH_W, 64, '', disabled ? '#ebebe4' : col, '', '', disabled);
         } else {
             // 字型欄位空白時顯示提示，讓使用者知道是點開下拉挑選的。
-            const shown = def.subtype === 'font' && !fSettings[key] ? T('themeFont_pick') : String(fSettings[key] ?? '');
+            // 語言欄位顯示的是語言碼對應的語言名（不是碼本身）。
+            let shown;
+            if (def.subtype === 'language') shown = langLabel(fSettings[key]);
+            else if (def.subtype === 'font' && !fSettings[key]) shown = T('themeFont_pick');
+            else shown = String(fSettings[key] ?? '');
             DrawButton(SEL_OFFSET, y, SEL_WIDTH, 64, shown, disabled ? '#ebebe4' : 'White', '', '', disabled);
         }
     });
@@ -362,9 +366,89 @@ function handleInputClick(key, def, y) {
         else if (MouseIn(SEL_OFFSET, y, hexW, 64)) promptInput(key, def);
     } else if (def.subtype === 'font') {
         if (MouseIn(SEL_OFFSET, y, SEL_WIDTH, 64)) openFontPicker(key, def);
+    } else if (def.subtype === 'language') {
+        if (MouseIn(SEL_OFFSET, y, SEL_WIDTH, 64)) openLanguagePicker(key, def);
     } else if (MouseIn(SEL_OFFSET, y, SEL_WIDTH, 64)) {
         promptInput(key, def);
     }
+}
+
+/** 語言碼 → 顯示用語言名（查不到就顯示碼本身）。 */
+function langLabel(code) {
+    const { codes, labels } = gameLanguages();
+    const i = codes.indexOf(code);
+    return i >= 0 ? labels[i] : String(code ?? '');
+}
+
+let langPickerOpen = false;
+
+/**
+ * 開出「遊戲語言」下拉清單（canvas 設定頁上的 HTML 覆蓋層，與字型/調色器同一套做法）。
+ * 直接點選要的語言即可，不必用 ◀▶ 一個個繞。語言清單取自 BC 的 TranslationDictionary。
+ */
+function openLanguagePicker(key, def) {
+    if (langPickerOpen) return;
+    langPickerOpen = true;
+
+    const backdrop = document.createElement('div');
+    backdrop.id = 'lce-langpicker-backdrop';
+    Object.assign(backdrop.style, {
+        position: 'fixed', inset: '0', background: 'rgba(0,0,0,0.5)', zIndex: '10000',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+    });
+
+    const panel = document.createElement('div');
+    Object.assign(panel.style, {
+        width: 'min(420px,90vw)', maxHeight: '80vh', display: 'flex', flexDirection: 'column',
+        background: 'var(--lce-main,#222)', color: 'var(--lce-text,#eee)',
+        border: '2px solid var(--lce-login-accent,#7214ff)', borderRadius: '8px',
+        overflow: 'hidden', boxShadow: '0 8px 30px rgba(0,0,0,0.6)',
+    });
+
+    const heading = document.createElement('div');
+    heading.textContent = T(def.label);
+    Object.assign(heading.style, {
+        padding: '10px', borderBottom: '1px solid var(--lce-login-accent,#7214ff)',
+        background: 'var(--lce-element,#111)', fontSize: '16px', fontWeight: 'bold',
+    });
+
+    const listWrap = document.createElement('div');
+    Object.assign(listWrap.style, { overflowY: 'auto', overflowX: 'hidden', padding: '8px' });
+
+    panel.append(heading, listWrap);
+    backdrop.appendChild(panel);
+    document.body.appendChild(backdrop);
+
+    const close = () => {
+        langPickerOpen = false;
+        backdrop.remove();
+        document.removeEventListener('keydown', onKey, true);
+    };
+    const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); close(); } };
+    document.addEventListener('keydown', onKey, true);
+    backdrop.addEventListener('mousedown', (e) => { if (e.target === backdrop) close(); });
+    panel.addEventListener('mousedown', e => e.stopPropagation());
+
+    const pick = (code) => {
+        if (code !== fSettings[key]) { fSettings[key] = code; fireSideEffect(key, def); }
+        close();
+    };
+
+    const { codes, labels } = gameLanguages();
+    codes.forEach((code, i) => {
+        const row = document.createElement('div');
+        row.textContent = labels[i];
+        const selected = fSettings[key] === code;
+        Object.assign(row.style, {
+            padding: '8px 10px', cursor: 'pointer', borderRadius: '4px', fontSize: '18px',
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            background: selected ? 'var(--lce-login-accent,#7214ff)' : '',
+        });
+        row.addEventListener('mouseenter', () => { if (!selected) row.style.background = 'var(--lce-element-hover,#3a3a3a)'; });
+        row.addEventListener('mouseleave', () => { if (!selected) row.style.background = ''; });
+        row.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); pick(code); });
+        listWrap.appendChild(row);
+    });
 }
 
 let fontPickerOpen = false;

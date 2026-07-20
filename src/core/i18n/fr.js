@@ -380,6 +380,8 @@ export default {
     sd_allowIMBypassBCX: "Autorise les messages instantanés à contourner les restrictions de bip de BCX.",
 
     // ── Divers ──
+    s_gameLanguage: "Langue du jeu",
+    sd_gameLanguage: "Change la langue de l'interface du jeu. BC ne permet de la choisir que sur la page de connexion ; ici vous pouvez en changer à tout moment après connexion, sans recharger la page.",
     s_relogin: "Reconnexion automatique après déconnexion",
     sd_relogin: "Ressaisit votre mot de passe automatiquement après une déconnexion (nécessite un mot de passe enregistré).",
     s_confirmLeave: "Confirmer avant de quitter le jeu",

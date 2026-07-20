@@ -361,6 +361,8 @@ export default {
     sd_autoStruggle: "三種掙扎都在合理時間內自動完成（若可掙脫）。",
     s_allowIMBypassBCX: "繞過 BCXBEEP 限制",
     sd_allowIMBypassBCX: "允許即時通訊繞過 BCX 的 beep 限制。",
+    s_gameLanguage: "遊戲語言",
+    sd_gameLanguage: "更換遊戲介面語言。BC 原本只能在登入頁選，這裡讓你登入後也能即時切換，不必刷新頁面。",
     s_relogin: "斷線重連",
     sd_relogin: "斷線後自動重新輸入密碼登入（需已在登入頁保存密碼）。",
     s_confirmLeave: "離開遊戲時確認",

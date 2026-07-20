@@ -361,6 +361,8 @@ export default {
     sd_autoStruggle: "All struggle types complete automatically in realistic time, if escapable.",
     s_allowIMBypassBCX: "Let IMs bypass BCX beep limits",
     sd_allowIMBypassBCX: "Allow instant messages to bypass BCX beep restrictions.",
+    s_gameLanguage: "Game language",
+    sd_gameLanguage: "Change the game's interface language. BC only lets you pick it on the login page; this lets you switch on the fly after logging in, without refreshing the page.",
     s_relogin: "Automatic relogin on disconnect",
     sd_relogin: "Re-enter your password automatically after a disconnect (needs saved password).",
     s_confirmLeave: "Confirm leaving the game",

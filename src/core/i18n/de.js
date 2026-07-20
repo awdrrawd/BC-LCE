@@ -381,6 +381,8 @@ export default {
     sd_allowIMBypassBCX: "Erlaubt Sofortnachrichten, BCX-Beep-Beschränkungen zu umgehen.",
 
     // ── Sonstiges ──
+    s_gameLanguage: "Spielsprache",
+    sd_gameLanguage: "Ändert die Sprache der Spieloberfläche. BC lässt die Auswahl nur auf der Anmeldeseite zu; hier kannst du auch nach dem Anmelden jederzeit wechseln, ohne die Seite neu zu laden.",
     s_relogin: "Automatische Wiederanmeldung bei Trennung",
     sd_relogin: "Gibt dein Passwort nach einer Trennung automatisch erneut ein (benötigt gespeichertes Passwort).",
     s_confirmLeave: "Verlassen des Spiels bestätigen",
