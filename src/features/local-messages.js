@@ -81,6 +81,24 @@ function injectStyle() {
             justify-content: flex-end;
             gap: 18px;
         }
+
+        /* 很長的訊息（versions、lcesetlist、profiles…）右下角的刪除鈕：
+           騰出右下角空間避免蓋到文字，✖ 融進訊息、hover 才明顯。 */
+        .ChatMessage.lce-closable { position: relative; padding-right: 1.4em; padding-bottom: 1.1em; }
+        .ChatMessage .lce-notify-close {
+            position: absolute;
+            right: 4px;
+            bottom: 2px;
+            border: none;
+            background: none;
+            padding: 2px;
+            line-height: 1;
+            font-size: 0.85em;
+            cursor: pointer;
+            color: var(--lce-sysmsg-text, #000);
+            opacity: 0.5;
+        }
+        .ChatMessage .lce-notify-close:hover { opacity: 1; }
     `;
     document.head.appendChild(s);
 }

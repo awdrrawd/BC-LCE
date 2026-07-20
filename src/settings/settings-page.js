@@ -9,6 +9,7 @@ import { SETTING_CHANGED_EVENT } from '../core/constants.js';
 import { fSettings, saveFeatureSettings } from '../core/feature-settings.js';
 import { T } from '../core/i18n.js';
 import { applyTheme } from '../features/theme.js';
+import { listSystemFonts } from '../features/theme-font.js';
 import iconUrl from '../assets/lce-icon.svg';
 
 const SWATCH_W = 64;   // 色塊寬度（與十六進位欄位齊平）
@@ -346,7 +347,9 @@ function drawInputControl(key, def, y, disabled) {
             const col = /^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/.test(val) ? val : '#000000';
             DrawButton(SEL_OFFSET + hexW, y, SWATCH_W, 64, '', disabled ? '#ebebe4' : col, '', '', disabled);
         } else {
-            DrawButton(SEL_OFFSET, y, SEL_WIDTH, 64, String(fSettings[key] ?? ''), disabled ? '#ebebe4' : 'White', '', '', disabled);
+            // 字型欄位空白時顯示提示，讓使用者知道是點開下拉挑選的。
+            const shown = def.subtype === 'font' && !fSettings[key] ? T('themeFont_pick') : String(fSettings[key] ?? '');
+            DrawButton(SEL_OFFSET, y, SEL_WIDTH, 64, shown, disabled ? '#ebebe4' : 'White', '', '', disabled);
         }
     });
 }
@@ -357,9 +360,96 @@ function handleInputClick(key, def, y) {
         const hexW = SEL_WIDTH - SWATCH_W;
         if (MouseIn(SEL_OFFSET + hexW, y, SWATCH_W, 64)) openColorPicker(key, def);
         else if (MouseIn(SEL_OFFSET, y, hexW, 64)) promptInput(key, def);
+    } else if (def.subtype === 'font') {
+        if (MouseIn(SEL_OFFSET, y, SEL_WIDTH, 64)) openFontPicker(key, def);
     } else if (MouseIn(SEL_OFFSET, y, SEL_WIDTH, 64)) {
         promptInput(key, def);
     }
+}
+
+let fontPickerOpen = false;
+
+/** 開出「系統已安裝字型」的 HTML 下拉清單（canvas 設定頁上的覆蓋層，與調色器同一套做法）。 */
+function openFontPicker(key, def) {
+    if (fontPickerOpen) return;
+    fontPickerOpen = true;
+
+    const backdrop = document.createElement('div');
+    backdrop.id = 'lce-fontpicker-backdrop';
+    Object.assign(backdrop.style, {
+        position: 'fixed', inset: '0', background: 'rgba(0,0,0,0.5)', zIndex: '10000',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+    });
+
+    const panel = document.createElement('div');
+    Object.assign(panel.style, {
+        width: 'min(520px,90vw)', maxHeight: '80vh', display: 'flex', flexDirection: 'column',
+        background: 'var(--lce-main,#222)', color: 'var(--lce-text,#eee)',
+        border: '2px solid var(--lce-login-accent,#7214ff)', borderRadius: '8px',
+        overflow: 'hidden', boxShadow: '0 8px 30px rgba(0,0,0,0.6)',
+    });
+
+    const search = document.createElement('input');
+    search.type = 'text';
+    search.setAttribute('placeholder', T('themeFont_search'));
+    Object.assign(search.style, {
+        padding: '10px', border: '0', borderBottom: '1px solid var(--lce-login-accent,#7214ff)',
+        background: 'var(--lce-element,#111)', color: 'inherit', fontSize: '16px',
+    });
+
+    const listWrap = document.createElement('div');
+    Object.assign(listWrap.style, { overflowY: 'auto', overflowX: 'hidden', padding: '8px' });
+    listWrap.textContent = '…';
+
+    panel.append(search, listWrap);
+    backdrop.appendChild(panel);
+    document.body.appendChild(backdrop);
+
+    const close = () => {
+        fontPickerOpen = false;
+        backdrop.remove();
+        document.removeEventListener('keydown', onKey, true);
+    };
+    const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); close(); } };
+    document.addEventListener('keydown', onKey, true);
+    backdrop.addEventListener('mousedown', (e) => { if (e.target === backdrop) close(); });
+    // 別讓點擊/輸入穿到底下的 BC canvas
+    panel.addEventListener('mousedown', e => e.stopPropagation());
+    search.addEventListener('keydown', e => e.stopPropagation());
+
+    const pick = (name) => { fSettings[key] = name; fireSideEffect(key, def); close(); };
+
+    const makeRow = (label, value, previewFont) => {
+        const row = document.createElement('div');
+        row.textContent = label;
+        const selected = fSettings[key] === value;
+        Object.assign(row.style, {
+            padding: '8px 10px', cursor: 'pointer', borderRadius: '4px', fontSize: '18px',
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            background: selected ? 'var(--lce-login-accent,#7214ff)' : '',
+        });
+        if (previewFont) row.style.fontFamily = /\s/.test(previewFont) ? `"${previewFont}"` : previewFont;
+        row.addEventListener('mouseenter', () => { if (!selected) row.style.background = 'var(--lce-element-hover,#3a3a3a)'; });
+        row.addEventListener('mouseleave', () => { if (!selected) row.style.background = ''; });
+        row.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); pick(value); });
+        return row;
+    };
+
+    let allFonts = [];
+    const render = (filter = '') => {
+        listWrap.textContent = '';
+        listWrap.appendChild(makeRow(T('themeFont_default'), '', ''));   // 清除 → 用預設字型
+        const f = filter.trim().toLowerCase();
+        for (const name of allFonts) {
+            if (f && !name.toLowerCase().includes(f)) continue;
+            listWrap.appendChild(makeRow(name, name, name));
+        }
+    };
+    search.addEventListener('input', () => render(search.value));
+
+    listSystemFonts()
+        .then((fonts) => { allFonts = fonts; render(); search.focus(); })
+        .catch((e) => { listWrap.textContent = String(e?.message ?? e); });
 }
 
 function promptInput(key, def) {

@@ -353,9 +353,11 @@ export async function installInstantMessenger() {
     hook('ServerInit', 10, (args, next) => { const r = next(args); bind(); return r; });
 
     // 收件
+    // 忽略「自己 beep 自己」：有些插件會送一則 beep 給自己當作通知，那不是聊天，
+    // 收進即時通訊只會多一個跟自己的對話、還會亮未讀。這是聊天用途，直接濾掉。
     hook('ServerAccountBeep', 15, (args, next) => {
         const [beep] = args;
-        if (beep && typeof beep === 'object' && !beep.BeepType && imOn()) {
+        if (beep && typeof beep === 'object' && !beep.BeepType && beep.MemberNumber !== Player?.MemberNumber && imOn()) {
             (async () => {
                 if (!loaded) await loadIM();
                 handleUnseenFriend(beep.MemberNumber);
@@ -368,7 +370,8 @@ export async function installInstantMessenger() {
     // 送件（別的來源送的 beep 也記進來；自己送的已帶 META，不重複記）
     hook('ServerSend', 0, (args, next) => {
         const [command, beep] = args;
-        if (command === 'AccountBeep' && beep && !beep.BeepType && typeof beep.Message === 'string' && !beep.Message.includes(META) && imOn()) {
+        // 同上：別的插件送給自己的 beep 也不記進來（否則會變成「自己跟自己」的對話）。
+        if (command === 'AccountBeep' && beep && !beep.BeepType && beep.MemberNumber !== Player?.MemberNumber && typeof beep.Message === 'string' && !beep.Message.includes(META) && imOn()) {
             (async () => {
                 if (!loaded) await loadIM();
                 handleUnseenFriend(beep.MemberNumber);

@@ -15,6 +15,8 @@ import { Theme, isThemeEnabled, getMainColor, getAccentColor, getTextColor, getP
 import { installSettingsPage } from './settings/settings-page.js';
 import { installCommander } from './commands/commander.js';
 import { applyTheme, installThemeEngine } from './features/theme.js';
+import { installThemeFont } from './features/theme-font.js';
+import { installSafeword } from './features/safeword.js';
 import { installBehaviors } from './features/behaviors.js';
 import { installProfile } from './features/profile.js';
 import { installChat } from './features/chat.js';
@@ -93,12 +95,14 @@ if (LCE_ALREADY_LOADED) {
                 // applyTheme 必須最後（等所有 sideEffects 套好再統一上色）。中間順序不敏感。
                 const steps = [
                     ['主題引擎', installThemeEngine],
+                    ['主題字型', installThemeFont],
                     ['設定頁', installSettingsPage],
                     ['設定副作用', postFeatureSettings],
                     ['指令', installCommander],
                     ['行為', installBehaviors],
                     ['個人檔案', installProfile],
                     ['聊天', installChat],
+                    ['安全詞保留權限', installSafeword],
                     ['聊天嵌入', installChatAugments],
                     ['待送訊息', installPendingMessages],
                     ['好友上下線', installFriendPresence],

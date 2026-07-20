@@ -29,6 +29,17 @@ export function lceChatNotify(node, opts) {
     if (typeof node === 'string') div.appendChild(document.createTextNode(node));
     else if (Array.isArray(node)) div.append(...node);
     else div.appendChild(node);
+    // 很長的訊息（versions、lcesetlist、profiles…）右下角補一顆 ✖，讓使用者自己刪掉、免得洗版。
+    if (opts?.closable) {
+        div.classList.add('lce-closable');
+        const x = document.createElement('button');
+        x.type = 'button';
+        x.className = 'lce-notify-close';
+        x.textContent = '✖';
+        x.title = '刪除此訊息';
+        x.onclick = (e) => { e.preventDefault(); try { div.remove(); } catch { /* 已被清掉就算了 */ } };
+        div.appendChild(x);
+    }
     if (typeof ChatRoomAppendChat === 'function') ChatRoomAppendChat(div);
     // 過一段時間自動移除（例如刪除確認框：只保留 10 秒，避免留在聊天室裡卡著）。
     if (opts?.autoRemoveMs > 0) {
@@ -167,7 +178,7 @@ function listExtSettings() {
         row.appendChild(text);
         wrap.appendChild(row);
     }
-    lceChatNotify(wrap);
+    lceChatNotify(wrap, { closable: true });
 }
 
 /**
@@ -238,7 +249,8 @@ function lceDebug() {
     info.push(`表情引擎: ${isExpressionEngineStarted() ? '已啟動' : '未啟動'}`
         + ` (自動慾望表情=${getFeature('autoArousalExpression')}, 活動表情=${getFeature('activityExpressions')})`);
     const print = info.join('\n');
-    lceChatNotify(`${print}\n\n**已複製到剪貼簿。**`);
+    // 資料已在剪貼簿，聊天室裡的那份 10 秒後自動移除，免得洗版。
+    lceChatNotify(`${print}\n\n**已複製到剪貼簿。**（10 秒後自動移除）`, { autoRemoveMs: 10000 });
     navigator.clipboard?.writeText(print).catch(() => {});
     return print;
 }
@@ -375,24 +387,29 @@ function versions(args) {
         return `${CharacterNickname(character)} (${character.MemberNumber ?? ''}) club ${bcVersion}${BCXi}${wce}${lce}${others}`;
     }
     const printList = findDrawnCharacters(args.length > 0 ? args[0] : null, true);
-    lceChatNotify(printList.map(modInfo).filter(Boolean).join('\n\n'));
+    lceChatNotify(printList.map(modInfo).filter(Boolean).join('\n\n'), { closable: true });
 }
 
 // 指令清單（同時供 CommandCombine 註冊與 /lce 說明列出）
-// NeedsArg：這些指令要接參數，/lce 的按鈕只把指令填進輸入框讓你接著打，不直接執行。
+// NeedsArg：這些指令要接參數（或可查別人，如 profiles/versions），/lce 的按鈕只把指令
+//           填進輸入框讓你接著打，不直接執行 —— 與 /w、/beep 的行為一致。
+// HelpHidden：只註冊、不列進 /lce 說明清單（/lce 本身沒必要列自己）。
+// HelpOnly：只列進 /lce 說明、不由這裡註冊（/profiles 實際由 features/past-profiles.js 註冊）。
+// 陣列順序即 /lce 說明的顯示順序。
 const COMMAND_LIST = [
-    { Tag: 'lce', Description: '檢視所有 LCE 指令與功能說明', Action: () => { showHelp(); } },
-    { Tag: 'lcesetting', Description: '快速前往 LCE 設定頁', Action: () => { openSettings(); } },
-    { Tag: 'lcedebug', Description: '取得除錯資訊並複製到剪貼簿', Action: () => { lceDebug(); } },
-    { Tag: 'lceThemetest', Description: '除錯：浮空氣球，點擊即時開/關主題（不動存檔設定），再次輸入收起', Action: () => { toggleThemeTestBalloon(); } },
-    { Tag: 'lcesetlist', Description: '列出帳號上所有 ExtensionSettings 與其大小（可直接按鈕刪除）', Action: () => { listExtSettings(); } },
+    { Tag: 'lce', HelpHidden: true, Description: '檢視所有 LCE 指令與功能說明', Action: () => { showHelp(); } },
+    { Tag: 'w', NeedsArg: true, Description: '[名稱] [訊息]：悄悄話房間內第一個符合名稱的人', Action: (_, command, args) => { whisper(command, args); } },
+    { Tag: 'beep', NeedsArg: true, Description: '[會員編號] [訊息]：beep 某人', Action: (_, command, [target]) => { beep(command, target); } },
+    { Tag: 'cum', Description: '引起高潮', Action: () => { doOrgasm(); } },
     { Tag: 'lcegotoroom', NeedsArg: true, Description: '[房名或空]：無視限制切換房間，空白則離開', Action: (_, command) => { gotoRoom(command.substring(12).trim()); } },
     { Tag: 'exportlooks', NeedsArg: true, Description: '[會員編號]：複製你或他人的外觀字串（可用 LCE/BCX 匯入）', Action: (_, _c, [target]) => { exportLooks(target); } },
     { Tag: 'importlooks', Description: '從字串匯入外觀（LCE/BCX 匯出）', Action: () => { importLooks(); } },
-    { Tag: 'beep', NeedsArg: true, Description: '[會員編號] [訊息]：beep 某人', Action: (_, command, [target]) => { beep(command, target); } },
-    { Tag: 'w', NeedsArg: true, Description: '[名稱] [訊息]：悄悄話房間內第一個符合名稱的人', Action: (_, command, args) => { whisper(command, args); } },
-    { Tag: 'versions', Description: '顯示房間內玩家的俱樂部/BCX/插件版本', Action: (_, _c, args) => { versions(args); } },
-    { Tag: 'cum', Description: '引起高潮', Action: () => { doOrgasm(); } },
+    { Tag: 'profiles', NeedsArg: true, HelpOnly: true, Description: '<關鍵字>：列出已保存的個人資料，可用會員編號或名稱搜尋' },
+    { Tag: 'versions', NeedsArg: true, Description: '[名稱]：顯示房間內玩家的俱樂部/BCX/插件版本', Action: (_, _c, args) => { versions(args); } },
+    { Tag: 'lcesetting', Description: '快速前往 LCE 設定頁', Action: () => { openSettings(); } },
+    { Tag: 'lcesetlist', Description: '列出帳號上所有 ExtensionSettings 與其大小（可直接按鈕刪除）', Action: () => { listExtSettings(); } },
+    { Tag: 'lceThemetest', Description: '主題開關測試，呼叫一個懸浮球，點擊即時開/關主題，再次輸入收起', Action: () => { toggleThemeTestBalloon(); } },
+    { Tag: 'lcedebug', Description: '取得除錯資訊並複製到剪貼簿', Action: () => { lceDebug(); } },
 ];
 
 /** 引起高潮（移植自 CRA）。 */
@@ -416,6 +433,7 @@ function showHelp() {
     wrap.appendChild(head);
 
     for (const c of COMMAND_LIST) {
+        if (c.HelpHidden) continue;   // /lce 本身不列進說明
         const row = document.createElement('div');
         row.className = 'lce-help-row';
         row.appendChild(chatButton(`/${c.Tag}`, () => {
@@ -449,7 +467,8 @@ export function installCommander() {
             setTimeout(() => wait(n - 1), 500);
             return;
         }
-        CommandCombine(COMMAND_LIST);
+        // HelpOnly（如 profiles）只出現在說明清單，實際指令由各自的 feature 註冊，這裡不重複註冊。
+        CommandCombine(COMMAND_LIST.filter(c => !c.HelpOnly));
         installed = true;
     })();
 }

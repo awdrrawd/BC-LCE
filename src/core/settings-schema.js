@@ -179,6 +179,11 @@ export const DEFAULT_FEATURE_SETTINGS = {
         label: 's_pendingMessages', desc: 'sd_pendingMessages',
         type: 'checkbox', value: true, category: 'chat', disabled: () => false, sideEffects: logChange('pendingMessages'),
     },
+    // 安全詞回復時不自動收緊互動權限（見 features/safeword.js）。預設關閉。
+    safewordKeepPermission: {
+        label: 's_safewordKeepPermission', desc: 'sd_safewordKeepPermission',
+        type: 'checkbox', value: false, category: 'chat', disabled: () => false, sideEffects: logChange('safewordKeepPermission'),
+    },
 
     // ───────────────────────── theme 主題 ─────────────────────────
     themeEnabled: {
@@ -195,6 +200,16 @@ export const DEFAULT_FEATURE_SETTINGS = {
         // 開：背景直接填滿主色；關：保留原背景圖並以主色 multiply 疊色（同 Themed）
         label: 's_themeFlatColor', desc: 'sd_themeFlatColor',
         type: 'checkbox', value: false, category: 'theme', disabled: themeOff, sideEffects: logChange('themeFlatColor'),
+    },
+    // 介面字型：左側勾選啟用，右側填字型名稱（見 features/theme-font.js）。
+    // 刻意獨立於 themeEnabled（disabled 恆 false）—— 換字型不必連染色一起開。
+    // 缺字時瀏覽器沿 font stack 逐字後退到萬用字型，不需要特別的「雙字元」處理。
+    themeFont: {
+        // subtype 'font'：點右側欄位會開出「系統已安裝字型」的下拉清單（見 settings-page 的 openFontPicker）。
+        label: 's_themeFont', desc: 'sd_themeFont',
+        type: 'input', subtype: 'font', value: '', category: 'theme',
+        withToggle: true, toggleDefault: false,
+        disabled: () => false, sideEffects: logChange('themeFont'),
     },
     themeMainColor:     { label: 's_c_main',     desc: 'sd_c_main',     type: 'input', subtype: 'color', value: '#202020', category: 'theme', disabled: themeOff, sideEffects: logChange('themeMainColor') },
     themeAccentColor:   { label: 's_c_accent',   desc: 'sd_c_accent',   type: 'input', subtype: 'color', value: '#440171', category: 'theme', disabled: themeOff, sideEffects: logChange('themeAccentColor') },
