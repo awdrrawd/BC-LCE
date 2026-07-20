@@ -223,7 +223,10 @@ function addMessage(friendId, sent, beep, skipHistory, createdAt) {
     const messageText = String(beep.Message ?? '').split('\n').filter(l => !l.startsWith(META)).join('\n').trimEnd();
     if (!messageText) return;
 
-    const scrolledToEnd = friend.history.scrollHeight - friend.history.scrollTop - friend.history.clientHeight < 1;
+    // 收到對方傳來、且正開著這個對話時，一律捲到最新訊息（就算原本捲在上面讀歷史也拉回底部）。
+    // 其餘情況（自己送出、正在讀別的對話、載入歷史）維持「只有原本就在底部才捲」的行為。
+    const scrolledToEnd = (!sent && friendId === activeChat && !container.classList.contains('lce-hidden'))
+        || friend.history.scrollHeight - friend.history.scrollTop - friend.history.clientHeight < 1;
     const el = document.createElement('div');
     el.classList.add('lce-msg', sent ? 'lce-msg-sent' : 'lce-msg-received', `lce-msg-${messageType}`);
     el.setAttribute('data-time', createdAt.toLocaleString());

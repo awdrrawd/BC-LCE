@@ -2,7 +2,7 @@
 // @name         Liko - LCE - 本地版
 // @name:zh      Liko的俱樂部擴充 - 本地開發版
 // @namespace    https://github.com/awdrrawd/liko-Plugin-Repository
-// @version      0.1.5
+// @version      0.1.6
 // @description  Liko Club Extensions (local dev loader)
 // @author       Likolisu
 // @include      /^https:\/\/(www\.)?bondage(projects\.elementfx|-(europe|asia))\.com\/.*/
