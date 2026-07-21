@@ -1,9 +1,9 @@
 // ==UserScript==
-// @name         Liko - LCE - 本地版
-// @name:zh      Liko的俱樂部擴充 - 本地開發版
-// @namespace    https://github.com/awdrrawd/liko-Plugin-Repository
-// @version      0.1.0
+// @name         本地測試 - LCE
+// @namespace    https://github.com/awdrrawd/BC-LCE
+// @version      0.1
 // @description  Liko Club Extensions (local dev loader)
+// @supportURL   https://github.com/awdrrawd/BC-LCE
 // @author       Likolisu
 // @include      /^https:\/\/(www\.)?bondage(projects\.elementfx|-(europe|asia))\.com\/.*/
 // @icon         https://cdn.jsdelivr.net/gh/awdrrawd/liko-Plugin-Repository@main/Images/PCM_ICON.png
