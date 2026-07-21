@@ -2095,11 +2095,9 @@
         return r;
     });
 
-    modApi.hookFunction('ChatRoomTopMenuPosition', 0, (args, next) => {
-        if (crActive) { crMaintain(); return; }
-        return next(args);
-    });
-
+    // 註：新版 BC 已移除 ChatRoomTopMenuPosition（頂部選單改為 #chat-room-div 內、
+    // 由 CSS flex 排版的子元素），不再有可攔的單獨定位函式。重套直版版面的責任改由
+    // 下面的 ChatRoomResize hook 與 window resize/orientationchange 監聽器承擔。
     modApi.hookFunction('ChatRoomResize', 0, (args, next) => {
         const r = next(args);
         crMaintain();
