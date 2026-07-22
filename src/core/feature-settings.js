@@ -106,7 +106,9 @@ export async function loadFeatureSettings() {
     //
     // 沒登入本來就沒有「該載入的每帳號設定」，等下去才是對的：條件一成立就往下跑，
     // 使用者永遠不登入的話這個 Promise 就永遠不 resolve，後面那些功能也本來就不該裝。
-    await waitFor(() => !!(typeof Player !== 'undefined' && Player?.AccountName), Infinity);
+    // 用 250ms 疏探（而非預設 100ms）：登入靠使用者操作、可能停留數分鐘，降低輪詢頻率省資源，
+    // 而登入後功能安裝本來就緊接著這裡，多出的 <150ms 延遲無感。
+    await waitFor(() => !!(typeof Player !== 'undefined' && Player?.AccountName), Infinity, 250);
 
     // 每帳號的部分從伺服器讀（DB 是這半邊的唯一正本）
     const online = parseJSON(decompress(Player.ExtensionSettings?.[LCE_EXT_KEY] || ''));

@@ -36,6 +36,8 @@ import { installArousal } from './features/arousal.js';
 import { installPerformance } from './features/performance.js';
 import { installCheats } from './features/cheats.js';
 import { installMisc } from './features/misc.js';
+import { installRegionSwitch } from './features/region-switch.js';
+import { installHiddenArousal } from './features/hidden-arousal.js';
 import { installWardrobe } from './features/wardrobe.js';
 import { installLayeringHide } from './features/layering-hide.js';
 import { installRelogin } from './features/relogin.js';
@@ -74,13 +76,15 @@ if (LCE_ALREADY_LOADED) {
     safe('FUSAM 置頂', ensureFusamVisible);   // 常駐，遊戲內開插件管理器也要蓋過 LCE 浮層
     safe('登入頁', installLoginPage);
 
-    // 等待 BC 核心就緒。globals 通常在腳本執行前後就出現，用較短間隔讓初始化更即時
-    //（總等待上限仍約 60 秒，只是把 500ms×120 改細成 150ms×400，抓到就馬上往下走）。
-    (function waitForBC(n = 0) {
-        const MAX_RETRIES = 400, POLL_MS = 150;
-        if (typeof Player === 'undefined' || typeof CurrentScreen === 'undefined') {
-            if (n >= MAX_RETRIES) { console.warn(LOG, '等待 BC 核心逾時，插件停止初始化'); return; }
-            setTimeout(() => waitForBC(n + 1), POLL_MS);
+    // 等待 BC 核心就緒。globals 幾乎都在腳本執行後的頭一兩秒內出現，所以採兩段式輪詢：
+    // 前 1.5 秒用 50ms 密集探測（抓到就馬上往下走，把首屏延遲壓到最短），之後退成 300ms
+    // 疏探直到約 60 秒上限。這比固定 150ms 快取到、又大幅減少長時間等待時的 timer 次數。
+    const bcReady = () => typeof Player !== 'undefined' && typeof CurrentScreen !== 'undefined';
+    (function waitForBC(elapsed = 0) {
+        if (!bcReady()) {
+            if (elapsed >= 60000) { console.warn(LOG, '等待 BC 核心逾時，插件停止初始化'); return; }
+            const step = elapsed < 1500 ? 50 : 300;
+            setTimeout(() => waitForBC(elapsed + step), step);
             return;
         }
 
@@ -118,6 +122,8 @@ if (LCE_ALREADY_LOADED) {
                     ['效能', installPerformance],
                     ['作弊/反作弊', installCheats],
                     ['雜項', installMisc],
+                    ['區域切換', installRegionSwitch],
+                    ['隱藏興奮條', installHiddenArousal],
                     ['衣櫃', installWardrobe],
                     ['圖層隱藏', installLayeringHide],
                     ['自動重連', installRelogin],

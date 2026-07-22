@@ -85,24 +85,43 @@ export async function listSystemFonts() {
     return FONT_CANDIDATES.filter(isFontInstalled).sort((a, b) => a.localeCompare(b));
 }
 
-/** 使用者填的字型名稱 → 乾淨的字型清單（含空白者補引號）。允許逗號分隔多個。 */
-function userFontNames() {
-    const raw = String(getFeature('themeFont') ?? '').trim();
+/** 某字型設定鍵（逗號分隔）→ 乾淨的字型清單（去引號、去空項）。允許逗號分隔多個。 */
+function fontNamesOf(key) {
+    const raw = String(getFeature(key) ?? '').trim();
     if (!raw) return [];
     return raw.split(',')
         .map(s => s.trim().replace(/^["']|["']$/g, ''))
         .filter(Boolean);
 }
 
-/** 字型是否啟用：左側勾選箱開，且真的填了字型名稱。 */
+/** 西文（主）字型：左側勾選箱開、且真的填了名稱。 */
+function latinFontNames() {
+    return getFeature('themeFontEnabled') ? fontNamesOf('themeFont') : [];
+}
+
+/** 中文/CJK 字型：獨立的勾選箱與欄位（themeFontCJK）。 */
+function cjkFontNames() {
+    return getFeature('themeFontCJKEnabled') ? fontNamesOf('themeFontCJK') : [];
+}
+
+/**
+ * 使用者字型（有序）：西文在前、中文在後。CSS/canvas 的 font stack 會「逐字」沿堆疊
+ * 找第一個有該字符的字型 —— 西文字符命中西文字型，西文字型沒有的中文字符再往後落到
+ * 中文字型。所以兩欄各司其職，不必特別區分是哪國文字。
+ */
+function activeUserFonts() {
+    return [...latinFontNames(), ...cjkFontNames()];
+}
+
+/** 字型是否啟用：西文或中文任一欄啟用且填了字型名稱。 */
 function fontEnabled() {
-    return !!getFeature('themeFontEnabled') && userFontNames().length > 0;
+    return activeUserFonts().length > 0;
 }
 
 /** 給 CSS 用的字型字串（有空白的名稱補引號）。未啟用回空字串。 */
 function cssFontStack() {
     if (!fontEnabled()) return '';
-    const user = userFontNames().map(n => (/\s/.test(n) ? `"${n}"` : n));
+    const user = activeUserFonts().map(n => (/\s/.test(n) ? `"${n}"` : n));
     return [...user, ...FALLBACK].join(', ');
 }
 
@@ -131,7 +150,7 @@ function applyCanvasFontViaStacks() {
         for (const k of Object.keys(CommonFontStacks)) originalStacks[k] = CommonFontStacks[k];
     }
     if (fontEnabled()) {
-        const user = userFontNames();
+        const user = activeUserFonts();
         for (const k of Object.keys(originalStacks)) {
             const [names, generic] = originalStacks[k];
             CommonFontStacks[k] = [[...user, ...names], generic];   // 使用者字型插到最前，原字型當後備
@@ -155,7 +174,7 @@ function rewriteFontString(v) {
     if (!trapEnabled) return v;
     const cached = trapCache.get(v);
     if (cached !== undefined) return cached;
-    const user = userFontNames();
+    const user = activeUserFonts();
     if (!user.length) { trapCache.set(v, v); return v; }
     // 字型字串格式：`<style/variant/weight><size 含單位> <family>`。抓 size（含單位）為界，其後為 family。
     const m = v.match(/^(.*?\d*\.?\d+(?:px|pt|em|rem|%|ex|ch)\s+)(.*)$/i);
@@ -224,8 +243,8 @@ export function installThemeFont() {
     if (installed) return;
     installed = true;
     applyThemeFont();
-    // 設定頁改字型（或切換啟用勾選）會發出這個事件，key 一律是基底鍵 themeFont。
+    // 設定頁改字型（或切換啟用勾選）會發出這個事件，key 是基底鍵 themeFont / themeFontCJK。
     window.addEventListener(SETTING_CHANGED_EVENT, (e) => {
-        if (e.detail?.key === 'themeFont') applyThemeFont();
+        if (e.detail?.key === 'themeFont' || e.detail?.key === 'themeFontCJK') applyThemeFont();
     });
 }

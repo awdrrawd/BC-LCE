@@ -234,11 +234,6 @@ export const DEFAULT_FEATURE_SETTINGS = {
         label: 's_pendingMessages', desc: 'sd_pendingMessages',
         type: 'checkbox', value: true, category: 'chat', disabled: () => false, sideEffects: logChange('pendingMessages'),
     },
-    // 安全詞回復時不自動收緊互動權限（見 features/safeword.js）。預設關閉。
-    safewordKeepPermission: {
-        label: 's_safewordKeepPermission', desc: 'sd_safewordKeepPermission',
-        type: 'checkbox', value: false, category: 'chat', disabled: () => false, sideEffects: logChange('safewordKeepPermission'),
-    },
 
     // ───────────────────────── theme 主題 ─────────────────────────
     themeEnabled: {
@@ -265,6 +260,15 @@ export const DEFAULT_FEATURE_SETTINGS = {
         type: 'input', subtype: 'font', value: '', category: 'theme',
         withToggle: true, toggleDefault: false,
         disabled: () => false, sideEffects: logChange('themeFont'),
+    },
+    // 中文/CJK 字型：獨立於 themeFont 的第二個字型欄位。西文字型（themeFont）常常沒有中文字符，
+    // 光靠它換不到中文；這欄專填中文字型，套用時排在西文字型之後、萬用後備之前 ——
+    // 於是西文用你選的西文字型、中文用你選的中文字型（見 features/theme-font.js）。同樣獨立於染色開關。
+    themeFontCJK: {
+        label: 's_themeFontCJK', desc: 'sd_themeFontCJK',
+        type: 'input', subtype: 'font', value: '', category: 'theme',
+        withToggle: true, toggleDefault: false,
+        disabled: () => false, sideEffects: logChange('themeFontCJK'),
     },
     themeMainColor:     { label: 's_c_main',     desc: 'sd_c_main',     type: 'input', subtype: 'color', value: '#202020', category: 'theme', disabled: themeOff, sideEffects: logChange('themeMainColor') },
     themeAccentColor:   { label: 's_c_accent',   desc: 'sd_c_accent',   type: 'input', subtype: 'color', value: '#440171', category: 'theme', disabled: themeOff, sideEffects: logChange('themeAccentColor') },
@@ -630,6 +634,21 @@ export const DEFAULT_FEATURE_SETTINGS = {
     ghostNewUsers: {
         label: 's_ghostNewUsers', desc: 'sd_ghostNewUsers',
         type: 'checkbox', value: false, category: 'misc', disabled: () => false, sideEffects: logChange('ghostNewUsers'),
+    },
+    // 安全詞回復時不自動收緊互動權限（見 features/safeword.js）。預設關閉。
+    safewordKeepPermission: {
+        label: 's_safewordKeepPermission', desc: 'sd_safewordKeepPermission',
+        type: 'checkbox', value: false, category: 'misc', disabled: () => false, sideEffects: logChange('safewordKeepPermission'),
+    },
+    // 混合區／女性區快速切換：在聊天搜尋畫面加一顆切換鈕（見 features/region-switch.js）。預設關閉。
+    regionSwitch: {
+        label: 's_regionSwitch', desc: 'sd_regionSwitch',
+        type: 'checkbox', value: false, category: 'misc', disabled: () => false, sideEffects: logChange('regionSwitch'),
+    },
+    // 隱藏興奮條（含掛在 DrawArousalMeter 上的第三方 HUD）於衣櫃/檔案/對話框（見 features/hidden-arousal.js）。預設關閉。
+    hideArousalMeter: {
+        label: 's_hideArousalMeter', desc: 'sd_hideArousalMeter',
+        type: 'checkbox', value: false, category: 'misc', disabled: () => false, sideEffects: logChange('hideArousalMeter'),
     },
     // 註：指令系統（/lce、/w、/beep…）沒有開關 —— 它是必要功能，一律啟用。
 
