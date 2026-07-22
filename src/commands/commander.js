@@ -31,7 +31,7 @@ export function lceChatNotify(node, opts) {
     else div.appendChild(node);
     // 很長的訊息（versions、lcesetlist、profiles…）右下角補工具列，讓使用者自己收合/刪掉、免得洗版。
     //   closable    → ✖ 刪除整則
-    //   collapsible → ▼/▶ 收合本體，只留標記為 .lce-collapse-keep 的元素（通常是標題）與工具列
+    //   collapsible → ▼/▲ 收合本體，只留標記為 .lce-collapse-keep 的元素（通常是標題）與工具列
     if (opts?.closable || opts?.collapsible) {
         div.classList.add('lce-closable');
         const tools = document.createElement('div');
@@ -41,12 +41,12 @@ export function lceChatNotify(node, opts) {
             const c = document.createElement('button');
             c.type = 'button';
             c.className = 'lce-notify-collapse';
-            c.textContent = '▼';
+            c.textContent = '▲';
             c.title = '收合／展開';
             c.onclick = (e) => {
                 e.preventDefault();
                 const collapsed = div.classList.toggle('lce-collapsed');
-                c.textContent = collapsed ? '▶' : '▼';
+                c.textContent = collapsed ? '▼' : '▲';
             };
             tools.appendChild(c);
         }
