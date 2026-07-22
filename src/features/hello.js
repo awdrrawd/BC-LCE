@@ -46,6 +46,17 @@ const inChatRoom = () =>
     && typeof ServerPlayerIsInChatRoom === 'function' && ServerPlayerIsInChatRoom();
 
 /**
+ * 是否分享自己的完整插件清單。對齊 BC 原廠的 RespondRemoteModListQueries
+ *（偏好 → 線上），取代舊的 LCE 專屬 shareAddons —— 單一開關管到底，與原廠
+ * /mods remote 一致。設定未定義時視為分享（與原廠預設相同）。
+ * 註：LCE 版本號一律照送（那是別人 /versions 看得到我們的唯一依據），這裡只管
+ * 「要不要附上完整清單」。
+ */
+export function shouldShareAddons() {
+    return typeof Player !== 'undefined' && Player?.OnlineSettings?.RespondRemoteModListQueries !== false;
+}
+
+/**
  * 在 LCE 自己的頻道上報上名號。
  * @param {number|null} target   指定對象的會員編號；null = 廣播給整個房間
  * @param {boolean} requestReply 要求對方也回報一次（進房時用，否則看不到既有的人）
@@ -71,7 +82,7 @@ export function sendLceHello(target = null, requestReply = false) {
         if (caps.length) payload.capabilities = caps;
         // 完整插件清單看使用者願不願意分享；送出時 LCE 本身也在其中，
         // 於是 WCE 的 /versions 會把 LCE 列進「Other Addons」，等於在 WCE 那邊也認得出 LCE。
-        if (getFeature('shareAddons')) {
+        if (shouldShareAddons()) {
             payload.otherAddons = window.bcModSdk?.getModsInfo?.() ?? [];
         }
         const message = {

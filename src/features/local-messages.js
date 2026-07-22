@@ -82,13 +82,17 @@ function injectStyle() {
             gap: 18px;
         }
 
-        /* 很長的訊息（versions、lcesetlist、profiles…）右下角的刪除鈕：
-           騰出右下角空間避免蓋到文字，✖ 融進訊息、hover 才明顯。 */
-        .ChatMessage.lce-closable { position: relative; padding-right: 1.4em; padding-bottom: 1.1em; }
-        .ChatMessage .lce-notify-close {
-            position: absolute;
-            right: 4px;
-            bottom: 2px;
+        /* 很長的訊息（versions、lcesetlist、profiles…）末端的工具列：收合 ▼／刪除 ✖，
+           靠右對齊、融進訊息、hover 才明顯。 */
+        .ChatMessage .lce-notify-tools {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 10px;
+            margin-top: 4px;
+        }
+        .ChatMessage .lce-notify-close,
+        .ChatMessage .lce-notify-collapse {
             border: none;
             background: none;
             padding: 2px;
@@ -98,7 +102,14 @@ function injectStyle() {
             color: var(--lce-sysmsg-text, #000);
             opacity: 0.5;
         }
-        .ChatMessage .lce-notify-close:hover { opacity: 1; }
+        .ChatMessage .lce-notify-close:hover,
+        .ChatMessage .lce-notify-collapse:hover { opacity: 1; }
+        /* 收合：只留標記為 .lce-collapse-keep 的元素（標題／統計）與工具列本身。 */
+        .ChatMessage.lce-collapsed > *:not(.lce-notify-tools):not(.lce-collapse-keep) { display: none; }
+        /* /versions：每人一塊，外掛清單縮排；連結沿用聊天記錄的深藍。 */
+        .ChatMessage .lce-versions-block { margin: 0.35em 0; }
+        .ChatMessage .lce-versions-addons { margin-left: 1.2em; }
+        .ChatMessage .lce-versions-addons a { color: #003f91; }
     `;
     document.head.appendChild(s);
 }

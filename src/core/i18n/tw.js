@@ -367,8 +367,6 @@ export default {
     sd_relogin: "斷線後自動重新輸入密碼登入（需已在登入頁保存密碼）。",
     s_confirmLeave: "離開遊戲時確認",
     sd_confirmLeave: "離開遊戲時先確認，避免誤關分頁。",
-    s_shareAddons: "共享插件清單",
-    sd_shareAddons: "與同房其他 LCE 使用者共享你安裝的插件清單（/versions 查看）。關閉後仍會報上 LCE 版本（否則別人的 /versions 看不到你），只是不附完整清單。不會送給 WCE 使用者 —— 我們走的是 LCE 自己的頻道。",
     s_customContentDomainCheck: "加載三方時提示",
     sd_customContentDomainCheck: "載入第三方網域內容前先跳出確認。",
     s_ghostNewUsers: "不自然用戶無視並黑名單",

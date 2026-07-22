@@ -145,6 +145,7 @@ async function listProfiles(filter) {
     const header = document.createElement('h3');
     header.textContent = T('profiles_title');
     header.style.marginTop = '0';
+    header.classList.add('lce-collapse-keep');   // 收合時仍保留標題
 
     const lines = list.map(p => {
         const div = document.createElement('div');
@@ -169,9 +170,10 @@ async function listProfiles(filter) {
     footer.textContent = T('profiles_footer')
         .replace('{num}', list.length.toLocaleString())
         .replace('{total}', matches.toLocaleString());
+    footer.classList.add('lce-collapse-keep');   // 收合時仍保留「共 N 筆」統計
 
-    // 清單通常很長，右下角補刪除鈕，避免洗版。
-    lceChatNotify([header, ...lines, footer], { closable: true });
+    // 清單通常很長，末端補收合 ▼／刪除 ✖，避免洗版。
+    lceChatNotify([header, ...lines, footer], { closable: true, collapsible: true });
 }
 
 // ───────────────────── WCE Profile Share（WPS 互通）─────────────────────

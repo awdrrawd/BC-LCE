@@ -627,12 +627,6 @@ export const DEFAULT_FEATURE_SETTINGS = {
         label: 's_customContentDomainCheck', desc: 'sd_customContentDomainCheck',
         type: 'checkbox', value: true, category: 'misc', disabled: () => false, sideEffects: logChange('customContentDomainCheck'),
     },
-    // 只影響「完整插件清單」要不要一起送。LCE 的版本號一律會送 ——
-    // 那是 /versions 看得到其他 LCE 使用者的唯一依據（見 features/hello.js）。
-    shareAddons: {
-        label: 's_shareAddons', desc: 'sd_shareAddons',
-        type: 'checkbox', value: true, category: 'misc', disabled: () => false, sideEffects: logChange('shareAddons'),
-    },
     ghostNewUsers: {
         label: 's_ghostNewUsers', desc: 'sd_ghostNewUsers',
         type: 'checkbox', value: false, category: 'misc', disabled: () => false, sideEffects: logChange('ghostNewUsers'),

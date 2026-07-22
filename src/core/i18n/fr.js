@@ -386,8 +386,6 @@ export default {
     sd_relogin: "Ressaisit votre mot de passe automatiquement après une déconnexion (nécessite un mot de passe enregistré).",
     s_confirmLeave: "Confirmer avant de quitter le jeu",
     sd_confirmLeave: "Demande confirmation avant de partir pour éviter de fermer l'onglet par accident.",
-    s_shareAddons: "Partager la liste des addons",
-    sd_shareAddons: "Partage votre liste d'addons installés avec les autres utilisateurs LCE de la salle (/versions). Le désactiver signale toujours votre version LCE (sinon vous êtes invisible dans leur /versions), simplement sans la liste complète. Les utilisateurs WCE ne la reçoivent jamais — LCE utilise son propre canal.",
     s_customContentDomainCheck: "Demander pour le contenu tiers",
     sd_customContentDomainCheck: "Confirmer avant de charger du contenu depuis un domaine tiers.",
     s_ghostNewUsers: "Ghost+liste noire des nouveaux utilisateurs anormaux",

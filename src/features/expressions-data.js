@@ -58,14 +58,15 @@ export const EventExpressions = {
         { ExpressionModifier: -1, Duration: 5000, Priority: 1000 },
         { ExpressionModifier: -1, Duration: 5000, Priority: 200 },
       ],
+      // Eyes / Eyes2 時長對齊，避免高潮後那段一眼閉一眼愛心的短暫失步（原 WCE 資料兩眼差 500ms）。
       Eyes: [
         { Expression: "Closed", Duration: 8500 },
         { Expression: "Heart", Duration: 7500 },
         { Expression: "Sad", Duration: 4000, Priority: 200 },
       ],
       Eyes2: [
-        { Expression: "Closed", Duration: 8000 },
-        { Expression: "Heart", Duration: 8000 },
+        { Expression: "Closed", Duration: 8500 },
+        { Expression: "Heart", Duration: 7500 },
         { Expression: "Sad", Duration: 4000, Priority: 200 },
       ],
       Mouth: [
@@ -99,7 +100,8 @@ export const EventExpressions = {
   RaiseBrows: { Type: "RaiseBrows", Duration: -1, Expression: { Eyebrows: [{ Expression: "Raised", Duration: -1 }] } },
   Confused: { Type: "Confused", Duration: -1, Expression: { Eyebrows: [{ Expression: "OneRaised", Duration: -1 }] } },
   Smirk: { Type: "Smirk", Duration: -1, Expression: { Mouth: [{ Expression: "Smirk", Duration: -1 }] } },
-  Wink: { Type: "Wink", Duration: 1500, Expression: { Eyes: [{ Expression: "Closed", Duration: 1500 }] } },
+  // SingleEye：眨眼是刻意的單眼，排除引擎的雙眼同步（見 expressions.js pushEvent）。
+  Wink: { Type: "Wink", Duration: 1500, SingleEye: true, Expression: { Eyes: [{ Expression: "Closed", Duration: 1500 }] } },
   Laugh: {
     Type: "Laugh",
     Duration: 8000,

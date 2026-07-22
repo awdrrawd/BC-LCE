@@ -190,6 +190,18 @@ export function pushEvent(evt) {
 
     const time = Date.now();
     const event = deepCopy(evt);
+
+    // 雙眼同步：活動／事件類表情若只指定了單眼，補上另一眼，避免「一眼開一眼閉」。
+    //   • 慾望分級（AROUSAL_EVT）本就以 Eyes / Eyes2 成對推送，且資料對稱 —— 不需處理。
+    //   • 手動覆寫（MANUAL_EVT）已在 CharacterSetFacialExpression 鉤子鏡射過 —— 不重複。
+    //   • 刻意單眼（如眨眼 Wink）以 SingleEye:true 標記，跳過鏡射。
+    // 在 deepCopy 之後操作，才不會污染 EventExpressions / ArousalExpressionStages 這些共用常數。
+    if (event.Expression && !event.SingleEye && event.Type !== AROUSAL_EVT && event.Type !== MANUAL_EVT) {
+        const ex = event.Expression;
+        if (ex.Eyes && !ex.Eyes2) ex.Eyes2 = deepCopy(ex.Eyes);
+        else if (ex.Eyes2 && !ex.Eyes) ex.Eyes = deepCopy(ex.Eyes2);
+    }
+
     event.At = time;
     event.Until = time + event.Duration;
     event.Id = newUniqueId();

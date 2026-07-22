@@ -387,8 +387,6 @@ export default {
     sd_relogin: "Gibt dein Passwort nach einer Trennung automatisch erneut ein (benötigt gespeichertes Passwort).",
     s_confirmLeave: "Verlassen des Spiels bestätigen",
     sd_confirmLeave: "Fragt vor dem Verlassen nach, um versehentliches Schließen des Tabs zu vermeiden.",
-    s_shareAddons: "Addon-Liste teilen",
-    sd_shareAddons: "Teilt deine installierte Addon-Liste mit anderen LCE-Nutzern im Raum (/versions). Ausschalten meldet weiterhin deine LCE-Version (sonst bist du in ihrem /versions unsichtbar), nur ohne die vollständige Liste. WCE-Nutzer erhalten sie nie — LCE nutzt einen eigenen Kanal.",
     s_customContentDomainCheck: "Bei Drittanbieter-Inhalten nachfragen",
     sd_customContentDomainCheck: "Vor dem Laden von Inhalten einer Drittanbieter-Domain bestätigen.",
     s_ghostNewUsers: "Auffällig neue Nutzer ghosten+blockieren",

@@ -56,26 +56,26 @@ function injectStyle() {
     s.textContent = `
 /* 貼齊左上角、滿寬。z-index 10 是為了蓋過chat-room-top-menu */
 #lce-im{display:flex;z-index:10;position:fixed;width:100%;height:70%;top:0;left:0;padding:0;margin:0;
-  flex-direction:row;background-color:var(--lce-main,#111);color:var(--lce-text,#eee);
-  border:0.2em solid var(--lce-accent,#fff);resize:both;overflow:auto;
+  flex-direction:row;background-color:var(--lce-main,#242424);color:var(--lce-text,#eee);
+  border:0.2em solid var(--lce-accent,#c3c3c3);resize:both;overflow:auto;
   max-width:100%;max-height:75%;min-width:38%;min-height:30%;overflow-wrap:break-word;box-sizing:border-box;}
 #lce-im.lce-hidden{display:none !important;}
 #lce-im-left{display:flex;flex-direction:column;width:20%;height:100%;}
-#lce-im-right{width:80%;display:flex;flex-direction:column;border-left:0.1em solid var(--lce-accent,#fff);}
-#lce-friend-search{border:0;border-bottom:0.1em solid var(--lce-accent,#fff);padding:0.5em;height:1em;
-  background-color:var(--lce-element,#222);color:var(--lce-text,#eee);}
+#lce-im-right{width:80%;display:flex;flex-direction:column;border-left:0.1em solid var(--lce-accent,#c3c3c3);}
+#lce-friend-search{border:0;border-bottom:0.1em solid var(--lce-accent,#c3c3c3);padding:0.5em;height:1em;
+  background-color:var(--lce-element,#1a1a1a);color:var(--lce-text,#eee);}
 #lce-friend-list{width:100%;overflow-x:hidden;overflow-y:scroll;}
 .lce-friend-entry{padding:1em;cursor:pointer;}
 .lce-friend-entry-name{font-weight:bold;display:flex;flex-direction:column;}
-.lce-friend-selected{font-style:italic;border-top:0.1em solid var(--lce-accent,#fff);
-  border-bottom:0.1em solid var(--lce-accent,#fff);background-color:var(--lce-element,#222);}
+.lce-friend-selected{font-style:italic;border-top:0.1em solid var(--lce-accent,#c3c3c3);
+  border-bottom:0.1em solid var(--lce-accent,#c3c3c3);background-color:var(--lce-element,#1a1a1a);}
 /* 未讀通知刻意用寫死的紅色，不吃 --lce-accent —— 主題染色會把 accent 染成紫色，
    讓「有新訊息」這個提示看起來像一般選中狀態。訊息通知要一眼認得出來，不該被主題蓋過。 */
 .lce-friend-unread{background-color:#c62828 !important;}
 .lce-friend-offline{text-decoration:line-through;color:var(--lce-text-disabled,gray);}
 #lce-im-messages{width:100%;height:90%;font-size:1.5rem;font-family:Arial,sans-serif;}
 #lce-im-input{width:100%;height:10%;border:0;padding:0;margin:0;
-  background-color:var(--lce-element,#222);color:var(--lce-text,#eee);font-size:1.5rem;}
+  background-color:var(--lce-element,#1a1a1a);color:var(--lce-text,#eee);font-size:1.5rem;}
 .lce-friend-history{overflow-y:scroll;overflow-x:hidden;height:100%;}
 .lce-msg{padding:0.2em 0.4em;position:relative;white-space:pre-wrap;}
 .lce-msg::before{content:attr(data-time);float:right;color:gray;font-size:0.5em;margin-right:0.2em;font-style:italic;}
@@ -85,7 +85,15 @@ function injectStyle() {
    讓名字自己佔一行，維持「玩家: 圖片」的閱讀順序。 */
 .lce-msg:has(> .lce-img-link) > .lce-msg-sender{display:block;}
 .lce-msg-Emote,.lce-msg-Action{font-style:italic;color:gray;}
-.lce-msg-divider{margin:0.5em 2em;border-bottom:0.2em solid var(--lce-accent,#fff);}
+.lce-msg-divider{margin:0.5em 2em;border-bottom:0.2em solid var(--lce-accent,#c3c3c3);}
+/* 訊息裡的連結：預設瀏覽器藍太亮，改用與聊天記錄一致的深藍（見 chat-augments）。 */
+#lce-im a{color:#003f91;cursor:pointer;}
+#lce-im a:visited{color:#380091;}
+/* 卷軸：不開染色時 #c3c3c3；染色開啟時吃 --lce-accent。 */
+#lce-im ::-webkit-scrollbar{width:0.6em;height:0.6em;}
+#lce-im ::-webkit-scrollbar-thumb{background:var(--lce-accent,#c3c3c3);border-radius:0.3em;}
+#lce-im ::-webkit-scrollbar-track{background:transparent;}
+#lce-im{scrollbar-color:var(--lce-accent,#c3c3c3) transparent;}
 `;
     document.head.appendChild(s);
 }
@@ -399,6 +407,10 @@ export async function installInstantMessenger() {
             (async () => {
                 if (!loaded) await loadIM();
                 sortIM();
+                // 登入時瀏覽器常無視 autocomplete='off' 把帳號名塞進搜尋框（它是頁面上第一個
+                // text input）。每次開啟時清空並重跑過濾，確保清單不被殘留關鍵字誤篩。
+                friendSearch.value = '';
+                onSearch();
                 container.classList.remove('lce-hidden');
                 ServerSend('AccountQuery', { Query: 'OnlineFriends' });
                 unreadSinceOpened = 0;

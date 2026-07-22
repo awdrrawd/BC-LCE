@@ -1,6 +1,7 @@
 // ════════════════════════════════════════════════════════════════════════════
 // 雜項
-//   shareAddons              與同房其他 LCE 使用者共享已安裝的插件清單（/versions 可看）
+//   插件清單共享            對齊原廠 RespondRemoteModListQueries（見 hello.js shouldShareAddons），
+//                          不再有 LCE 專屬開關；清單有變動時重報一次名，/versions 才看得到
 //   ghostNewUsers            自動 ghost + 黑名單「異常新」的帳號（防惡意機器人）
 //   customContentDomainCheck 房間自訂背景/音樂來自第三方網域時先確認再載入
 // （confirmLeave 在 behaviors.js；relogin 見說明）
@@ -15,7 +16,7 @@ import { T } from '../core/i18n.js';
 // 與聊天嵌入共用同一份「本次連線已授權來源」名單（WCE 也是共用同一個 map），
 // 在聊天嵌入授權過的來源，這裡就不會再問一次。
 import { sessionCustomOrigins } from './chat-augments.js';
-import { sendLceHello } from './hello.js';
+import { sendLceHello, shouldShareAddons } from './hello.js';
 
 const LOG = '🐈‍⬛ [LCE]';
 const NEW_ACCOUNT_MS = 30000;              // 建立不到 30 秒就進房 = 異常新（同 WCE）
@@ -134,7 +135,7 @@ export function installMisc() {
             const loaded = window.bcModSdk?.getModsInfo?.() ?? [];
             if (JSON.stringify(loaded) === JSON.stringify(Player.LCEOtherAddons)) return;
             Player.LCEOtherAddons = loaded;
-            if (getFeature('shareAddons')) sendLceHello(null, false);
+            if (shouldShareAddons()) sendLceHello(null, false);
         } catch { /* ignore */ }
     }, 5000);
 

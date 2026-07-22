@@ -29,16 +29,37 @@ export function lceChatNotify(node, opts) {
     if (typeof node === 'string') div.appendChild(document.createTextNode(node));
     else if (Array.isArray(node)) div.append(...node);
     else div.appendChild(node);
-    // 很長的訊息（versions、lcesetlist、profiles…）右下角補一顆 ✖，讓使用者自己刪掉、免得洗版。
-    if (opts?.closable) {
+    // 很長的訊息（versions、lcesetlist、profiles…）右下角補工具列，讓使用者自己收合/刪掉、免得洗版。
+    //   closable    → ✖ 刪除整則
+    //   collapsible → ▼/▶ 收合本體，只留標記為 .lce-collapse-keep 的元素（通常是標題）與工具列
+    if (opts?.closable || opts?.collapsible) {
         div.classList.add('lce-closable');
-        const x = document.createElement('button');
-        x.type = 'button';
-        x.className = 'lce-notify-close';
-        x.textContent = '✖';
-        x.title = '刪除此訊息';
-        x.onclick = (e) => { e.preventDefault(); try { div.remove(); } catch { /* 已被清掉就算了 */ } };
-        div.appendChild(x);
+        const tools = document.createElement('div');
+        tools.className = 'lce-notify-tools';
+        if (opts?.collapsible) {
+            div.classList.add('lce-collapsible');
+            const c = document.createElement('button');
+            c.type = 'button';
+            c.className = 'lce-notify-collapse';
+            c.textContent = '▼';
+            c.title = '收合／展開';
+            c.onclick = (e) => {
+                e.preventDefault();
+                const collapsed = div.classList.toggle('lce-collapsed');
+                c.textContent = collapsed ? '▶' : '▼';
+            };
+            tools.appendChild(c);
+        }
+        if (opts?.closable) {
+            const x = document.createElement('button');
+            x.type = 'button';
+            x.className = 'lce-notify-close';
+            x.textContent = '✖';
+            x.title = '刪除此訊息';
+            x.onclick = (e) => { e.preventDefault(); try { div.remove(); } catch { /* 已被清掉就算了 */ } };
+            tools.appendChild(x);
+        }
+        div.appendChild(tools);
     }
     if (typeof ChatRoomAppendChat === 'function') ChatRoomAppendChat(div);
     // 過一段時間自動移除（例如刪除確認框：只保留 10 秒，避免留在聊天室裡卡著）。
@@ -365,29 +386,174 @@ function whisper(command, args) {
     }
 }
 
-function versions(args) {
-    function modInfo(character) {
-        const bcVersion = character.OnlineSharedSettings?.GameVersion ?? 'R0';
-        const BCXi = window.bcx?.getCharacterVersion?.(character.MemberNumber) ? ` BCX ${window.bcx.getCharacterVersion(character.MemberNumber) ?? '?'}` : '';
+// ───────────────── /versions —— 混合式：徽章走 hello，插件清單走原廠 ModSdkModsQuery ─────────────────
+// 徽章（club / BCX / WCE / LCE 版本）：由 features/hello.js 被動蒐集在 character 上，查得到就直接列。
+// 插件清單：送原廠 ModSdkModsQuery，每個 vanilla BC 客戶端（含「沒裝 WCE/LCE」的人）都會由
+//   BC 本體的 CommandsModsList 自動回 ModSdkModsReply（附 bcModSdk.getModsInfo()）——這是能查到
+//   「所有人」的關鍵。回覆受對方 RespondRemoteModListQueries 開關控制；沒回應的人退回 hello
+//   帶來的清單（若有）。非同步：先畫出徽章與「查詢中…」，回覆到達或 5 秒逾時再補上。
 
-        // 兩個獨立來源，見 features/hello.js（都走 WCE 的 BCEMsg 頻道，靠 lce 標記區分）：
-        //   FBC ← 沒有 lce 標記的 BCEMsg（WCE 送的）
-        //   LCE ← 夾了 lce 標記的 BCEMsg，或舊版 LCEMsg
-        // 兩個都有值 = 對方同時裝了 WCE 和 LCE，兩行都該列出來。
-        // WCE 主版號 1~5 是舊名 FBC，之後才改叫 WCE（判斷方式同 WCE 自己的徽章）。
-        const wceLabel = character.FBC && ['1', '2', '3', '4', '5'].includes(character.FBC.split('.')[0]) ? 'FBC' : 'WCE';
-        const wce = character.FBC ? `\n${wceLabel} v${character.FBC}` : '';
-        const lce = character.LCE ? `\nLCE v${character.LCE}` : '';
+const VERSIONS_TIMEOUT_MS = 5000;
+let activeVersionsReq = null;
 
-        // 兩邊送的都是 bcModSdk.getModsInfo()，內容一樣；有 LCE 的就用 LCE 那份
-        const addons = character.LCEOtherAddons ?? character.FBCOtherAddons ?? [];
-        const others = addons.length
-            ? `\nAddons:\n- ${addons.map(m => `${m.name} v${m.version} ${m.repository ?? ''}`).join('\n- ')}`
-            : '';
-        return `${CharacterNickname(character)} (${character.MemberNumber ?? ''}) club ${bcVersion}${BCXi}${wce}${lce}${others}`;
+/** 收掉進行中的查詢：移除臨時 socket 監聽並清計時器。 */
+function cancelActiveVersions() {
+    if (!activeVersionsReq) return;
+    try { ServerSocket?.off?.('ChatRoomMessage', activeVersionsReq.handler); } catch { /* ignore */ }
+    clearTimeout(activeVersionsReq.timeoutId);
+    activeVersionsReq = null;
+}
+
+/** 版本徽章行（club / BCX / WCE / LCE），資料全來自 hello 被動蒐集。 */
+function versionBadgeLine(character) {
+    const bcVersion = character.OnlineSharedSettings?.GameVersion ?? 'R0';
+    const bcxVer = window.bcx?.getCharacterVersion?.(character.MemberNumber);
+    const bcx = bcxVer ? ` · BCX ${bcxVer}` : '';
+    // WCE 主版號 1~5 是舊名 FBC，之後才改叫 WCE（判斷方式同 WCE 自己的徽章）。
+    const wceLabel = character.FBC && ['1', '2', '3', '4', '5'].includes(character.FBC.split('.')[0]) ? 'FBC' : 'WCE';
+    const wce = character.FBC ? ` · ${wceLabel} v${character.FBC}` : '';
+    const lce = character.LCE ? ` · LCE v${character.LCE}` : '';
+    return `${CharacterNickname(character)} (${character.MemberNumber ?? ''}) · club ${bcVersion}${bcx}${wce}${lce}`;
+}
+
+/** 一份插件清單 → DOM；有 repository 網址的名稱做成可點連結（回報做成連結）。 */
+function renderAddonList(mods) {
+    const wrap = document.createElement('div');
+    wrap.className = 'lce-versions-addons';
+    for (const m of mods) {
+        const row = document.createElement('div');
+        row.appendChild(document.createTextNode('- '));
+        const repo = typeof m.repository === 'string' && /^https?:\/\//i.test(m.repository) ? m.repository : null;
+        const label = `${m.name} v${m.version}`;
+        if (repo) {
+            const a = document.createElement('a');
+            a.href = repo; a.target = '_blank'; a.rel = 'noopener noreferrer';
+            a.textContent = label;
+            row.appendChild(a);
+        } else {
+            row.appendChild(document.createTextNode(label));
+        }
+        wrap.appendChild(row);
     }
-    const printList = findDrawnCharacters(args.length > 0 ? args[0] : null, true);
-    lceChatNotify(printList.map(modInfo).filter(Boolean).join('\n\n'), { closable: true });
+    return wrap;
+}
+
+/** 把某人的外掛區塊填成清單。isFallback = 用 hello 帶來的暫時資料（非即時回覆）。 */
+function fillAddons(b, mods, isFallback = false) {
+    b.addonsHost.replaceChildren();
+    const label = document.createElement('span');
+    label.textContent = mods.length ? `　外掛（${mods.length}）${isFallback ? '＊' : ''}：` : '　外掛：（無）';
+    b.addonsHost.appendChild(label);
+    if (mods.length) b.addonsHost.appendChild(renderAddonList(mods));
+    if (isFallback) b.hasFallback = true; else b.filled = true;
+}
+
+/** 把某人的外掛區塊填成一段純文字（未開放查詢／查詢失敗／無回應）。 */
+function fillAddonsText(b, text) {
+    b.addonsHost.replaceChildren(document.createTextNode(text));
+    b.filled = true;
+}
+
+function updateVersionsHeader(header, total, pendingCount) {
+    header.textContent = pendingCount > 0
+        ? `LCE /versions —— 房內 ${total} 人（插件清單查詢中… 尚待 ${pendingCount}）`
+        : `LCE /versions —— 房內 ${total} 人`;
+}
+
+function versions(args) {
+    if (typeof ServerPlayerIsInChatRoom !== 'function' || !ServerPlayerIsInChatRoom()) {
+        lceChatNotify('必須在聊天室內才能查詢版本。'); return;
+    }
+    cancelActiveVersions();
+
+    const spec = (args?.[0] ?? '').trim();
+    const targetChar = spec ? findDrawnCharacters(spec.replace(/^@/, ''), true)[0] : null;
+    if (spec && !targetChar) { lceChatNotify(`找不到對象：${spec}`); return; }
+    const targets = targetChar ? [targetChar] : findDrawnCharacters(null, true);
+    if (!targets.length) { lceChatNotify('房間內沒有可查詢的對象。'); return; }
+
+    const requestId = typeof CommonGenerateUniqueID === 'function'
+        ? CommonGenerateUniqueID()
+        : `lce-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+    const header = document.createElement('div');
+    header.className = 'lce-collapse-keep';
+
+    const body = document.createElement('div');
+    const blocks = new Map();   // memberNumber → { addonsHost, char, filled, hasFallback }
+    for (const c of targets) {
+        const block = document.createElement('div');
+        block.className = 'lce-versions-block';
+        const line = document.createElement('div');
+        line.textContent = versionBadgeLine(c);
+        const addonsHost = document.createElement('div');
+        addonsHost.textContent = '　外掛：查詢中…';
+        block.append(line, addonsHost);
+        body.appendChild(block);
+        blocks.set(c.MemberNumber, { addonsHost, char: c, filled: false, hasFallback: false });
+    }
+    lceChatNotify([header, body], { closable: true, collapsible: true });
+
+    // 自己：直接填本地清單，不必查
+    const selfBlock = blocks.get(Player.MemberNumber);
+    if (selfBlock) fillAddons(selfBlock, window.bcModSdk?.getModsInfo?.() ?? []);
+
+    // 其他人：先用 hello 帶來的清單當暫時後備（有的話），等原廠回覆再覆蓋
+    for (const [mn, b] of blocks) {
+        if (mn === Player.MemberNumber) continue;
+        const fallback = b.char.LCEOtherAddons ?? b.char.FBCOtherAddons;
+        if (fallback?.length) fillAddons(b, fallback, true);
+    }
+
+    const pending = new Set(targets.filter(c => c.MemberNumber !== Player.MemberNumber).map(c => c.MemberNumber));
+    updateVersionsHeader(header, targets.length, pending.size);
+    if (pending.size === 0) return;   // 只有自己，不必送查詢
+
+    const handler = (data) => {
+        try {
+            if (data?.Type !== 'Hidden' || data.Content !== 'ModSdkModsReply') return;
+            const payload = Array.isArray(data.Dictionary)
+                ? data.Dictionary.find(t => t?.Tag === 'ModSdkModsReplyPayload') : null;
+            if (!payload || payload.RequestId !== requestId) return;
+            const mn = data.Sender;
+            if (!pending.has(mn)) return;
+            pending.delete(mn);
+            const b = blocks.get(mn);
+            if (b) {
+                if (payload.Status === 'declined') fillAddonsText(b, '　外掛：（對方未開放查詢）');
+                else if (payload.Status === 'error' || !payload.ModsJson) fillAddonsText(b, '　外掛：（查詢失敗）');
+                else {
+                    let mods = [];
+                    try { mods = JSON.parse(payload.ModsJson); } catch { /* 解析失敗當空 */ }
+                    fillAddons(b, Array.isArray(mods) ? mods : []);
+                }
+            }
+            updateVersionsHeader(header, targets.length, pending.size);
+            if (pending.size === 0) cancelActiveVersions();
+        } catch (e) { console.warn(LOG, '/versions 回覆處理失敗:', e); }
+    };
+
+    const timeoutId = setTimeout(() => {
+        for (const mn of pending) {
+            const b = blocks.get(mn);
+            // 沒回應：已有 hello 後備就留著（＊ 標記），否則標明無回應
+            if (b && !b.filled && !b.hasFallback) fillAddonsText(b, '　外掛：（無回應或未開放查詢）');
+        }
+        pending.clear();
+        updateVersionsHeader(header, targets.length, 0);
+        cancelActiveVersions();
+    }, VERSIONS_TIMEOUT_MS);
+
+    activeVersionsReq = { requestId, handler, timeoutId };
+    try { ServerSocket?.on?.('ChatRoomMessage', handler); } catch { /* ignore */ }
+
+    // 送原廠查詢：Target 省略 = 廣播給整房；指定對象時只問他一個（同 CommandsModsList.StartRemote）
+    ServerSend('ChatRoomChat', {
+        Content: 'ModSdkModsQuery',
+        Type: 'Hidden',
+        Dictionary: [{ Tag: 'ModSdkModsQueryPayload', RequestId: requestId }],
+        Target: targetChar?.MemberNumber,
+    });
 }
 
 // 指令清單（同時供 CommandCombine 註冊與 /lce 說明列出）
@@ -405,7 +571,7 @@ const COMMAND_LIST = [
     { Tag: 'exportlooks', NeedsArg: true, Description: '[會員編號]：複製你或他人的外觀字串（可用 LCE/BCX 匯入）', Action: (_, _c, [target]) => { exportLooks(target); } },
     { Tag: 'importlooks', Description: '從字串匯入外觀（LCE/BCX 匯出）', Action: () => { importLooks(); } },
     { Tag: 'profiles', NeedsArg: true, HelpOnly: true, Description: '<關鍵字>：列出已保存的個人資料，可用會員編號或名稱搜尋' },
-    { Tag: 'versions', NeedsArg: true, Description: '[名稱]：顯示房間內玩家的俱樂部/BCX/插件版本', Action: (_, _c, args) => { versions(args); } },
+    { Tag: 'versions', NeedsArg: true, Description: '[名稱]：查詢房內玩家的俱樂部/BCX/插件版本（走原廠查詢，未裝 LCE/WCE 也查得到）', Action: (_, _c, args) => { versions(args); } },
     { Tag: 'lcesetting', Description: '快速前往 LCE 設定頁', Action: () => { openSettings(); } },
     { Tag: 'lcesetlist', Description: '列出帳號上所有 ExtensionSettings 與其大小（可直接按鈕刪除）', Action: () => { listExtSettings(); } },
     { Tag: 'lceThemetest', Description: '主題開關測試，呼叫一個懸浮球，點擊即時開/關主題，再次輸入收起', Action: () => { toggleThemeTestBalloon(); } },
