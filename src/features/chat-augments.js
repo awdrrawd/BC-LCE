@@ -46,9 +46,15 @@ function parseUrl(word) {
     } catch { return false; }
 }
 
+// 可內嵌的圖片副檔名（比 WCE 原本的 png/jpg/webp/gif 更廣）：
+//   bmp / avif / apng / jfif / ico  瀏覽器 <img> 都支援；svg 以 <img> 載入時不會執行內嵌
+//   腳本（沙盒化），且非信任來源仍要先確認，故一併納入。
+// 副檔名比對用 url.pathname（不含 ?query#hash），所以帶查詢字串的圖片網址仍能命中。
+const IMAGE_EXT_RE = /\/[^/]+\.(png|jpe?g|gif|webp|bmp|avif|apng|jfif|svg|ico)$/iu;
+
 function allowedToEmbed(url) {
     const trusted = TRUSTED_HOSTS.includes(url.host) || sessionCustomOrigins.get(url.origin) === 'allowed';
-    if (/\/[^/]+\.(png|jpe?g|webp|gif)$/iu.test(url.pathname)) {
+    if (IMAGE_EXT_RE.test(url.pathname)) {
         return trusted ? EMBED.Image : EMBED.Untrusted;
     }
     return EMBED.None;
@@ -183,6 +189,31 @@ export function processChatAugmentsForLine(el, scrollToEnd, isChat) {
     (isChat ? el.parentElement : el)?.setAttribute('lce-original-text', originalText);
 }
 
+/**
+ * 把「連到圖片、允許內嵌、但還是純連結」的 <a> 升級成內嵌圖片。
+ * 用途：別的擴充（例如 WCE）可能搶先處理過訊息，卻不認得某些格式（BMP/WEBP…），
+ * 只把網址轉成純連結；此時原本的文字節點已變成 <a>，LCE 的逐字處理（只認文字節點）
+ * 就碰不到它。這一輪把 LCE 支援、且來源可信任的圖片連結補成真正的圖片，
+ * 讓「WCE + LCE 同時裝」時仍能顯示這些格式。對 LCE 自己已內嵌的圖片（anchor 內已有 img）不動。
+ */
+function upgradeImageAnchors(root) {
+    if (!root) return;
+    for (const a of root.querySelectorAll('a[href]')) {
+        if (a.querySelector('img')) continue;               // 已是圖片，不重複處理
+        let url;
+        try { url = new URL(a.href); } catch { continue; }
+        if (!['http:', 'https:'].includes(url.protocol)) continue;
+        if (allowedToEmbed(url) !== EMBED.Image) continue;  // 非圖片、或來源未信任 → 不動
+        const img = document.createElement('img');
+        img.src = url.href;
+        img.alt = url.href;
+        img.classList.add('lce-img');
+        a.classList.add('lce-img-link');
+        while (a.firstChild) a.removeChild(a.firstChild);
+        a.appendChild(img);
+    }
+}
+
 /** 掃描尚未處理的聊天訊息並套用嵌入；同時同步 chatColors 的 body class。 */
 function scan() {
     // chatColors：可讀性調色（body class 切換即可，關閉時自動還原）
@@ -203,6 +234,9 @@ function scan() {
 
         const scrolledToEnd = ElementIsScrolledToEnd(CHATLOG);
         processChatAugmentsForLine(content, () => { if (scrolledToEnd) ElementScrollToEnd(CHATLOG); }, !!contentSpan);
+        // 補救別的擴充留下的純圖片連結（例如 WCE 不認得的 BMP/WEBP）——
+        // 掃整個訊息 div，把可信任的圖片連結升級成內嵌圖片。
+        upgradeImageAnchors(msgEl);
         if (scrolledToEnd) ElementScrollToEnd(CHATLOG);
     }
 }

@@ -13,10 +13,10 @@ export function installBehaviors() {
     if (installed) return;
     installed = true;
 
-    // 數字 Enter 送出：在 BC 自己的 ChatRoomKeyDown 流程裡處理（跟 WCE 一樣），
-    // 這樣與普通 Enter 走同一條路徑、同樣尊重中文（IME）組字狀態。
+    // 數字 Enter 送出：在 BC 自己的 ChatRoomKeyDown 流程裡處理，這樣與普通 Enter 走同一條
+    // 路徑、同樣尊重中文（IME）組字狀態。
     //   - 普通 Enter 的 event.key 也是 "Enter"，兩者僅差在 event.code；
-    //     BC 依 key 判斷，故普通 Enter 本就正常。這裡只補「數字 Enter」。
+    //     BC 依 code 判斷，數字 Enter（NumpadEnter）不會自己送出，這裡補上。
     //   - e.isComposing 為真（正在組字，例如注音/拼音尚未上屏）時不送出，
     //     與普通 Enter 一致：第一次 Enter 結束組字、需再按一次才送出。
     //   - 回傳 true 表示已處理、消費此事件，避免 BC 原生流程重覆送出。

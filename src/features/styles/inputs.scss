@@ -25,12 +25,21 @@ input:focus {
 }
 
 /*
- * BIO（個人資料）輸入框：BC 用 ID 選擇器指定它的底色，優先級（1-0-0）高過上面的
- * `textarea`（0-0-1），所以必須同樣用 ID 才蓋得過。它本質上就是一個大輸入窗，
- * 因此套用與按鈕相同的 element 色。
+ * BIO（個人資料）輸入框：只在「編輯狀態」才染色，檢視/保護（唯讀）狀態維持 BC 原色。
+ * 用 :read-only / :not(:read-only) 判斷編輯與否 —— LCE/WCE 的保護檢視都會把它設成唯讀
+ * 或整個藏起來，真正可輸入時才是編輯中。ID 選擇器（1-0-0）壓過上面的 `textarea`（0-0-1），
+ * 帶屬性的（1-0-1）再壓過純 ID，層層蓋得住。
  */
 #DescriptionInput {
-  background: var(--lce-element);
+  /* 檢視／保護（唯讀）：還原 BC 原本的白底黑字黑框，不染色（避免「一直亮著」） */
+  background: white;
+  color: black;
+  border: min(0.2vh, 0.1vw) solid black;
+}
+
+#DescriptionInput:not(:read-only) {
+  /* 編輯中：染色，背景用指定的 #6A89A1 */
+  background: #6A89A1;
   color: var(--lce-text);
   border: min(0.2vh, 0.1vw) solid var(--lce-accent);
 }
