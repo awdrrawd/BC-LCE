@@ -716,19 +716,23 @@ export function installExpressions() {
             return next(args);
         }
         const duration = typeof Timer === 'number' && Timer > 0 ? Timer * 1000 : -1;
+        if (!Color || !CommonColorIsValid(Color)) Color = undefined;
         const e = {};
 
-        // BC 的本體開頭會在 AssetGroup==="Eyes" 時遞迴呼叫自己處理 "Eyes2"（左眼帶右眼）。
-        // 我們攔截後不呼叫 next，本體不再執行，這個遞迴就跟著消失 —— 排在我們前面的模組
-        // （如「服装拓展」的 左眼_Luzi / 右眼_Luzi）只會收到 "Eyes"，於是只有左眼跟著變，
-        // 右眼永遠停在原表情。這裡把遞迴補回來：走完整的鉤子鏈重新發一次 "Eyes2"，
-        // 讓它們也收得到。"Eyes2" 不會再觸發這個分支，不會無限遞迴。
-        // （WCE 直接把 Eyes2 併進 types 了事，只顧自己的兩眼，模組的右眼就是這樣被漏掉的。）
-        if (AssetGroup === 'Eyes') CharacterSetFacialExpression(C, 'Eyes2', Expression, Timer, Color);
-
-        // 上面那通已經連同鉤子鏈處理完 Eyes2，這裡只剩自己這一邊（比照 BC：Eyes1 即左眼）
-        const types = AssetGroup === 'Eyes1' ? ['Eyes'] : [AssetGroup];
-        if (!Color || !CommonColorIsValid(Color)) Color = undefined;
+        // 兩眼必須「原子性」地一起套用（同 BC 本體語意：AssetGroup==="Eyes" 代表雙眼、
+        // Eyes1 只左眼、Eyes2 只右眼）。把 Eyes+Eyes2 放進「同一個」MANUAL 事件、只跑一次
+        // 引擎，兩眼才會在同一輪一起變。
+        //
+        // 【曾踩過的坑，勿改回】舊版用 `if (AssetGroup==='Eyes') CharacterSetFacialExpression
+        //   (C,'Eyes2',…)` 補遞迴，但那通會再進本鉤子並在末尾 return customArousalExpression()
+        //   先跑一輪引擎 —— 此刻只有 Eyes2 進了佇列、Eyes 還停在舊的慾望值，引擎就把
+        //   「Eyes=舊值、Eyes2=新值」這個大小眼中間態 setExpression＋notifyMods＋ServerSend
+        //   全廣播出去，之後外層才補上 Eyes 收斂。自己畫面多半同一 tick 收斂看不到，但整房
+        //   其他人與遠端的 echo-clothing-ext 鏡射會 latch 到那個中間態 → 常態性大小眼。
+        //   補遞迴當年是為了讓排在前面、靠鉤子鏡射的模組（服装拓展的 左眼_Luzi/右眼_Luzi）
+        //   也收到 "Eyes2"；但 notifyMods（WCE 沒有、LCE 後加）在套用後會走完整鉤子鏈重發，
+        //   BC 本體的 Eyes→Eyes2 遞迴會在其中觸發，右眼照樣收得到 —— 補遞迴已多餘，只剩害處。
+        const types = AssetGroup === 'Eyes' ? ['Eyes', 'Eyes2'] : AssetGroup === 'Eyes1' ? ['Eyes'] : [AssetGroup];
         for (const t of types) {
             e[t] = [{ Expression, Duration: duration, Color }];
             if (duration < 0) manualComponents[t] = Expression;
