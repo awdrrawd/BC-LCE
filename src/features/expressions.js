@@ -599,6 +599,14 @@ function installPatches() {
         window.lceAnimationEngineEnabled = engineOn;
         window.lcePushEvent = pushEvent;
 
+        // WCE 生態相容旗標：ECHO（服装拓展）等模組是用 bceAnimationEngineEnabled
+        // 判斷「動畫引擎在不在跑」，據以切到專為引擎設計的鏡射路徑
+        // （CharacterLoadCanvas 每次重繪重鏡 Eyes→右眼_Luzi/Eyes2→左眼_Luzi＋ServerSend 改寫群組）。
+        // 不設它 → ECHO 誤判引擎沒開，走原版鏡射路徑，撐不住引擎直接寫 Property 的做法，
+        // 自訂眼睛套用後約 0.5 秒被慾望表情打回（基礎 Eyes 由引擎作主故不受影響）。
+        // 我們的引擎與 WCE 同構，語意上就是 true，設成同一個判斷即可。
+        window.bceAnimationEngineEnabled = engineOn;
+
         modApi.patchFunction('TimerInventoryRemove', {
             'CharacterSetFacialExpression(C, C.ExpressionQueue[0].Group, C.ExpressionQueue[0].Expression, undefined, undefined, true);':
             `if (window.lceAnimationEngineEnabled()) {
