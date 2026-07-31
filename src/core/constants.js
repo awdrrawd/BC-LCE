@@ -79,7 +79,7 @@ export const DEFAULT_SETTINGS = {
     showAccount:  true,      // 2b. 顯示帳號（預設啟用）
     showName:     true,      // 2c. 顯示名稱（預設啟用）
     bgMode:       'random',  // 3. 背景：'random' | 'select' | 'custom'（預設隨機）
-    bgName:       'BG-01',   // bgMode='select' 時使用的背景名稱（Images/ 內的檔名，去副檔名）
+    bgName:       'BG-01',   // bgMode='select' 時使用的背景名稱（assets/ 內的檔名，去副檔名）
     // bgMode='custom' 時的來源：一個圖片網址，或 WALLPAPER_UPLOAD_SENTINEL
     // （代表改用上傳進 lce-assets 那張）。空字串 = 還沒設，會退回隨機。
     bgCustomUrl:  '',

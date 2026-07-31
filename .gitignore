@@ -2,3 +2,8 @@ node_modules/
 dist/
 *.log
 .DS_Store
+
+# 圖片/影片素材：由 `assets` 分支於 build 前自動抓取到這裡（見 scripts/fetch-assets.mjs），
+# main 分支本身不追蹤這些檔案。開頭的 "/" 限定只忽略「專案根目錄」的 assets/，
+# 不影響 src/assets/（圖示等小型內建素材，仍正常受版控）。
+/assets/

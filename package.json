@@ -5,10 +5,10 @@
   "type": "module",
   "description": "Liko Club Extensions - horizontal login UI and club extensions for Bondage Club",
   "scripts": {
-    "predev": "node scripts/sync-version.mjs",
+    "predev": "node scripts/fetch-assets.mjs && node scripts/sync-version.mjs",
     "dev": "vite build && concurrently -k -n build,serve \"vite build --watch\" \"vite preview --port 5174\"",
     "sync-version": "node scripts/sync-version.mjs",
-    "prebuild": "node scripts/sync-version.mjs",
+    "prebuild": "node scripts/fetch-assets.mjs && node scripts/sync-version.mjs",
     "build": "vite build",
     "preview": "vite preview --port 5174"
   },

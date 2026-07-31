@@ -1,23 +1,23 @@
 // ════════════════════════════════════════════════════════════════════════════
 // 登入背景
-// 使用專案 Images/ 資料夾內的自訂圖片（BG-01.jpg…）。Vite 於建置時把圖片輸出成
+// 使用專案 assets/ 資料夾內的自訂圖片（BG-01.jpg…）。Vite 於建置時把圖片輸出成
 // 獨立的 hash 檔（可被瀏覽器快取），URL 以 import.meta.url 相對 bundle 解析，跨來源
 // 載入也正確。在 stage 最底層鋪一張滿版背景圖蓋住整個 canvas —— 同時遮住 BC 的登入
 // 角色/感謝名單，以及 WCE 畫在 canvas 上的存檔按鈕（點4、點5）。
-// 新增圖片只要丟進 Images/ 依檔名排序即可自動納入（無需改程式，重新 build 即可）。
+// 新增圖片只要丟進 assets/ 依檔名排序即可自動納入（無需改程式，重新 build 即可）。
 // ════════════════════════════════════════════════════════════════════════════
 
 import { S } from '../core/state.js';
 import { WALLPAPER_UPLOAD_SENTINEL } from '../core/constants.js';
 import { loadWallpaper } from '../core/storage.js';
 
-// 建置時把 Images/*.{jpg,jpeg,png,webp} 全部收進來（eager，取 default = 輸出檔的 URL）
-// 路徑相對本檔（src/loginpage/）→ 專案根的 Images/ 需回上兩層。
-const _modules = import.meta.glob('../../Images/*.{jpg,jpeg,png,webp}', { eager: true, import: 'default' });
+// 建置時把 assets/*.{jpg,jpeg,png,webp} 全部收進來（eager，取 default = 輸出檔的 URL）
+// 路徑相對本檔（src/loginpage/）→ 專案根的 assets/ 需回上兩層。
+const _modules = import.meta.glob('../../assets/*.{jpg,jpeg,png,webp}', { eager: true, import: 'default' });
 
 // 背景影片（可選）：命名規則 BGV-XX.mp4，對應同號的圖片 BG-XX.jpg。
 // 有對應影片的背景會「先出圖、影片載好再淡入」（見 applyVideo）；沒有影片的就純圖片。
-const _videoModules = import.meta.glob('../../Images/*.{mp4,webm}', { eager: true, import: 'default' });
+const _videoModules = import.meta.glob('../../assets/*.{mp4,webm}', { eager: true, import: 'default' });
 
 /** @type {Record<string,string>} 影片名（去副檔名）→ 輸出檔 URL，例如 'BGV-01' → 'assets/BGV-01-xxxx.mp4' */
 const VIDEO_BY_NAME = {};
@@ -172,7 +172,7 @@ export async function applyBackground() {
 
     releaseUploadedUrl();
     const bg = pickBackground();
-    if (!bg) { clearVideo(); return; } // Images/ 為空時，僅保留暗化遮罩
+    if (!bg) { clearVideo(); return; } // assets/ 為空時，僅保留暗化遮罩
     img.style.display = '';
     if (img.src !== bg.url) img.src = bg.url;
     // 有對應影片 → 準備好就淡入；沒有 → 收掉上一支、維持純圖片
