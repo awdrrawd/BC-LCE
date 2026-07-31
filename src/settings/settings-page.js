@@ -38,6 +38,12 @@ let currentPage = 0;
 let currentSetting = '';      // 目前選中的設定 key（顯示描述用）
 const actionDone = new Set(); // 已點過的動作按鈕（顯示回饋文字）
 
+// bar 拖曳狀態：滑鼠在軌道上按下時記住是哪一項，放開前每幀依目前滑鼠位置更新數值。
+// key/def 分開存（而非只存 key）是因為拖曳中途 pageSlice() 可能已經翻頁，
+// 仍要能拿到正確的 min/max/step 做 clampBar。
+let dragKey = null;
+let dragDef = null;
+
 function settingsInCategory(category) {
     return Object.entries(DEFAULT_FEATURE_SETTINGS).filter(([, def]) => def.category === category);
 }
@@ -107,10 +113,12 @@ function load() {
     currentPage = 0;
     currentSetting = '';
     actionDone.clear();
+    stopBarDrag();
 }
 
 function exit() {
     saveFeatureSettings();
+    stopBarDrag();
     if (typeof PreferenceSubscreenExtensionsClear === 'function') PreferenceSubscreenExtensionsClear();
 }
 
@@ -118,6 +126,9 @@ function run() {
     const ctx = window.MainCanvas?.getContext('2d');
     if (!ctx) return;
     ctx.textAlign = 'left';
+
+    // 拖曳中：每幀依最新滑鼠位置更新值（放開滑鼠由全域 mouseup 監聽器處理，見 installSettingsPage）。
+    if (dragKey) applyDraggedBarValue();
 
     const title = currentCategory ? `${T('lce_settings_title')} — ${T('cat_' + currentCategory)}` : T('lce_settings_title');
     DrawText(title, 300, 125, 'Black', 'Gray');
@@ -321,20 +332,80 @@ function drawBarControl(key, def, y, disabled) {
     if (ratio > 0) DrawRect(SEL_OFFSET, top, SEL_WIDTH * ratio, BAR_H, disabled ? '#c8c8c0' : '#3575b5');
     DrawEmptyRect(SEL_OFFSET, top, SEL_WIDTH, BAR_H, 'Black', 2);
 
-    // 拉桿：夾在軌道內，兩端才不會畫到軌道外面
+    // 拉桿：夾在軌道內，兩端才不會畫到軌道外面。拖曳中加寬、換色，給個明確的「抓住了」回饋。
+    const dragging = !disabled && key === dragKey;
+    const handleW = dragging ? 16 : 12;
     const hx = SEL_OFFSET + Math.max(6, Math.min(SEL_WIDTH - 6, SEL_WIDTH * ratio));
-    DrawRect(hx - 6, y + 12, 12, 40, disabled ? '#c8c8c0' : 'Black');
+    DrawRect(hx - handleW / 2, y + 10, handleW, 44, disabled ? '#c8c8c0' : (dragging ? '#3575b5' : 'Black'));
 
     centered(() => DrawTextFit(String(v), SEL_OFFSET + SEL_WIDTH + SOUND_GAP + BAR_VAL_W / 2, y + 33,
         BAR_VAL_W, disabled ? 'Gray' : 'Black'));
 }
 
+/** 依目前 SEL_OFFSET~SEL_OFFSET+SEL_WIDTH 內的滑鼠位置算出 bar 的值（不檢查是否在列內）。 */
+function barValueFromMouseX(def) {
+    const ratio = (MouseX - SEL_OFFSET) / SEL_WIDTH;
+    return clampBar(def, def.min + ratio * (def.max - def.min));
+}
+
 /** 點擊 bar：點到哪就跳到哪一格（依 step 對齊）。整列 64 高都算，不必精準點在軌道上。 */
 function handleBarClick(key, def, y) {
     if (!MouseIn(SEL_OFFSET, y, SEL_WIDTH, 64)) return;
-    const ratio = (MouseX - SEL_OFFSET) / SEL_WIDTH;
-    const next = clampBar(def, def.min + ratio * (def.max - def.min));
+    const next = barValueFromMouseX(def);
     if (next !== fSettings[key]) { fSettings[key] = next; fireSideEffect(key, def); }
+}
+
+/**
+ * 開始拖曳：滑鼠在某個 bar 的軌道列（SEL_OFFSET~+SEL_WIDTH、整列 64 高）按下時呼叫。
+ * 立刻套用一次目前位置的值，讓「按下不放直接拖」跟「點一下」手感一致，
+ * 之後每幀（見 run() 開頭）依最新滑鼠位置持續更新，直到放開滑鼠。
+ */
+function startBarDrag(key, def) {
+    dragKey = key;
+    dragDef = def;
+    applyDraggedBarValue();
+}
+
+/** 拖曳中依目前滑鼠位置更新值；放開滑鼠、或滑鼠已離開頁面座標系（拖到畫面外）時仍持續依最後位置夾住。 */
+function applyDraggedBarValue() {
+    if (!dragKey || !dragDef || typeof MouseX !== 'number') return;
+    const next = barValueFromMouseX(dragDef);
+    if (next !== fSettings[dragKey]) { fSettings[dragKey] = next; fireSideEffect(dragKey, dragDef); }
+}
+
+function stopBarDrag() {
+    dragKey = null;
+    dragDef = null;
+}
+
+/** 這個 bar 目前是否可操作（未停用、withToggle 時左側勾選箱已開）。 */
+function isBarDraggable(key, def) {
+    if (def.type !== 'bar') return false;
+    if (def.disabled?.(fSettings)) return false;
+    if (def.withToggle) return !!fSettings[`${key}Enabled`];
+    return true;
+}
+
+/**
+ * 全域 mousedown：只在 LCE 設定頁「已進入某分類」時作用（currentCategory 非 null，
+ * 跟 keyHandler 的 Escape 判斷同一招）。命中某個可操作 bar 的整列範圍就開始拖曳。
+ * 用 capture 掛在 window 上，不 stopPropagation / preventDefault —— 讓 BC 原生的
+ * click() 照樣在放開滑鼠時觸發，兩邊算出來的值本來就該一致，不需要互相攔截。
+ */
+function onGlobalMouseDown() {
+    if (currentCategory === null) return;
+    let y = Y_START;
+    for (const [key, def] of pageSlice(currentCategory)) {
+        if (isBarDraggable(key, def) && MouseIn(SEL_OFFSET, y, SEL_WIDTH, 64)) {
+            startBarDrag(key, def);
+            return;
+        }
+        y += Y_INC;
+    }
+}
+
+function onGlobalMouseUp() {
+    stopBarDrag();
 }
 
 /** 繪製 input 控制項：色彩型別 → 十六進位欄位 + 齊平色塊；其餘 → 一般數值鈕。 */
@@ -599,6 +670,7 @@ function keyHandler(e) {
     if (e.key === 'Escape' && currentCategory !== null) {
         currentCategory = null;
         currentSetting = '';
+        stopBarDrag();
         e.stopPropagation();
         e.preventDefault();
     }
@@ -622,6 +694,11 @@ export function installSettingsPage() {
             load, run, click, exit,
         });
         document.addEventListener('keydown', keyHandler, true);
+        // bar 拖曳：mousedown 判定命中哪一項並開始拖，mouseup 結束（見 onGlobalMouseDown/Up）。
+        // 只在有 currentCategory 時才動作，離開 LCE 設定頁後這兩個監聽器什麼都不做，不必額外移除。
+        window.addEventListener('mousedown', onGlobalMouseDown, true);
+        window.addEventListener('mouseup', onGlobalMouseUp, true);
+        window.addEventListener('touchend', onGlobalMouseUp, true);
         installed = true;
     })();
 }
