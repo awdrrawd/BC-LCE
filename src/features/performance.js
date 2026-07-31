@@ -368,11 +368,36 @@ function onTextureSettingChanged(key) {
 // 只接受 PreferenceGraphicsFrameLimit = [0, 10, 15, 30, 60]，填 35 會被打回預設。
 // 也不再改寫 window.requestAnimationFrame —— 那會連帶節流所有用到 rAF 的
 // 插件與 UI 動畫，不只是遊戲繪製。改成只攔 GameRun，跳幀方式與 BC 本身一致。
+//
+// v2：原本拿「上一次真的畫出來的時間」當基準點，每輪都從那個已經 snap 到某個
+// vsync 節拍的時間重新起算。若目標間隔剛好卡在節拍整數倍上（例如 60Hz 時的
+// 20fps、15fps），時鐘的微小系統性偏差會讓每一輪都同方向判定「還差一點點」，
+// 結果穩定卡在低一檔，而不是準確命中目標（實測：設 20 恆卡 15、設 15 恆卡 10）。
+//
+// 改用累加排程（accumulator）：下一次該畫的時間點是「獨立時間軸上累加固定間隔」
+// 算出來的，不是每次都從上一次「已經被 snap 過」的時間重新起算。多幀下來，
+// 有時會提前一點命中、有時延後一點，誤差不會固定往同一個方向摞加，長期平均
+// 會貼著目標值，不會被單一節拍的邊界誤差鎖死在固定的錯誤檔位。
+let fpsCapNextDue = 0;
+
+/** 目標值變更 / 功能關閉時要重置，否則會拿舊間隔的殘留基準去比對。 */
+function resetFpsCapSchedule() { fpsCapNextDue = 0; }
 
 function shouldSkipFrame(timestamp) {
-    if (!getFeature('lowFrameRateFpsEnabled')) return false;
-    if (typeof TimerLastTime !== 'number' || TimerLastTime <= 0 || !(timestamp > 0)) return false;
-    return TimerLastTime + 1000 / bar('lowFrameRateFps') > timestamp;
+    if (!getFeature('lowFrameRateFpsEnabled')) { fpsCapNextDue = 0; return false; }
+    if (!(timestamp > 0)) return false;
+
+    const interval = 1000 / bar('lowFrameRateFps');
+
+    if (fpsCapNextDue === 0) { fpsCapNextDue = timestamp + interval; return false; }
+    if (timestamp < fpsCapNextDue) return true;
+
+    // 追上理想時間軸；若分頁被瀏覽器丟到背景太久導致落後太多幀，直接以現在時間
+    // 重新校準，避免回到前景時為了「補幀」瞬間跳過節流狂畫一串。
+    fpsCapNextDue = (timestamp - fpsCapNextDue > interval * 4)
+        ? timestamp + interval
+        : fpsCapNextDue + interval;
+    return false;
 }
 
 // ───────────────────────── FPS 顯示 ─────────────────────────
@@ -500,9 +525,29 @@ export function installPerformance() {
     });
 
     // 低幀率：跳幀的作法與 BC GameRun 自己的上限判斷一致 —— 重掛下一幀後直接返回。
+    //
+    // v2：原本每次跳幀都是 `requestAnimationFrame(window.GameRun)` —— window.GameRun
+    // 是 Mod SDK 換過的 router，代表每一次「純粹只是還沒到時間」的檢查，也要重新走一遍
+    // 完整的 hook 分派鏈（建參數陣列、跑 hookEnter/hookChainExit、巢狀閉包）。目標值愈低，
+    // 一次真的畫面之前要跳過的次數愈多，這些固定成本疊加起來會再啃掉一截幀率
+    // （這就是為什麼目標 15 會多丟到 10，而不是理論上量化誤差算出來的 12）。
+    //
+    // 改成：跳幀時用一個不經過 router 的輕量私有迴圈自己排 rAF，只在真的要畫的
+    // 那一次才呼叫 window.GameRun（觸發正常的 hook 分派）。
+    // window.GameAnimationFrameId 仍要同步更新——BC 的 GameHandleError 等原生清理
+    // 邏輯會用它來 cancelAnimationFrame，私有迴圈的 id 沒登記上去就不會被正確取消。
+    function lowFpsWait(timestamp) {
+        window.GameAnimationFrameId = null;
+        if (shouldSkipFrame(timestamp)) {
+            window.GameAnimationFrameId = requestAnimationFrame(lowFpsWait);
+            return;
+        }
+        window.GameRun(timestamp);
+    }
+
     hook('GameRun', 0, (args, next) => {
         if (!shouldSkipFrame(args[0])) return next(args);
-        window.GameAnimationFrameId = requestAnimationFrame(window.GameRun);
+        window.GameAnimationFrameId = requestAnimationFrame(lowFpsWait);
         return undefined;
     });
 
@@ -542,5 +587,8 @@ export function installPerformance() {
         const key = e.detail?.key;
         try { onCapacitySettingChanged(key); } catch { /* ignore */ }
         try { onTextureSettingChanged(key); } catch { /* ignore */ }
+        // 目標值或開關被改動：累加排程的基準時間是照舊目標算出來的，繼續沿用會讓
+        // 下一次「該畫」的判斷點跟新目標對不上，直接歸零讓下一幀重新起算。
+        if (key === 'lowFrameRateFps' || key === 'lowFrameRateFpsEnabled') resetFpsCapSchedule();
     });
 }
