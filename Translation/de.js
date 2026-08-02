@@ -110,6 +110,8 @@ export default {
     sd_pastProfiles: "Speichert Profile, die du gesehen hast; durchsuche sie mit /profiles. Das Umschalten erfordert ein Neuladen der Seite.",
     s_pendingMessages: "Gesendete Nachrichten beim Warten anzeigen",
     sd_pendingMessages: "Zeigt von dir gesendete Nachrichten an, während auf den Server gewartet wird.",
+    s_chatScrollFreeze: "Nachrichten-Einfrieren: neue Nachrichten beim Hochscrollen pausieren",
+    sd_chatScrollFreeze: "Wenn du zum Durchsehen des Verlaufs nach oben scrollst, friert die Ansicht ein und puffert eingehende Nachrichten, statt dich von anderen Plugins nach unten ziehen zu lassen; wird gelöst, sobald du wieder nach unten scrollst oder eine Nachricht sendest. Die Funktion selbst ist ein externes Plugin, das nur bei Aktivierung geladen wird. Nach dem Deaktivieren in dieser Sitzung ist zum erneuten Aktivieren ein Seiten-Neuladen nötig.",
     s_safewordKeepPermission: "Safeword ändert Interaktionsrechte nicht",
     sd_safewordKeepPermission: "Bei Verwendung eines Safewords wird die Interaktionsberechtigung nicht automatisch auf „nur Whitelist“ eingeschränkt (die ursprüngliche Einstellung „Alle / außer Blacklist“ bleibt unverändert).",
     augment_embed: "(Einbettung)",

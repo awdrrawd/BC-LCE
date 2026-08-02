@@ -234,6 +234,13 @@ export const DEFAULT_FEATURE_SETTINGS = {
         label: 's_pendingMessages', desc: 'sd_pendingMessages',
         type: 'checkbox', value: true, category: 'chat', disabled: () => false, sideEffects: logChange('pendingMessages'),
     },
+    // 信息凍結：捲上去看歷史時凍結新訊息、不被別的插件把畫面拉到底。功能本體是外部插件，
+    // 開啟才動態載入、關閉才 teardown —— 開關流程全在 features/chat-scroll-freeze.js，
+    // 它掛 lce-setting-changed 監聽，故這裡照舊只記一筆即可。
+    chatScrollFreeze: {
+        label: 's_chatScrollFreeze', desc: 'sd_chatScrollFreeze',
+        type: 'checkbox', value: false, category: 'chat', disabled: () => false, sideEffects: logChange('chatScrollFreeze'),
+    },
 
     // ───────────────────────── theme 主題 ─────────────────────────
     themeEnabled: {

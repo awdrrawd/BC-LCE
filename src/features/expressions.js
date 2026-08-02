@@ -81,6 +81,9 @@ const DIR = { None: 0, Down: 1, Up: 2 };
 
 const queue = [];
 const manualComponents = {};
+// broadcast[t] = 引擎「上一次真的送給伺服器」的表情值（見 customArousalExpression 末尾的對外校正）。
+// 用來偵測「本地被引擎以外的路徑改掉、但沒補送」造成的 self/others 表情不同步。
+const broadcast = {};
 let lastUniqueId = 0;
 let lastOrgasm = 0, orgasmCount = 0, wasDefault = false;
 let PreviousArousal = null;
@@ -525,6 +528,7 @@ function customArousalExpression() {
                 Name: desiredExpression[t].Expression ?? null, Group: t,
                 Appearance: ServerAppearanceBundle(Player.Appearance),
             });
+            broadcast[t] = desiredExpression[t].Expression ?? null;   // 記下已同步值，供末尾校正比對（避免重送）
             if (desiredExpression[t].Duration < 0 && desiredExpression[t].Expression !== 'Closed') {
                 refreshScreen = true;
                 Player.ActiveExpression?.setWithoutReload?.(t, desiredExpression[t].Expression);
@@ -534,6 +538,30 @@ function customArousalExpression() {
             DialogSelfMenuMapping.Expression.Reload();
         }
         needsRefresh = true;
+    }
+
+    // ── 對外同步校正（server reconciliation）──────────────────────────────
+    // 引擎只在「本地值有變」時才送 ChatRoomCharacterExpressionUpdate（見上方套用區塊）。
+    // 但本地表情可能被「引擎以外」的路徑改掉而沒補送 —— 最典型是 BC 的
+    // ValidationSanitizeProperties 在換裝／增減帶 AllowExpression 的物品時 delete
+    // property.Expression（見 installPatches），或其他模組直接改 Property。此時本地已是
+    // 新值、伺服器卻停在舊值，而引擎下一輪比對「本地==期望」判定沒變，於是永遠不補送 ——
+    // 症狀就是「自己看正常、別人看到卡住的舊表情，連 dialog-expression-menubar-clear
+    // 都救不回（因為本地本來就正常，clear 不產生本地變化 → 一樣不送）」。
+    //
+    // 這裡以 broadcast[t]（引擎上次真的送出的值）比對目前本地值，不一致就補一發，讓伺服器
+    // 收斂到本地 —— 等同 BC 原生 CharacterSetFacialExpression 的那發訊息，屬合法補送。
+    // 只認 BASE_FACE_COMPONENTS：模組新增的群組（如服装拓展的 左眼_Luzi）由該模組自行同步
+    // （見 bceAnimationEngineEnabled 那段），我們不越界代送以免打架。
+    for (const t of BASE_FACE_COMPONENTS) {
+        const cur = expression(t)[0];
+        if (!(t in broadcast)) { broadcast[t] = cur; continue; }   // 首見僅記錄，不送（避免開場亂送）
+        if (broadcast[t] === cur) continue;
+        broadcast[t] = cur;
+        ServerSend('ChatRoomCharacterExpressionUpdate', {
+            Name: cur ?? null, Group: t,
+            Appearance: ServerAppearanceBundle(Player.Appearance),
+        });
     }
 
     // 姿勢衝突解析（例如全身姿勢會蓋掉上下半身）

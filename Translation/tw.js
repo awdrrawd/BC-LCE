@@ -104,6 +104,8 @@ export default {
     sd_pastProfiles: "保存看過的個人資料，可用 /profiles 瀏覽。切換此項後需重新整理頁面才生效。",
     s_pendingMessages: "等待伺服器時顯示已發送的信息",
     sd_pendingMessages: "等待伺服器回應時先顯示你已送出的訊息。",
+    s_chatScrollFreeze: "信息凍結：捲動查看歷史時暫停新訊息",
+    sd_chatScrollFreeze: "捲上去看歷史紀錄時凍結畫面、暫存新進訊息，不被其他插件把畫面拉到底；捲回底部或送出訊息即解除。功能本體為外部插件，開啟才載入。本次關閉後需重新整理頁面才能再次啟用。",
     s_safewordKeepPermission: "安全詞不變更互動權限",
     sd_safewordKeepPermission: "使用安全詞時，不會自動將互動權限收緊到「白名單以上」（原本設定為「所有人／黑名單除外」將維持不變）。",
     augment_embed: "(嵌入)",

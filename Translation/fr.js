@@ -109,6 +109,8 @@ export default {
     sd_pastProfiles: "Enregistre les profils que vous avez vus ; parcourez-les avec /profiles. Activer/désactiver nécessite un rechargement de la page.",
     s_pendingMessages: "Afficher les messages envoyés pendant l'attente",
     sd_pendingMessages: "Affiche les messages que vous avez envoyés en attendant le serveur.",
+    s_chatScrollFreeze: "Gel des messages : suspend les nouveaux messages en défilement",
+    sd_chatScrollFreeze: "Lorsque vous remontez pour consulter l'historique, fige l'affichage et met en mémoire tampon les messages entrants au lieu de laisser d'autres extensions vous ramener en bas ; se relâche quand vous redescendez ou envoyez un message. La fonctionnalité est une extension externe, chargée uniquement lorsqu'elle est activée. Après l'avoir désactivée pendant cette session, un rechargement de la page est nécessaire pour la réactiver.",
     s_safewordKeepPermission: "Le safeword ne change pas les permissions",
     sd_safewordKeepPermission: "Lors de l’utilisation d’un mot de sécurité, les autorisations d’interaction ne seront pas automatiquement restreintes à « liste blanche et au-dessus » (le paramètre d’origine « tout le monde / sauf liste noire » restera inchangé).",
     augment_embed: "(intégration)",

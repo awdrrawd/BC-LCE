@@ -104,6 +104,8 @@ export default {
     sd_pastProfiles: "Save profiles you have seen; browse via /profiles. Toggling this requires a page refresh.",
     s_pendingMessages: "Show sent messages while waiting",
     sd_pendingMessages: "Show messages you sent while waiting for the server.",
+    s_chatScrollFreeze: "Message freeze: pause new messages while scrolled up",
+    sd_chatScrollFreeze: "While scrolled up reviewing history, freezes the view and buffers incoming messages instead of letting other plugins yank you to the bottom; releases when you scroll back down or send a message. The feature itself is an external plugin, loaded only when enabled. After disabling it this session, a page reload is needed to re-enable.",
     s_safewordKeepPermission: "Safeword keeps interaction permission",
     sd_safewordKeepPermission: "When using a safe word, the interaction permissions will not be automatically tightened to “whitelist and above” (the original setting of “everyone / except blacklist” will remain unchanged).",
     augment_embed: "(embed)",
