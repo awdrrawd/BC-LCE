@@ -137,6 +137,7 @@ export default {
     im_offline: "Offline",
     relogin_title: "Neu verbinden",
     relogin_done: "Wieder verbunden!",
+    relogin_restored: "Chatverlauf vor der Wiederverbindung wiederhergestellt",
     relogin_error: "FEHLER",
     relogin_duplicate: "Von einem anderen Ort angemeldet! Lade die Seite neu, um die automatische Wiederanmeldung in diesem Tab zu reaktivieren.",
     wardrobe_page: "Seite",

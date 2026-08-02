@@ -20,6 +20,55 @@ let breakCircuit = false;       // 單次重連進行中
 let breakCircuitFull = false;   // 永久停止（重整前不再嘗試）
 let loginError = null;
 
+// ── 重連時保住聊天紀錄 ──
+// BC 的聊天紀錄「只存在 DOM」（#TextAreaChatLog 的子節點），沒有可重播的陣列。重連走完整
+// 重登（LoginDoLogin）時，BC 會短暫離開房間 → ElementRemove 掉聊天區 → 回房時 ChatRoomSync
+// 只給你一個全新的空 div，歷史就永久消失（BC 自己也補不回來）。這就是「重連後聊天有機率被
+// 清空」的根因。對策：斷線當下（DOM 還完整）先快照,回房後若發現聊天區被重建成空的就補回去。
+// 刻意不動下面那套調校過的重連/限流邏輯（全是「根因」註解），改用零侵入的旁路。
+const CHATLOG_ID = 'TextAreaChatLog';
+let chatSnapshot = null;   // { html, stamp, count }
+let snapshotSeq = 0;
+
+/** 斷線當下把聊天紀錄與其所在元素的識別戳記存下來。 */
+function snapshotChatLog() {
+    try {
+        const log = document.getElementById(CHATLOG_ID);
+        if (!log) return;
+        const count = log.querySelectorAll('.ChatMessage').length;
+        if (count === 0) return;   // 沒東西可救
+        const stamp = `lce-${++snapshotSeq}-${Date.now()}`;
+        log.dataset.lceChatStamp = stamp;   // 蓋在「這個」元素上；重建後的新元素不會有
+        chatSnapshot = { html: log.innerHTML, stamp, count };
+    } catch (e) { console.warn(LOG, '快照聊天紀錄失敗:', e?.message ?? e); }
+}
+
+/**
+ * 回房後檢查：聊天區若是被重建成空的（元素換了新的、戳記對不上），就把快照補回最上方。
+ * 靠「元素識別戳記」而非單純數訊息數 —— 這樣 performance 的容量修剪（同一元素、砍掉舊訊息）
+ * 不會被誤判成「被清空」而重塞造成重複。
+ */
+function restoreChatLogIfWiped() {
+    if (!chatSnapshot) return;
+    const log = document.getElementById(CHATLOG_ID);
+    if (!log) return;   // 房間還沒建好 → 保留快照，讓下一次 ChatRoomSync 再試
+    const snap = chatSnapshot;
+    const preserved = log.dataset.lceChatStamp === snap.stamp;   // 同一個元素還在
+    const currentCount = log.querySelectorAll('.ChatMessage').length;
+    // 原元素還在且仍有內容 → 沒被清，跳過。
+    // （只認戳記還不夠：萬一 BC 是就地 innerHTML 清空、元素沒換，戳記仍在但內容沒了 ——
+    //   所以還要求「仍有內容」，讓那種情況掉進下面的還原。快照本就要求 count>0，故空房不會誤觸。）
+    if (preserved && currentCount > 0) { chatSnapshot = null; return; }
+    // 新元素已含同等以上內容 → 避免重複塞
+    if (currentCount >= snap.count) { chatSnapshot = null; return; }
+    try {
+        const sep = `<div class="lce-relog-restored" style="text-align:center;opacity:.55;font-size:.85em;margin:.35em 0;">— ${T('relogin_restored')} —</div>`;
+        log.insertAdjacentHTML('afterbegin', snap.html + sep);   // 歷史補回最上方，新訊息仍在其下
+        console.info(LOG, `已還原重連前的 ${snap.count} 則聊天紀錄`);
+    } catch (e) { console.warn(LOG, '還原聊天紀錄失敗:', e?.message ?? e); }
+    chatSnapshot = null;
+}
+
 // ── 重試節流 ──
 // 症狀：連線不穩時 socket.io 會反覆 connect/disconnect，而我們的 'connect' 監聽每次都把 breakCircuit
 // 重置，於是 RelogRun 立刻又送一次 LoginDoLogin。登入請求擠成一團 → 反而更容易踩到伺服器的限流
@@ -101,6 +150,23 @@ async function relog() {
     setTimeout(() => notify(T('relogin_title'), T('relogin_done')), 500);
 }
 
+/**
+ * 診斷用：在 console 執行 `Liko.LCE.debugRelogSnapshot()`，看斷線快照有沒有拍到。
+ * 判讀：斷線後（回房前）pendingSnapshot 應為 true、snapshotCount 是斷線前的則數；
+ * 若一直是 false，代表斷線沒經過 ServerDisconnect、快照沒觸發（那要換更早的抓法）。
+ */
+export function debugRelogSnapshot() {
+    const log = document.getElementById(CHATLOG_ID);
+    const info = {
+        pendingSnapshot: !!chatSnapshot,
+        snapshotCount: chatSnapshot?.count ?? 0,
+        logExists: !!log,
+        currentMessages: log ? log.querySelectorAll('.ChatMessage').length : null,
+    };
+    console.info(LOG, '重連快照狀態:', info);
+    return info;
+}
+
 let installed = false;
 
 export function installRelogin() {
@@ -136,6 +202,15 @@ export function installRelogin() {
         return next(args);
     });
 
+    // 重連回房 → 若聊天區被重建成空的，把斷線前的快照補回去。
+    // ChatRoomSync 是重連後回到房間的同步點；延遲一下等 BC 把聊天區元素重建好再檢查。
+    // 沒有待還原的快照時（一般進房 / 換房）restoreChatLogIfWiped 直接 no-op。
+    hook('ChatRoomSync', 3, (args, next) => {
+        const ret = next(args);
+        setTimeout(restoreChatLogIfWiped, 400);
+        return ret;
+    });
+
     // ── 異地登入 / 限流的強制斷線處理（移植 WCE automaticReconnect 的 ServerDisconnect hook）──
     // 「被踢下線」的真正原因只會從 ServerDisconnect（force=true）帶進來，不會經過 LoginResponse；
     // 少了這個 hook，就抓不到「在別處登入」，兩邊會不停互相把對方踢掉、輪流搶登。
@@ -143,6 +218,8 @@ export function installRelogin() {
     //   • ErrorRateLimited（被限流）→ 隔 3~6 秒（隨機抖動，避開同時重連）再連一次。
     hook('ServerDisconnect', 6, (args, next) => {
         const [error, force] = args;
+        // 斷線當下聊天 DOM 還完整 —— 趁被 BC 拆掉前先快照（回房時若被清空再補回）。
+        snapshotChatLog();
         // 交回 BC 時把 force 改成 false：避免 BC 直接進入它自己的強制斷線流程，改由我們接管重連。
         const ret = next([error, false]);
         if (force) {

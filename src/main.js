@@ -41,7 +41,7 @@ import { installRegionSwitch } from './features/region-switch.js';
 import { installHiddenArousal } from './features/hidden-arousal.js';
 import { installWardrobe } from './features/wardrobe.js';
 import { installLayeringHide } from './features/layering-hide.js';
-import { installRelogin } from './features/relogin.js';
+import { installRelogin, debugRelogSnapshot } from './features/relogin.js';
 import {
     installExpressions, isExpressionEngineStarted, debugExpressions,
     getExpressionQueue, getExpressionHookOrder, faceComponents,
@@ -150,6 +150,8 @@ if (LCE_ALREADY_LOADED) {
             // → getFaceComponents()（該部位在不在引擎管轄內）
             isExpressionEngineStarted,
             debugExpressions,
+            // 重連掉聊天診斷：斷線後回房前執行，看快照有沒有拍到（見 relogin.js）
+            debugRelogSnapshot,
             getExpressionQueue,
             getExpressionHookOrder,
             getFaceComponents: faceComponents,

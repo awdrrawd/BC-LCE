@@ -131,6 +131,7 @@ export default {
     im_offline: "Offline",
     relogin_title: "Reconnect",
     relogin_done: "Reconnected!",
+    relogin_restored: "Chat history before reconnect restored",
     relogin_error: "ERROR",
     relogin_duplicate: "Signed in from a different location! Refresh the page to re-enable relogin in this tab.",
     wardrobe_page: "Page",

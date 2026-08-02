@@ -131,6 +131,7 @@ export default {
     im_offline: "离线",
     relogin_title: "重新连线",
     relogin_done: "已重新连线！",
+    relogin_restored: "已还原重连前的聊天记录",
     relogin_error: "错误",
     relogin_duplicate: "此账号已在别处登录！请重新整理页面以恢复本分页的自动重连。",
     wardrobe_page: "页",

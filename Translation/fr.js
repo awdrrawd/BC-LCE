@@ -136,6 +136,7 @@ export default {
     im_offline: "Hors ligne",
     relogin_title: "Reconnexion",
     relogin_done: "Reconnecté !",
+    relogin_restored: "Historique de discussion d'avant la reconnexion restauré",
     relogin_error: "ERREUR",
     relogin_duplicate: "Connecté depuis un autre endroit ! Rechargez la page pour réactiver la reconnexion automatique dans cet onglet.",
     wardrobe_page: "Page",
