@@ -111,7 +111,7 @@ export default {
     s_pendingMessages: "Gesendete Nachrichten beim Warten anzeigen",
     sd_pendingMessages: "Zeigt von dir gesendete Nachrichten an, während auf den Server gewartet wird.",
     s_chatScrollFreeze: "Nachrichten-Einfrieren: neue Nachrichten beim Hochscrollen pausieren",
-    sd_chatScrollFreeze: "Wenn du zum Durchsehen des Verlaufs nach oben scrollst, friert die Ansicht ein und puffert eingehende Nachrichten, statt dich von anderen Plugins nach unten ziehen zu lassen; wird gelöst, sobald du wieder nach unten scrollst oder eine Nachricht sendest. Die Funktion selbst ist ein externes Plugin, das nur bei Aktivierung geladen wird. Nach dem Deaktivieren in dieser Sitzung ist zum erneuten Aktivieren ein Seiten-Neuladen nötig.",
+    sd_chatScrollFreeze: "Puffert eingehende Nachrichten, während du den Verlauf durchsiehst; wird gelöst, sobald du wieder nach unten scrollst oder eine Nachricht sendest (zum Deaktivieren die Seite neu laden).",
     s_safewordKeepPermission: "Safeword ändert Interaktionsrechte nicht",
     sd_safewordKeepPermission: "Bei Verwendung eines Safewords wird die Interaktionsberechtigung nicht automatisch auf „nur Whitelist“ eingeschränkt (die ursprüngliche Einstellung „Alle / außer Blacklist“ bleibt unverändert).",
     augment_embed: "(Einbettung)",

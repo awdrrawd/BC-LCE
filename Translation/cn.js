@@ -105,7 +105,7 @@ export default {
     s_pendingMessages: "等待服务器时显示已发送的信息",
     sd_pendingMessages: "等待服务器响应时先显示你已发送的消息。",
     s_chatScrollFreeze: "消息冻结：滚动查看历史时暂停新消息",
-    sd_chatScrollFreeze: "向上滚动查看历史记录时冻结画面、暂存新进消息，不被其他插件把画面拉到底；滚回底部或发送消息即解除。功能本体为外部插件，开启才载入。本次关闭后需刷新页面才能再次启用。",
+    sd_chatScrollFreeze: "查看历史消息时暂存新进消息，滚回底部或发送消息即解除 (停用时需刷新页面)。",
     s_safewordKeepPermission: "安全词不变更互动权限",
     sd_safewordKeepPermission: "使用安全词时，不会自动将互动权限收紧到“白名单以上”（原本设置为“所有人／黑名单除外”将维持不变）。",
     augment_embed: "(嵌入)",
