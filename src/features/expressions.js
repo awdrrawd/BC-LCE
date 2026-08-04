@@ -29,6 +29,7 @@
 
 import modApi from '../modsdk.js';
 import { getFeature } from '../core/feature-settings.js';
+import { deepCopy } from '../core/util.js';
 import { ArousalExpressionStages, EventExpressions, ActivityTriggers } from './expressions-data.js';
 
 const LOG = '🐈‍⬛ [LCE]';
@@ -93,7 +94,6 @@ let notifying = false;       // 引擎正在通知其他模組，此時鉤子必
 
 // ───────────────────────── 小工具 ─────────────────────────
 const newUniqueId = () => (lastUniqueId = (lastUniqueId + 1) % (Number.MAX_SAFE_INTEGER - 1));
-const deepCopy = (o) => { try { return structuredClone(o); } catch { return JSON.parse(JSON.stringify(o)); } };
 const isString = (s) => typeof s === 'string';
 const isCharacter = (c) => !!c && typeof c === 'object' && typeof c.MemberNumber !== 'undefined';
 const mustNum = (v, d = 0) => (typeof v === 'number' && !isNaN(v) ? v : d);

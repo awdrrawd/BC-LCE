@@ -13,6 +13,15 @@
 // 改成：LCE 一律自己管（畫自己的染色檢視、掌控編輯流程），並用 CSS 把 WCE 的富文本層
 // (#bceRichOnlineProfile) 藏起來。WCE（優先權較低、在 next 內層）誤以為仍在檢視、每幀想把輸入框
 // 藏起來，我們在 next 之後（外層、最後跑）再把它顯示回來蓋過去，編輯就不會被 WCE 搶著關掉。
+//
+// ── 編輯時卷軸拖不動的修法（WCE + LCE 同時開）──
+// WCE 每幀在 OnlineProfileRun 內把 DescriptionInput 設 inline display:none，緊接著
+// resizeRichTextArea() 的 ElementPositionFix 觸發一次 reflow —— 那一瞬間 textarea 被算成
+// display:none，原生卷軸的拖曳（pointer capture）就被取消。光靠我們在 next 之後再顯示回來救不了：
+// 拖曳早在 WCE 那次 hidden-reflow 就被打斷了。
+// 解法：編輯狀態掛 body.lce-bio-editing，用 !important 強制 #DescriptionInput 可見。CSS !important
+// 壓得過 WCE 的 inline display:none，textarea 全程沒真的隱藏過，reflow 不再取消拖曳。WCE 只讀自己
+// 的 originalShown 閉包、不讀 DOM，不會被搞混，其餘功能也不受影響。
 // ════════════════════════════════════════════════════════════════════════════
 
 import modApi from '../modsdk.js';
@@ -21,7 +30,8 @@ import { T } from '../core/i18n.js';
 import { positionElement, injectStyle } from '../core/util.js';
 import { processChatAugmentsForLine } from './chat-augments.js';
 
-const LCE_OWNS_CLASS = 'lce-owns-bio';   // 掛在 body：LCE 正在管 BIO 時藏掉 WCE 的富文本層
+const LCE_OWNS_CLASS = 'lce-owns-bio';     // 掛在 body：LCE 正在管 BIO 時藏掉 WCE 的富文本層
+const LCE_EDITING_CLASS = 'lce-bio-editing'; // 掛在 body：編輯狀態，用 !important 強制 textarea 可見（見頂部說明）
 const TA_ID = 'DescriptionInput';        // BC 的 BIO 輸入框
 const RICH_ID = 'lceRichOnlineProfile';  // 我們的唯讀富文本檢視
 const BTN = [90, 60, 90, 90];            // 與 WCE 相同的切換鈕位置
@@ -42,6 +52,11 @@ const anyOn = () => richOn() || protectOn();
 /** LCE 是否正在管 BIO：掛/卸 body class，讓 CSS 藏掉 WCE 的富文本層。 */
 function setOwns(on) {
     document.body?.classList.toggle(LCE_OWNS_CLASS, !!on);
+}
+
+/** 編輯狀態：掛/卸 body class，讓 !important 樣式強制 textarea 可見（擋 WCE 每幀的 display:none）。 */
+function setEditingClass(on) {
+    document.body?.classList.toggle(LCE_EDITING_CLASS, !!on);
 }
 
 // ───────────────────────── 唯讀輸入框（保護） ─────────────────────────
@@ -123,6 +138,7 @@ function disableRich() {
 function enterViewMode() {
     editing = false;
     setOwns(true);
+    setEditingClass(false);
     if (richOn()) enableRich();
     else if (protectOn()) { disableRich(); setReadOnly(true); }
 }
@@ -131,6 +147,7 @@ function enterViewMode() {
 function enterEditMode() {
     editing = true;
     setOwns(true);
+    setEditingClass(true);
     disableRich();
     setReadOnly(false);
 }
@@ -138,6 +155,7 @@ function enterEditMode() {
 function cleanup() {
     editing = false;
     setOwns(false);
+    setEditingClass(false);
     disableRich();
     setReadOnly(false);
 }
@@ -187,7 +205,10 @@ export function installProfile() {
     installed = true;
 
     // LCE 管 BIO 時藏掉 WCE 的富文本層（用 !important 蓋過它的 inline 樣式），只留我們自己那張染色檢視。
-    injectStyle('lce-profile-style', `body.${LCE_OWNS_CLASS} #bceRichOnlineProfile { display: none !important; }`);
+    // 編輯狀態則反過來強制 textarea 可見，壓過 WCE 每幀的 inline display:none（見頂部「卷軸拖不動」說明）。
+    injectStyle('lce-profile-style',
+        `body.${LCE_OWNS_CLASS} #bceRichOnlineProfile { display: none !important; }\n` +
+        `body.${LCE_EDITING_CLASS} #${TA_ID} { display: block !important; }`);
 
     hook('OnlineProfileLoad', 10, (args, next) => {
         const ret = next(args);

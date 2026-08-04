@@ -12,6 +12,7 @@
 
 import { DEFAULT_FEATURE_SETTINGS, defaultValues, globalKeys, clampBar } from './settings-schema.js';
 import { FEATURE_SETTINGS_VERSION, LCE_EXT_KEY, SETTINGS_KEY, SETTING_CHANGED_EVENT } from './constants.js';
+import { readRoot as readGlobalRoot } from './state.js';
 
 // 載入後即為完整設定物件；載入前為空物件（getFeature 會 fallback 到預設）。
 export let fSettings = {};
@@ -29,12 +30,7 @@ function decompress(b) {
 // ───────────────────────── 全域設定（ui / theme）─────────────────────────
 // 寄生在登入頁既有的 lce_settings 底下開一個 features 子物件，不另開 key，
 // 這樣登入頁與遊戲內共用同一份、也只佔一格 localStorage。
-
-/** 讀出整包 lce_settings（登入頁設定 + features 子物件）。 */
-function readGlobalRoot() {
-    try { return JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') || {}; }
-    catch { return {}; }
-}
+// 讀取點共用 state.js 的 readRoot（見上方 import）—— 同一格別讓兩邊各解析各的。
 
 /** 讀取全域功能設定（ui / theme）。登入前也能呼叫。 */
 export function loadGlobalFeatures() {

@@ -12,6 +12,7 @@
 import modApi from '../modsdk.js';
 import { getFeature } from '../core/feature-settings.js';
 import { T } from '../core/i18n.js';
+import { deepCopy } from '../core/util.js';
 import { lceChatNotify } from '../commands/commander.js';
 
 const LOG = '🐈‍⬛ [LCE]';
@@ -21,7 +22,6 @@ function hook(name, priority, fn) {
     catch (e) { console.warn(LOG, 'cheats hook 未掛上:', name, e?.message ?? e); }
 }
 
-const deepCopy = (o) => { try { return structuredClone(o); } catch { return JSON.parse(JSON.stringify(o)); } };
 const mustNum = (v, d = 0) => (typeof v === 'number' && !Number.isNaN(v) ? v : d);
 
 /** 送出一則動作訊息（同 chat.js 的 sendActionText）。 */

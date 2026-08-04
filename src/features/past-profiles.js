@@ -16,7 +16,7 @@ import modApi from '../modsdk.js';
 import { MOD_VER } from '../core/constants.js';
 import { getFeature } from '../core/feature-settings.js';
 import { T } from '../core/i18n.js';
-import { positionElement } from '../core/util.js';
+import { positionElement, deepCopy } from '../core/util.js';
 import { lceChatNotify } from '../commands/commander.js';
 
 const LOG = '🐈‍⬛ [LCE]';
@@ -45,7 +45,6 @@ let inNotes = false;
 let noteUpdatedAt = 0;
 
 const parseJSON = (s) => { try { return s ? JSON.parse(s) : null; } catch { return null; } };
-const deepCopy = (o) => { try { return structuredClone(o); } catch { return JSON.parse(JSON.stringify(o)); } };
 
 function hook(name, priority, fn) {
     try { modApi.hookFunction(name, priority, fn); }

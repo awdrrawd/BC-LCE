@@ -9,14 +9,16 @@
 import { getFeature } from '../core/feature-settings.js';
 import { THEME_COLOR_KEYS } from '../core/settings-schema.js';
 
+// 單一色板 → 兩位 hex：夾到 0~255、四捨五入。三處組 hex（rgb 字串 / HSL / mix）共用同一份。
+const channelHex = (v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0');
+
 // ───────────────── CSS 顏色 → hex（memoize，移植自 Themed _Color.getComputed）─────────────────
 const computedCache = new Map();
 
 function rgbStringToHex(s) {
     const m = String(s).match(/rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/i);
     if (!m) return null;
-    const to2 = (n) => Math.max(0, Math.min(255, Math.round(parseFloat(n)))).toString(16).padStart(2, '0');
-    return `#${to2(m[1])}${to2(m[2])}${to2(m[3])}`;
+    return `#${channelHex(parseFloat(m[1]))}${channelHex(parseFloat(m[2]))}${channelHex(parseFloat(m[3]))}`;
 }
 
 /** 任意 CSS 顏色（名稱/hex/rgb）→ '#rrggbb'；無法解析回傳 null。 */
@@ -73,8 +75,7 @@ function hslToHex(h, s, l) {
     else if (h < 240) [r, g, b] = [0, x, c];
     else if (h < 300) [r, g, b] = [x, 0, c];
     else [r, g, b] = [c, 0, x];
-    const to2 = (v) => Math.max(0, Math.min(255, Math.round((v + m) * 255))).toString(16).padStart(2, '0');
-    return `#${to2(r)}${to2(g)}${to2(b)}`;
+    return `#${channelHex((r + m) * 255)}${channelHex((g + m) * 255)}${channelHex((b + m) * 255)}`;
 }
 
 /** 解析成 hex：先問瀏覽器（可解析色名），失敗時退回原本就是 hex 的情況。 */
@@ -98,8 +99,7 @@ export function mix(a, b, weight = 0.5) {
     const ha = toHex(a), hb = toHex(b);
     if (!ha || !hb) return ha ?? hb ?? a;
     const ra = hexToRgb(ha), rb = hexToRgb(hb);
-    const to2 = (v) => Math.round(v).toString(16).padStart(2, '0');
-    return `#${ra.map((v, i) => to2(v * (1 - weight) + rb[i] * weight)).join('')}`;
+    return `#${ra.map((v, i) => channelHex(v * (1 - weight) + rb[i] * weight)).join('')}`;
 }
 
 /** WCAG 相對亮度判斷（與 BC_ThemeColorCheck 的 isDark 同一套想法）。 */

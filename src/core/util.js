@@ -22,6 +22,12 @@ export function getCanvas() {
     return document.getElementById('MainCanvas') || document.querySelector('canvas');
 }
 
+/** 深拷貝：優先用 structuredClone，環境不支援時退回 JSON 轉換。 */
+export function deepCopy(o) {
+    try { return structuredClone(o); }
+    catch { return JSON.parse(JSON.stringify(o)); }
+}
+
 /** 建立元素小工具 */
 export function mk(tag, cssText, props) {
     const el = document.createElement(tag);

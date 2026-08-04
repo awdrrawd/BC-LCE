@@ -10,7 +10,9 @@ import { DEFAULT_SETTINGS, SETTINGS_KEY } from './constants.js';
 //   features 子物件 → 全域功能設定（core/feature-settings.js 的 ui / theme）
 // 兩邊各存各的，誰都不能整包覆寫，否則會把對方的資料洗掉。
 
-function readRoot() {
+// lce_settings 整包（登入頁設定 + features 子物件）的唯一讀取點。
+// feature-settings.js 也讀同一格，共用這份以免兩邊的解析邏輯日後各改各的。
+export function readRoot() {
     try { return JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') || {}; }
     catch { return {}; }
 }
