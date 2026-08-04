@@ -22,6 +22,7 @@ import { installProfile } from './features/profile.js';
 import { installChat } from './features/chat.js';
 import { installChatAugments } from './features/chat-augments.js';
 import { installChatScrollFreeze } from './features/chat-scroll-freeze.js';
+import { installWhisperTarget } from './features/whisper-target.js';
 import { installPendingMessages } from './features/pending-messages.js';
 import { installFriendPresence } from './features/friend-presence.js';
 import { installLocalMessages } from './features/local-messages.js';
@@ -110,6 +111,7 @@ if (LCE_ALREADY_LOADED) {
                     ['安全詞保留權限', installSafeword],
                     ['聊天嵌入', installChatAugments],
                     ['信息凍結', installChatScrollFreeze],
+                    ['私聊對象自動解除', installWhisperTarget],
                     ['待送訊息', installPendingMessages],
                     ['好友上下線', installFriendPresence],
                     ['本地訊息', installLocalMessages],

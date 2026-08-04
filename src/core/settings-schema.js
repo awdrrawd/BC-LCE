@@ -209,6 +209,10 @@ export const DEFAULT_FEATURE_SETTINGS = {
         label: 's_whisperItalic', desc: 'sd_whisperItalic',
         type: 'checkbox', value: true, category: 'chat', disabled: () => false, sideEffects: logChange('whisperItalic'),
     },
+    whisperTargetReset: {
+        label: 's_whisperTargetReset', desc: 'sd_whisperTargetReset',
+        type: 'checkbox', value: true, category: 'chat', disabled: () => false, sideEffects: logChange('whisperTargetReset'),
+    },
     chatColors: {
         label: 's_chatColors', desc: 'sd_chatColors',
         type: 'checkbox', value: true, category: 'chat', disabled: () => false, sideEffects: logChange('chatColors'),
