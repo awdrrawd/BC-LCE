@@ -301,8 +301,12 @@ function processMessage(element) {
     if (element.dataset.likoProcessed === '1') { element.dataset.lceDone = '1'; return; }  // 避免與其他插件重複處理
     if (element.closest && element.closest('a')) return;
 
+    // 已被任何擴充轉成連結就整串跳過：ACV 會把影片網址換成「不含 scheme 的 <a> + 播放鈕」，
+    // 且比 LCE 早處理（它 hook ChatRoomMessageDisplay，LCE 是 500ms 輪詢），等 LCE 掃到時
+    // 原始 https:// 文字已被換掉——只驗文字會漏，故先偵測既有 <a>。
+    if (element.querySelector('a')) return;
     let html = element.innerHTML;
-    if (/https?:\/\//i.test(html)) return;
+    if (/https?:\/\//i.test(html)) return;   // 純文字網址（沒任何擴充轉連結時）仍靠這行擋
     let changed = false;
 
     // #房間# → 藍色
