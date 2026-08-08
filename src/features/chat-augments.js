@@ -73,6 +73,7 @@ function injectStyle() {
 .lce-rich-textarea{overflow-y:scroll;overflow-x:hidden;overflow-wrap:break-word;white-space:pre-wrap;padding:2px;
   background:var(--lce-element,rgb(244,236,216));color:var(--lce-text,rgb(45,35,27));
   border:2px solid var(--lce-accent,black);}
+.lce-rich-textarea a{color:rgb(55,55,255);}
 #${CHATLOG} a{color:#003f91;cursor:pointer;}
 #${CHATLOG} a:visited{color:#380091;}
 #${CHATLOG}[data-colortheme="dark"] a,#${CHATLOG}[data-colortheme="dark2"] a{color:#a9ceff;}
