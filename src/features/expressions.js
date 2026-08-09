@@ -85,6 +85,13 @@ const manualComponents = {};
 // broadcast[t] = 引擎「上一次真的送給伺服器」的表情值（見 customArousalExpression 末尾的對外校正）。
 // 用來偵測「本地被引擎以外的路徑改掉、但沒補送」造成的 self/others 表情不同步。
 const broadcast = {};
+// lastSentAt[t] = 該部位上次真的送出 ChatRoomCharacterExpressionUpdate 的時間。
+// 引擎每 250ms 會把同一張臉重算重套（部分服裝拓展會每 tick 洗掉底層表情，逼引擎重來），
+// 若每次都送就是 4 發/秒 → 灌爆 socket、斷線重連。這裡加「值變了立刻送、沒變則最多每
+// EXPR_KEEPALIVE_MS 補送一次」的節流：既大幅降頻，又持續餵 echo 服裝拓展的鏡射（它靠這發
+// 訊息把 Eyes 複製到自家群組，全停會讓鏡射的臉凍在預設）。
+const lastSentAt = {};
+const EXPR_KEEPALIVE_MS = 1000;   // 同值最短補送間隔；echo 鏡射在兩次補送間會自行持住
 let lastUniqueId = 0;
 let lastOrgasm = 0, orgasmCount = 0, wasDefault = false;
 let PreviousArousal = null;
@@ -520,18 +527,24 @@ function customArousalExpression() {
     if (Object.keys(desiredExpression).length > 0) {
         dbg('套用表情', JSON.parse(JSON.stringify(desiredExpression)), '佇列長度=', queue.length);
         let refreshScreen = false;
+        const now = Date.now();
         for (const t of Object.keys(desiredExpression)) {
             if (bcxRule('block_changing_emoticon')?.isEnforced && t === 'Emoticon') continue;
-            setExpression(t, desiredExpression[t].Expression ?? null, desiredExpression[t].Color);
-            notifyMods(t, desiredExpression[t].Expression ?? null, desiredExpression[t].Color);
-            ServerSend('ChatRoomCharacterExpressionUpdate', {
-                Name: desiredExpression[t].Expression ?? null, Group: t,
-                Appearance: ServerAppearanceBundle(Player.Appearance),
-            });
-            broadcast[t] = desiredExpression[t].Expression ?? null;   // 記下已同步值，供末尾校正比對（避免重送）
-            if (desiredExpression[t].Duration < 0 && desiredExpression[t].Expression !== 'Closed') {
+            const newVal = desiredExpression[t].Expression ?? null;
+            setExpression(t, newVal, desiredExpression[t].Color);   // 本地一律套用（不受節流影響）
+            notifyMods(t, newVal, desiredExpression[t].Color);
+            // 值變了立刻送；沒變則最多每 EXPR_KEEPALIVE_MS 補送一次（餵 echo 鏡射，避免每秒 4 發）。
+            if (broadcast[t] !== newVal || now - (lastSentAt[t] || 0) >= EXPR_KEEPALIVE_MS) {
+                ServerSend('ChatRoomCharacterExpressionUpdate', {
+                    Name: newVal, Group: t,
+                    Appearance: ServerAppearanceBundle(Player.Appearance),
+                });
+                broadcast[t] = newVal;   // 記下已同步值，供末尾校正比對（避免重送）
+                lastSentAt[t] = now;
+            }
+            if (desiredExpression[t].Duration < 0 && newVal !== 'Closed') {
                 refreshScreen = true;
-                Player.ActiveExpression?.setWithoutReload?.(t, desiredExpression[t].Expression);
+                Player.ActiveExpression?.setWithoutReload?.(t, newVal);
             }
         }
         if (refreshScreen && DialogSelfMenuSelected === 'Expression' && DialogSelfMenuMapping.Expression.C.IsPlayer()) {
