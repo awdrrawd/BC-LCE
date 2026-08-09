@@ -474,6 +474,9 @@ function openLanguagePicker(key, def) {
         background: 'var(--lce-main,#222)', color: 'var(--lce-text,#eee)',
         border: '2px solid var(--lce-login-accent,#7214ff)', borderRadius: '8px',
         overflow: 'hidden', boxShadow: '0 8px 30px rgba(0,0,0,0.6)',
+        // 國旗:與登入頁同招,白嫖 BC country-flag polyfill 注入的 "Twemoji Country Flags"
+        // @font-face;heading 與每個語言 row 都繼承此棧,國旗碼點用它、文字 fallback 到後面。
+        fontFamily: '"Twemoji Country Flags",-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC",sans-serif',
     });
 
     const heading = document.createElement('div');
