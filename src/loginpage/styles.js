@@ -172,7 +172,12 @@ export function injectLoginStyles() {
 /* ── 語言下拉 ── */
 .lce-select {
     pointer-events:auto; cursor:pointer;
-    color:#fff; font-family:inherit; font-weight:700;
+    color:#fff; font-weight:700;
+    /* 國旗:白嫖 BC 的 country-flag polyfill 全域注入的 "Twemoji Country Flags" @font-face
+       （只在畫不出國旗的平台=Windows 才會被 BC 注入，對 LCE 零額外體積/請求）；一般文字
+       fallback 到後面原本的字體棧。手機/Mac 上該 family 不存在會自動跳過，改用系統內建的
+       國旗字體，兩邊都正確。 */
+    font-family:"Twemoji Country Flags",-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans TC',sans-serif;
     background:rgba(0,0,0,0.5); border:1px solid var(--lce-login-accent,#7214ff); border-radius:12px;
     padding:0 12px; outline:none; appearance:auto; -webkit-appearance:auto;
 }
