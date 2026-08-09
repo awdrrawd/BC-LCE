@@ -40,8 +40,10 @@ export function installLoginPage() {
 
     unhooks.push(modApi.hookFunction('LoginLoad', 0, (args, next) => {
         const r = next(args);
-        // 交給 checkScene 判斷（含直向 + verticalLogin），避免這裡與它的條件各寫一份
-        setTimeout(checkScene, 50);
+        // LoginLoad 後 CurrentScreen 已是 'Login'，立刻 checkScene 藏原生畫面、蓋上 LCE。
+        // 原本的 setTimeout(…, 50) 那 50ms 內原生登入畫面全程可見，是「閃一下」主因之一。
+        // 交給 checkScene 判斷（含直向 + verticalLogin），避免這裡與它的條件各寫一份。
+        checkScene();
         return r;
     }));
 
@@ -60,6 +62,11 @@ export function installLoginPage() {
     orientHandler = () => setTimeout(handleResize, 250);
     window.addEventListener('resize', resizeHandler);
     window.addEventListener('orientationchange', orientHandler);
+
+    // LCE 常由 PCM 非同步 import，安裝完成時 BC 可能已停在登入畫面（LoginLoad 已觸發過、
+    // 上面的 hook 抓不到首次）。主動補檢查一次：若此刻已在 Login 就立刻蓋上 LCE，不必等
+    // 下一幀 DrawProcess。若 BC 核心還沒就緒（CurrentScreen 未定）則為 no-op，交給 hook。
+    checkScene();
 }
 
 /** 熱移除整個登入頁：解除所有 hook、移除 DOM 與監聽（快照仍會執行） */
