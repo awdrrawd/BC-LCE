@@ -83,6 +83,4 @@ export function teardownLoginPage() {
     if (orientHandler) window.removeEventListener('orientationchange', orientHandler);
     clearTimeout(resizeTimer);
     resizeHandler = orientHandler = null;
-
-    console.log('🐈‍⬛ [LCE] 登入介面已於登入後熱移除（快照仍會執行）');
 }
