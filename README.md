@@ -6,6 +6,10 @@
 >
 > **徽章 / `/versions` 走同一條頻道**：頭頂徽章與版本查詢用的打招呼訊息，與 WCE 同走 `BCEMsg` 這條 Hidden 頻道，額外夾一個 `lce` 標記讓兩邊能區分 LCE 與 WCE。因此 WCE 使用者也查得到 LCE 的人（會以 WCE 徽章 + `Other Addons` 清單呈現）；LCE 之間則正確顯示 LCE 徽章。詳見 [`src/features/hello.js`](src/features/hello.js) 開頭說明。
 
+## 文件
+
+- [ExtensionSettings 與 AccountUpdate 處理說明](docs/extension-settings-account-update.md)
+
 ## 功能總覽
 
 設定頁（遊戲偏好 → 擴充組件，或 `/lcesetting`）分成八類：
