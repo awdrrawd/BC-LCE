@@ -402,6 +402,6 @@ export default {
     sd_regionSwitch: "Ajoute un bouton dans la barre de navigation des salles de la recherche de chat pour basculer entre la région mixte et la région féminine et relancer la recherche en un clic.",
     regionSwitch_toMixed: "Passer à la région mixte",
     regionSwitch_toFemale: "Passer à la région féminine",
-    s_hideArousalMeter: "Masquer la jauge d'excitation",
+    s_hideArousalMeter: "Masquer la jauge d'excitation dans la garde-robe",
     sd_hideArousalMeter: "Masque la jauge d'excitation sur les écrans de garde-robe, de profil et de dialogue de personnage, ainsi que tout HUD ajouté par d'autres mods (ex. sphères d'état d'animal).",
 };

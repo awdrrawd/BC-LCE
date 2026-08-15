@@ -383,6 +383,6 @@ export default {
     sd_regionSwitch: "Adds a button to the room navigation bar on the chat search screen to toggle between the Mixed and Female-only regions and re-search in one click.",
     regionSwitch_toMixed: "Switch to Mixed region",
     regionSwitch_toFemale: "Switch to Female-only region",
-    s_hideArousalMeter: "Hide arousal meter",
+    s_hideArousalMeter: "Hide Arousal Meter in Wardrobe",
     sd_hideArousalMeter: "Hides the arousal meter on the wardrobe, profile and character-dialog screens, along with any add-on HUD other mods attach to it (e.g. pet status orbs).",
 };

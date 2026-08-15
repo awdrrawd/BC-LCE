@@ -383,6 +383,6 @@ export default {
     sd_regionSwitch: "在聊天搜索界面的房间导航栏加一颗按钮，一键切换混合区与女性区并重新搜索。",
     regionSwitch_toMixed: "切换到混合区",
     regionSwitch_toFemale: "切换到女性区",
-    s_hideArousalMeter: "隐藏兴奋条",
+    s_hideArousalMeter: "隐藏衣柜兴奋条",
     sd_hideArousalMeter: "在衣橱、个人档案与对话框界面隐藏兴奋条，并一并隐藏其他模组挂在其上的附加 HUD（例如宠物状态球）。",
 };

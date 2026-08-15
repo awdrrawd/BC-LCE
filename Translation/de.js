@@ -403,6 +403,6 @@ export default {
     sd_regionSwitch: "Fügt in der Raum-Navigationsleiste der Chat-Suche eine Schaltfläche hinzu, um mit einem Klick zwischen gemischter und rein weiblicher Region zu wechseln und neu zu suchen.",
     regionSwitch_toMixed: "Zur gemischten Region wechseln",
     regionSwitch_toFemale: "Zur weiblichen Region wechseln",
-    s_hideArousalMeter: "Erregungsanzeige ausblenden",
+    s_hideArousalMeter: "Erregungsanzeige in der Garderobe ausblenden",
     sd_hideArousalMeter: "Blendet die Erregungsanzeige in Garderobe, Profil und Charakterdialog aus, samt jeglicher Zusatz-HUD, die andere Mods daran anhängen (z. B. Haustier-Statuskugeln).",
 };
