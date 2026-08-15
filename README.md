@@ -102,4 +102,4 @@ LCE.isThemeEnabled()                // 同 Theme.enabled
 npm run build
 ```
 產物在 `dist/assets/main.js`，由 `loader.user.js` 以 dynamic import 載入。
-`scripts/sync-version.mjs` 會在 build / dev 前把 `package.json` 的版本同步到兩個 loader 的 `@version`。
+loader 採獨立版本，只有載入機制變更時才手動更新；build / dev 不會跟隨 `package.json` 改寫 loader 的 `@version`。
