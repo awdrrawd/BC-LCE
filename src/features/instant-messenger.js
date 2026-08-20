@@ -308,7 +308,7 @@ function onSearch() {
 }
 
 function onInputKey(e) {
-    if (e.key !== 'Enter' || e.shiftKey) return;
+    if (e.key !== 'Enter' || e.shiftKey || e.isComposing) return;
     e.preventDefault();
     let text = messageInput.value;
     if (!text.trim()) return;

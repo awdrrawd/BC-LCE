@@ -142,10 +142,10 @@ export function buildUI() {
 
 function bindEvents() {
     document.getElementById('lce-input-name').addEventListener('keydown', e => {
-        if (e.key === 'Enter') document.getElementById('lce-input-pass').focus();
+        if (e.key === 'Enter' && !e.isComposing) document.getElementById('lce-input-pass').focus();
     });
     document.getElementById('lce-input-pass').addEventListener('keydown', e => {
-        if (e.key === 'Enter') doLogin();
+        if (e.key === 'Enter' && !e.isComposing) doLogin();
     });
     document.getElementById('lce-btn-login').addEventListener('click', doLogin);
     // 帳號卡連點兩下 → 直接登入（以事件傳遞，避免與 account-carousel 循環相依）

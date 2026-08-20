@@ -110,7 +110,7 @@ function crShowFakeInput(realInput) {
         close();
     });
     ta.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendBtn.click(); }
+        if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); sendBtn.click(); }
     });
     overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
 

@@ -1,6 +1,6 @@
 // ════════════════════════════════════════════════════════════════════════════
 // 雜項行為 hook（讀設定即時生效，無需重載）
-//   數字鍵盤 Enter＝送出（內建，無設定開關），行為與普通 Enter 一致
+//   Enter／數字鍵盤 Enter＝送出（沿用 BC 的按鍵綁定）
 //   confirmLeave   ：離開遊戲（關閉/重整分頁）時跳出確認
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -13,13 +13,8 @@ export function installBehaviors() {
     if (installed) return;
     installed = true;
 
-    // 數字 Enter 送出：在 BC 自己的 ChatRoomKeyDown 流程裡處理，這樣與普通 Enter 走同一條
-    // 路徑、同樣尊重中文（IME）組字狀態。
-    //   - 普通 Enter 的 event.key 也是 "Enter"，兩者僅差在 event.code；
-    //     BC 依 code 判斷，數字 Enter（NumpadEnter）不會自己送出，這裡補上。
-    //   - e.isComposing 為真（正在組字，例如注音/拼音尚未上屏）時不送出，
-    //     與普通 Enter 一致：第一次 Enter 結束組字、需再按一次才送出。
-    //   - 回傳 true 表示已處理、消費此事件，避免 BC 原生流程重覆送出。
+    // BC 仍負責送出功能的按鍵設定；此處只補齊 Enter 與 NumpadEnter 的等價判定。
+    // 使用者改綁成其他按鍵或解除綁定後，不會被這個相容處理覆蓋。
     (function waitHook(n = 240) {
         if (typeof ChatRoomKeyDown !== 'function') {
             if (n <= 0) return;
@@ -27,15 +22,26 @@ export function installBehaviors() {
             return;
         }
         modApi.hookFunction('ChatRoomKeyDown', 10, (args, next) => {
+            const handled = next(args);
+            if (handled) return handled;
+
             const e = args[0];
-            if (e && e.code === 'NumpadEnter' && !e.shiftKey && !e.isComposing) {
-                const input = document.getElementById('InputChat');
-                if (input && document.activeElement === input) {
-                    if (typeof ChatRoomSendChat === 'function') ChatRoomSendChat();
-                    return true;
-                }
-            }
-            return next(args);
+            if (!e || e.isComposing || (e.code !== 'Enter' && e.code !== 'NumpadEnter')) return handled;
+
+            const keyManager = globalThis.KeyManager;
+            const binding = keyManager?.getKeybinding?.('chat_send_chat');
+            const configuredKey = binding?.keyCombo?.key;
+            if (configuredKey !== 'Enter' && configuredKey !== 'NumpadEnter') return handled;
+
+            const expectedModifiers = binding.keyCombo.modifiers ?? new Set();
+            const actualModifiers = keyManager.getModifiers(e);
+            if (expectedModifiers.size !== actualModifiers.size
+                || [...expectedModifiers].some((modifier) => !actualModifiers.has(modifier))) return handled;
+
+            const contextsActive = binding.contextIds.every((id) => keyManager.getContext(id)?.prerequisite(e) === true);
+            if (!contextsActive) return handled;
+
+            return binding.action(e) || true;
         });
     })();
 
