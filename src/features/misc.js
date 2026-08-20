@@ -1,7 +1,6 @@
 // ════════════════════════════════════════════════════════════════════════════
 // 雜項
-//   插件清單共享            對齊原廠 RespondRemoteModListQueries（見 hello.js shouldShareAddons），
-//                          不再有 LCE 專屬開關；清單有變動時重報一次名，/versions 才看得到
+//   插件版本辨識            LCE Hello 只交換版本與能力；完整插件清單交由 BC 原廠遠端查詢
 //   ghostNewUsers            自動 ghost + 黑名單「異常新」的帳號（防惡意機器人）
 //   customContentDomainCheck 房間自訂背景/音樂來自第三方網域時先確認再載入
 // （confirmLeave 在 behaviors.js；relogin 見說明）
@@ -15,7 +14,6 @@ import { T } from '../core/i18n.js';
 // 與聊天嵌入共用同一份「本次連線已授權來源」名單（WCE 也是共用同一個 map），
 // 在聊天嵌入授權過的來源，這裡就不會再問一次。
 import { sessionCustomOrigins } from './chat-augments.js';
-import { sendLceHello, shouldShareAddons } from './hello.js';
 
 const LOG = '🐈‍⬛ [LCE]';
 const NEW_ACCOUNT_MS = 30000;              // 建立不到 30 秒就進房 = 異常新（同 WCE）
@@ -76,22 +74,9 @@ export function installMisc() {
         return next(args);
     });
 
-    // ── 共享插件清單 ──
+    // ── 本地版本標記 ──
     // 先把自己的欄位填好，/versions 看自己時才列得出來（本地欄位，別人看不到）。
     if (typeof Player !== 'undefined' && Player) Player.LCE = MOD_VER;
-
-    // 清單有變動時重新報一次名。只寫本地欄位是不夠的 —— 別人的 /versions 要靠
-    // LCEMsg 廣播（features/hello.js）才填得到。走的是 LCE 自己的頻道，
-    // 不是 WCE 的 BCEMsg，所以不會被別人的 WCE 認成 WCE 使用者。
-    setInterval(() => {
-        try {
-            if (!(typeof ServerIsConnected !== 'undefined' && ServerIsConnected && ServerPlayerIsInChatRoom())) return;
-            const loaded = window.bcModSdk?.getModsInfo?.() ?? [];
-            if (JSON.stringify(loaded) === JSON.stringify(Player.LCEOtherAddons)) return;
-            Player.LCEOtherAddons = loaded;
-            if (shouldShareAddons()) sendLceHello(null, false);
-        } catch { /* ignore */ }
-    }, 5000);
 
     // ── 異常新帳號自動 ghost + 黑名單 ──
     const onMemberJoin = (data) => {

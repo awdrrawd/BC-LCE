@@ -130,7 +130,7 @@ function setExpression(t, n, color) {
         if (a.Asset.Group.Name !== t) continue;
         if (!a.Property) a.Property = {};
         a.Property.Expression = n;
-        if (color) a.Color = color;
+        if (color) a.Color = Array.isArray(color) ? color : [color];
         break;
     }
 }

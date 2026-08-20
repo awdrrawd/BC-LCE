@@ -15,6 +15,7 @@ import { openDB } from 'idb';
 import modApi from '../modsdk.js';
 import { MOD_VER } from '../core/constants.js';
 import { getFeature } from '../core/feature-settings.js';
+import { createPositionableButton, exposeButton, LCE_API } from '../core/public-api.js';
 import { T } from '../core/i18n.js';
 import { positionElement, deepCopy } from '../core/util.js';
 import { lceChatNotify } from '../commands/commander.js';
@@ -35,7 +36,12 @@ const WPS_OPEN_MARK = 'LIKOSHARE_OPEN';
 const WPS_CHUNK_SIZE = 800;
 const wpsIncoming = new Map();   // shareId → { total, chunks[] }：組裝中的分塊
 
-const NOTES_BTN = [1520, 60, 90, 90];
+const {
+    api: notesButtonApi,
+    getPosition: getNotesButtonPosition,
+    isHidden: isNotesButtonHidden,
+    isVisualHidden: isNotesButtonVisualHidden,
+} = createPositionableButton([1520, 60, 90, 90]);
 const SAVE_BTN = [1720, 60, 90, 90];
 const CANCEL_BTN = [1820, 60, 90, 90];
 
@@ -43,6 +49,28 @@ let db = null;
 let noteInput = null;
 let inNotes = false;
 let noteUpdatedAt = 0;
+
+async function getNote(memberNumber) {
+    if (typeof memberNumber !== 'number' || !Number.isFinite(memberNumber)) {
+        throw new TypeError('Liko.LCE.pastProfiles.get: memberNumber must be a finite number');
+    }
+    const note = await db.get('notes', memberNumber);
+    return isNote(note) ? note : undefined;
+}
+
+async function setNote(memberNumber, note) {
+    if (typeof memberNumber !== 'number' || !Number.isFinite(memberNumber)) {
+        throw new TypeError('Liko.LCE.pastProfiles.set: memberNumber must be a finite number');
+    }
+    if (typeof note !== 'string') throw new TypeError('Liko.LCE.pastProfiles.set: note must be a string');
+    await quotaSafetyCheck();
+    const updatedAt = Date.now();
+    await db.put('notes', { memberNumber, note, updatedAt });
+    if (inNotes && InformationSheetSelection?.MemberNumber === memberNumber) {
+        noteInput.value = note;
+        noteUpdatedAt = updatedAt;
+    }
+}
 
 const parseJSON = (s) => { try { return s ? JSON.parse(s) : null; } catch { return null; } };
 
@@ -339,6 +367,9 @@ export async function installPastProfiles() {
         return;
     }
 
+    exposeButton('pastProfiles', { ...notesButtonApi, isEnabled: () => !!getFeature('pastProfiles') });
+    LCE_API.pastProfiles = { get: getNote, set: setNote };
+
     if (typeof ElementCreateTextArea === 'function') ElementCreateTextArea(NOTE_ID);
     noteInput = document.getElementById(NOTE_ID);
     if (noteInput) {
@@ -397,7 +428,9 @@ export async function installPastProfiles() {
             DrawButton(...CANCEL_BTN, '', 'White', 'Icons/Cancel.png', TextGet('LeaveNoSave'));
             return null;   // 不呼叫 next：備註模式下不畫原本的個資頁
         }
-        DrawButton(...NOTES_BTN, '', 'White', 'Icons/Notifications.png', T('notes_button'));
+        if (!isNotesButtonHidden() && !isNotesButtonVisualHidden()) {
+            DrawButton(...getNotesButtonPosition(), '', 'White', 'Icons/Notifications.png', T('notes_button'));
+        }
         return next(args);
     });
 
@@ -417,7 +450,7 @@ export async function installPastProfiles() {
             }
             return null;
         }
-        if (MouseIn(...NOTES_BTN)) { showNoteInput(); return null; }
+        if (!isNotesButtonHidden() && MouseIn(...getNotesButtonPosition())) { showNoteInput(); return null; }
         return next(args);
     });
 

@@ -14,12 +14,19 @@
 import { openDB } from 'idb';
 import modApi from '../modsdk.js';
 import { getFeature } from '../core/feature-settings.js';
+import { createPositionableButton, exposeButton } from '../core/public-api.js';
 import { T } from '../core/i18n.js';
 import { processChatAugmentsForLine } from './chat-augments.js';
 
 const LOG = '🐈‍⬛ [LCE]';
 const META = '';                     // BcUtil/WCE 的中繼資料標記
-const BTN = [70, 905, 60, 60];             // 左下角（與 WCE 同位置）
+const DEFAULT_Z_INDEX = 10;
+const {
+    api: messengerButtonApi,
+    getPosition: getButtonPosition,
+    isHidden: isButtonHidden,
+    isVisualHidden: isButtonVisualHidden,
+} = createPositionableButton([70, 905, 60, 60]);
 const STYLE_ID = 'lce-im-style';
 const DB_NAME = 'lce-im';
 const DB_VER = 1;
@@ -260,7 +267,7 @@ function addMessage(friendId, sent, beep, skipHistory, createdAt) {
             divider.classList.add('lce-msg-divider');
             friend.history.appendChild(divider);
         }
-        if (container.classList.contains('lce-hidden')) unreadSinceOpened++;
+        if (container.classList.contains('lce-hidden') && !isButtonHidden() && !isButtonVisualHidden()) unreadSinceOpened++;
     }
 
     processChatAugmentsForLine(el, scrolledToEnd ? scrollToBottom : () => null);
@@ -340,6 +347,22 @@ export async function installInstantMessenger() {
     buildDom();
     await openHistoryDB();
 
+    exposeButton('Messenger', {
+        ...messengerButtonApi,
+        isEnabled: imOn,
+        getZIndex: () => {
+            const zIndex = Number(container.style.zIndex || getComputedStyle(container).zIndex);
+            return Number.isFinite(zIndex) ? zIndex : DEFAULT_Z_INDEX;
+        },
+        setZIndex: (zIndex) => {
+            if (typeof zIndex !== 'number' || !Number.isFinite(zIndex)) {
+                throw new TypeError('setZIndex: zIndex must be a finite number');
+            }
+            container.style.zIndex = String(zIndex);
+        },
+        resetZIndex: () => { container.style.zIndex = String(DEFAULT_Z_INDEX); },
+    });
+
     // 好友線上狀態
     const onQueryResult = (data) => {
         if (!data || data.Query !== 'OnlineFriends' || !Array.isArray(data.Result) || !imOn()) return;
@@ -395,14 +418,14 @@ export async function installInstantMessenger() {
     // 左下角按鈕：有未讀變紅
     hook('DrawProcess', 10, (args, next) => {
         const ret = next(args);
-        if (imOn()) {
-            DrawButton(...BTN, '', unreadSinceOpened ? 'Red' : 'White', 'Icons/Small/Chat.png', T('im_title'), false);
+        if (imOn() && !isButtonHidden() && !isButtonVisualHidden()) {
+            DrawButton(...getButtonPosition(), '', unreadSinceOpened ? 'Red' : 'White', 'Icons/Small/Chat.png', T('im_title'), false);
         }
         return ret;
     });
 
     hook('CommonClick', 20, (args, next) => {
-        if (imOn() && MouseIn(...BTN)) {
+        if (imOn() && !isButtonHidden() && MouseIn(...getButtonPosition())) {
             if (!container.classList.contains('lce-hidden')) { hideIM(); return null; }
             (async () => {
                 if (!loaded) await loadIM();

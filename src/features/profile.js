@@ -26,6 +26,7 @@
 
 import modApi from '../modsdk.js';
 import { getFeature } from '../core/feature-settings.js';
+import { createPositionableButton, exposeButton } from '../core/public-api.js';
 import { T } from '../core/i18n.js';
 import { positionElement, injectStyle } from '../core/util.js';
 import { processChatAugmentsForLine } from './chat-augments.js';
@@ -34,7 +35,12 @@ const LCE_OWNS_CLASS = 'lce-owns-bio';     // 掛在 body：LCE 正在管 BIO �
 const LCE_EDITING_CLASS = 'lce-bio-editing'; // 掛在 body：編輯狀態，用 !important 強制 textarea 可見（見頂部說明）
 const TA_ID = 'DescriptionInput';        // BC 的 BIO 輸入框
 const RICH_ID = 'lceRichOnlineProfile';  // 我們的唯讀富文本檢視
-const BTN = [90, 60, 90, 90];            // 與 WCE 相同的切換鈕位置
+const {
+    api: editProfileButtonApi,
+    getPosition: getEditProfileButtonPosition,
+    isHidden: isEditProfileButtonHidden,
+    isVisualHidden: isEditProfileButtonVisualHidden,
+} = createPositionableButton([90, 60, 90, 90]);
 const SAVE_BTN = [1720, 60, 90, 90];     // BC 的「接受並儲存」鈕
 const CANCEL_BTN = [1820, 60, 90, 90];   // BC 的「取消/離開」鈕
 
@@ -203,6 +209,7 @@ let installed = false;
 export function installProfile() {
     if (installed) return;
     installed = true;
+    exposeButton('EditProfile', { ...editProfileButtonApi, isEnabled: anyOn });
 
     // LCE 管 BIO 時藏掉 WCE 的富文本層（用 !important 蓋過它的 inline 樣式），只留我們自己那張染色檢視。
     // 編輯狀態則反過來強制 textarea 可見，壓過 WCE 每幀的 inline display:none（見頂部「卷軸拖不動」說明）。
@@ -221,7 +228,9 @@ export function installProfile() {
         const faked = fakeViewButtons();
         try {
             if (!anyOn()) return next(args);
-            DrawButton(...BTN, '', 'White', 'Icons/Crafting.png', T(editing ? 'profile_edit_on' : 'profile_edit_off'));
+            if (!isEditProfileButtonHidden() && !isEditProfileButtonVisualHidden()) {
+                DrawButton(...getEditProfileButtonPosition(), '', 'White', 'Icons/Crafting.png', T(editing ? 'profile_edit_on' : 'profile_edit_off'));
+            }
             const ret = next(args);
             // BC/WCE 每幀可能重建或藏起元素，這裡（最外層、最後跑）把狀態蓋回來：
             try {
@@ -243,7 +252,7 @@ export function installProfile() {
         try {
             if (!anyOn()) return next(args);
             // 編輯鈕：切換編輯／檢視
-            if (MouseIn(...BTN)) {
+            if (!isEditProfileButtonHidden() && MouseIn(...getEditProfileButtonPosition())) {
                 if (editing) enterViewMode(); else enterEditMode();
                 return true;
             }

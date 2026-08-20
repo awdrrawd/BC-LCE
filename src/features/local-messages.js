@@ -55,7 +55,7 @@ function injectStyle() {
             text-decoration: underline;
         }
 
-        /* 指令面板（/lce、/lcesetlist）的可點文字。
+        /* 指令面板（/lce）的可點文字。
            不畫按鈕外框 —— 跟 beep 連結一樣用染色文字表示可點，融進聊天訊息裡。 */
         .ChatMessage .lce-cmd-btn {
             display: inline;
@@ -82,7 +82,7 @@ function injectStyle() {
             gap: 18px;
         }
 
-        /* 很長的訊息（versions、lcesetlist、profiles…）末端的工具列：收合 ▼／刪除 ✖，
+        /* 很長的訊息（versions、profiles…）末端的工具列：收合 ▼／刪除 ✖，
            靠右對齊、融進訊息、hover 才明顯。 */
         .ChatMessage .lce-notify-tools {
             display: flex;

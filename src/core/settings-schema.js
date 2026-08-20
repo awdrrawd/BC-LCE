@@ -25,9 +25,9 @@
 // 跑一遍所有 sideEffects 並存檔。在 init 時改動其他設定 = 每次登入都覆寫使用者的選擇。
 // ════════════════════════════════════════════════════════════════════════════
 
-// 8 大分類（順序即設定頁清單順序）
+// 設定頁分類（順序即設定頁清單順序）
 export const CATEGORIES = [
-    'chat', 'theme', 'ui', 'immersion', 'wardrobe', 'performance', 'cheats', 'misc',
+    'chat', 'theme', 'ui', 'immersion', 'wardrobe', 'performance', 'cheats', 'storage', 'misc',
 ];
 
 // 主題所有顏色鍵（供紀錄快照 / 恢復預設 / 染色引擎使用）

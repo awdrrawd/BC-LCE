@@ -25,7 +25,7 @@
 | **作弊 & 反作弊** | 反作弊（依關係設門檻）、UWALL、開鎖提示、綑綁時可分層、自動掙扎… |
 | **雜項** | 斷線自動重連（含異地登入判斷）、離開確認、分享插件清單、第三方內容網域確認… |
 
-指令：`/lce`（總覽）、`/lcesetting`（開設定頁）、`/lcesetlist`（列出/刪除 `ExtensionSettings`）、`/profiles`、`/versions` 等。
+指令：`/lce`（總覽）、`/lcesetting`（開設定頁）、`/profiles`、`/versions` 等。`ExtensionSettings` 的容量、備份與刪除已移至偏好設定中的「容量管理」。
 
 ## 專案結構
 
@@ -73,6 +73,22 @@ LCE.Theme.Main / .Accent / .Text …  // hex，或未啟用時 null（另有 Ele
 LCE.Theme.isDark / .palette / .special
 LCE.isThemeEnabled()                // 同 Theme.enabled
 // 向後相容（等同 Theme.*、未啟用時同樣回 null）：getMainColor/getAccentColor/getTextColor/getPalette/isDarkTheme
+
+// 畫布按鈕（完整路徑皆以 window.Liko.LCE 開頭）
+LCE.Button.Messenger
+LCE.Button.EditProfile
+LCE.Button.pastProfiles
+// 共用方法：getPosition/setPosition/resetPosition、hide/show/isHidden、
+// hideVisual/showVisual/isVisualHidden，以及 isEnabled。
+
+// 即時通訊視窗另有 z-index 控制
+LCE.Button.Messenger.getZIndex()
+LCE.Button.Messenger.setZIndex(100)
+LCE.Button.Messenger.resetZIndex()
+
+// Past Profiles 個人備註
+await LCE.pastProfiles.get(memberNumber)
+await LCE.pastProfiles.set(memberNumber, note)
 
 // 表情引擎診斷、登入頁熱移除等，見 main.js 的 Object.assign 區塊
 ```

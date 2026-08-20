@@ -7,7 +7,6 @@
 
 import modApi from '../modsdk.js';
 import { MOD_VER, LCE_EXT_KEY } from '../core/constants.js';
-import { byteSize } from '../core/util.js';
 import { getFeature } from '../core/feature-settings.js';
 import { isExpressionEngineStarted } from '../features/expressions.js';
 import { LOCAL_MARKER } from '../features/local-messages.js';
@@ -29,7 +28,7 @@ export function lceChatNotify(node, opts) {
     if (typeof node === 'string') div.appendChild(document.createTextNode(node));
     else if (Array.isArray(node)) div.append(...node);
     else div.appendChild(node);
-    // 很長的訊息（versions、lcesetlist、profiles…）右下角補工具列，讓使用者自己收合/刪掉、免得洗版。
+    // 很長的訊息（versions、profiles…）右下角補工具列，讓使用者自己收合/刪掉、免得洗版。
     //   closable    → ✖ 刪除整則
     //   collapsible → ▼/▲ 收合本體，只留標記為 .lce-collapse-keep 的元素（通常是標題）與工具列
     if (opts?.closable || opts?.collapsible) {
@@ -150,111 +149,6 @@ function openSettings() {
     } catch (e) {
         console.warn(LOG, '開啟設定頁失敗:', e);
         lceChatNotify('開啟設定頁失敗，請改從偏好設定 → 擴充組件進入。');
-    }
-}
-
-// ───────────────── ExtensionSettings 維護（伺服器端存檔空間）─────────────────
-
-const extSettings = () => (typeof Player !== 'undefined' && Player?.ExtensionSettings) || null;
-
-/** 依大小排序的 [鍵名, UTF-8 位元組]。已被清成 null/空字串的鍵（刪除後留下的 null 佔位）不列出。
- *  用 byteSize（實際送出位元組）而非 str.length，才會跟伺服器/「巨大訊息報告」的數字對得上。 */
-function extRows(ext) {
-    return Object.entries(ext)
-        .filter(([, v]) => v != null && v !== '')
-        .map(([k, v]) => [k, byteSize(v)])
-        .sort((a, b) => b[1] - a[1]);
-}
-
-/** 聊天室裡的小按鈕。chat-room-div 本身就是 DOM 容器，不需要另外開彈窗。 */
-function chatButton(label, onClick, cls = 'lce-cmd-btn') {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = cls;
-    b.textContent = label;
-    b.onclick = (e) => { e.preventDefault(); onClick(b); };
-    return b;
-}
-
-/** 列出目前帳號上所有 ExtensionSettings 及其大小，每列附一顆刪除鈕。 */
-function listExtSettings() {
-    const ext = extSettings();
-    if (!ext) { lceChatNotify('讀不到 Player.ExtensionSettings。'); return; }
-    const rows = extRows(ext);
-    if (!rows.length) { lceChatNotify('目前沒有任何 ExtensionSettings。'); return; }
-
-    const total = rows.reduce((s, [, n]) => s + n, 0);
-    const wrap = document.createElement('div');
-
-    const head = document.createElement('div');
-    head.textContent = `ExtensionSettings（共 ${rows.length} 筆，合計 ${(total / 1024).toFixed(1)}KB）：`;
-    wrap.appendChild(head);
-
-    for (const [key, n] of rows) {
-        const row = document.createElement('div');
-        row.className = 'lce-setlist-row';
-        row.appendChild(chatButton('✖', () => confirmDelete(key), 'lce-cmd-btn lce-del-btn'));
-        const text = document.createElement('span');
-        text.textContent = ` ${key} — ${(n / 1024).toFixed(1)}KB`;
-        row.appendChild(text);
-        wrap.appendChild(row);
-    }
-    lceChatNotify(wrap, { closable: true });
-}
-
-/**
- * 刪除指定的 ExtensionSettings。
- * 這會動到「其他插件」存在伺服器上的資料且無法復原，所以一律要求二次確認 ——
- * 確認本身也直接輸出成一則本地訊息，用按鈕控制，不開彈窗。
- */
-function confirmDelete(key) {
-    const ext = extSettings();
-    if (!ext) { lceChatNotify('讀不到 Player.ExtensionSettings。'); return; }
-    if (!(key in ext)) { lceChatNotify(`"${key}" 已經不存在了，請重新執行 /lcesetlist。`); return; }
-
-    const size = (byteSize(ext[key]) / 1024).toFixed(1);   // 用 UTF-8 位元組，與清單/伺服器一致
-    const wrap = document.createElement('div');
-
-    const q = document.createElement('div');
-    q.textContent = `確定要刪除 "${key}"（約 ${size}KB）嗎？這會清掉該插件存在伺服器上的資料，且無法復原。`;
-    wrap.appendChild(q);
-
-    const bar = document.createElement('div');
-    bar.className = 'lce-confirm-bar';
-    const done = (msg) => { bar.replaceChildren(); const d = document.createElement('span'); d.textContent = msg; bar.appendChild(d); };
-    bar.appendChild(chatButton('刪除', () => { doDelete(key, size); done('（已刪除）'); }, 'lce-cmd-btn lce-del-btn'));
-    bar.appendChild(chatButton('取消', () => done('（已取消）')));
-    wrap.appendChild(bar);
-
-    // 確認框只保留 10 秒（不論有沒有按），逾時自動移除、不留在聊天室。
-    lceChatNotify(wrap, { autoRemoveMs: 10000 });
-}
-
-function doDelete(key, size) {
-    try {
-        if (Player.ExtensionSettings[key] === undefined) {
-            lceChatNotify(`"${key}" 已經不存在了。`); return;
-        }
-        // 用 dot-notation 單鍵同步把值清成 null（ServerPlayerExtensionSettingsSync 送
-        // { "ExtensionSettings.<key>": null }）—— 這是 BC / BCX 自己在用、既小又可靠的寫法：
-        //   • 訊息極小：不會觸發 BCX 的「巨大送出訊息」警告（整包重送動輒數百 KB，還可能被伺服器
-        //     退回而刪不掉，這正是先前整包法「刪了沒生效」+「BCX 報錯」的原因）。
-        //   • 真正持久：跟我們存自己 LCE 設定同一條路徑（所以「有效」），伺服器 $set 該子鍵、
-        //     刷新後仍是 null。
-        // BC 的 API 沒辦法把「鍵本身」$unset 掉（只有整包取代做得到，但那訊息太大又不穩），
-        // 只能退而求其次留一個 null 佔位（≈0 bytes）。之後本地把鍵刪掉、清單也濾掉 null（見 extRows），
-        // 使用者就不會再看到它，也不佔容量。
-        Player.ExtensionSettings[key] = null;
-        if (typeof ServerPlayerExtensionSettingsSync === 'function') {
-            ServerPlayerExtensionSettingsSync(key);
-        }
-        delete Player.ExtensionSettings[key];
-        const left = extRows(Player.ExtensionSettings).reduce((s, [, n]) => s + n, 0);
-        lceChatNotify(`已移除 "${key}"（釋出約 ${size}KB，剩餘合計 ${(left / 1024).toFixed(1)}KB）。`
-            + ' 該插件下次載入時會重建自己的預設值。可用 /lcesetlist 確認。');
-    } catch (e) {
-        console.warn(LOG, '刪除失敗:', e);
-        lceChatNotify(`刪除 "${key}" 失敗，詳見 console。`);
     }
 }
 
@@ -438,14 +332,14 @@ function renderAddonList(mods) {
     return wrap;
 }
 
-/** 把某人的外掛區塊填成清單。isFallback = 用 hello 帶來的暫時資料（非即時回覆）。 */
-function fillAddons(b, mods, isFallback = false) {
+/** 把某人的外掛區塊填成清單。 */
+function fillAddons(b, mods) {
     b.addonsHost.replaceChildren();
     const label = document.createElement('span');
-    label.textContent = mods.length ? `　外掛（${mods.length}）${isFallback ? '＊' : ''}：` : '　外掛：（無）';
+    label.textContent = mods.length ? `　外掛（${mods.length}）：` : '　外掛：（無）';
     b.addonsHost.appendChild(label);
     if (mods.length) b.addonsHost.appendChild(renderAddonList(mods));
-    if (isFallback) b.hasFallback = true; else b.filled = true;
+    b.filled = true;
 }
 
 /** 把某人的外掛區塊填成一段純文字（未開放查詢／查詢失敗／無回應）。 */
@@ -480,7 +374,7 @@ function versions(args) {
     header.className = 'lce-collapse-keep';
 
     const body = document.createElement('div');
-    const blocks = new Map();   // memberNumber → { addonsHost, char, filled, hasFallback }
+    const blocks = new Map();   // memberNumber → { addonsHost, char, filled }
     for (const c of targets) {
         const block = document.createElement('div');
         block.className = 'lce-versions-block';
@@ -490,20 +384,13 @@ function versions(args) {
         addonsHost.textContent = '　外掛：查詢中…';
         block.append(line, addonsHost);
         body.appendChild(block);
-        blocks.set(c.MemberNumber, { addonsHost, char: c, filled: false, hasFallback: false });
+        blocks.set(c.MemberNumber, { addonsHost, char: c, filled: false });
     }
     lceChatNotify([header, body], { closable: true, collapsible: true });
 
     // 自己：直接填本地清單，不必查
     const selfBlock = blocks.get(Player.MemberNumber);
     if (selfBlock) fillAddons(selfBlock, window.bcModSdk?.getModsInfo?.() ?? []);
-
-    // 其他人：先用 hello 帶來的清單當暫時後備（有的話），等原廠回覆再覆蓋
-    for (const [mn, b] of blocks) {
-        if (mn === Player.MemberNumber) continue;
-        const fallback = b.char.LCEOtherAddons ?? b.char.FBCOtherAddons;
-        if (fallback?.length) fillAddons(b, fallback, true);
-    }
 
     const pending = new Set(targets.filter(c => c.MemberNumber !== Player.MemberNumber).map(c => c.MemberNumber));
     updateVersionsHeader(header, targets.length, pending.size);
@@ -536,8 +423,7 @@ function versions(args) {
     const timeoutId = setTimeout(() => {
         for (const mn of pending) {
             const b = blocks.get(mn);
-            // 沒回應：已有 hello 後備就留著（＊ 標記），否則標明無回應
-            if (b && !b.filled && !b.hasFallback) fillAddonsText(b, '　外掛：（無回應或未開放查詢）');
+            if (b && !b.filled) fillAddonsText(b, '　外掛：（無回應或未開放查詢）');
         }
         pending.clear();
         updateVersionsHeader(header, targets.length, 0);
@@ -573,7 +459,6 @@ const COMMAND_LIST = [
     { Tag: 'profiles', NeedsArg: true, HelpOnly: true, Description: '<關鍵字>：列出已保存的個人資料，可用會員編號或名稱搜尋' },
     { Tag: 'versions', NeedsArg: true, Description: '[名稱]：查詢房內玩家的俱樂部/BCX/插件版本（走原廠查詢，未裝 LCE/WCE 也查得到）', Action: (_, _c, args) => { versions(args); } },
     { Tag: 'lcesetting', Description: '快速前往 LCE 設定頁', Action: () => { openSettings(); } },
-    { Tag: 'lcesetlist', Description: '列出帳號上所有 ExtensionSettings 與其大小（可直接按鈕刪除）', Action: () => { listExtSettings(); } },
     { Tag: 'lceThemetest', Description: '主題開關測試，呼叫一個懸浮球，點擊即時開/關主題，再次輸入收起', Action: () => { toggleThemeTestBalloon(); } },
     { Tag: 'lcedebug', Description: '取得除錯資訊並複製到剪貼簿', Action: () => { lceDebug(); } },
 ];

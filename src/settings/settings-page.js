@@ -10,6 +10,7 @@ import { fSettings, saveFeatureSettings } from '../core/feature-settings.js';
 import { T } from '../core/i18n.js';
 import { applyTheme } from '../features/theme.js';
 import { listSystemFonts } from '../features/theme-font.js';
+import { openStorageManager, closeStorageManager, isStorageManagerOpen, positionStorageManager } from './storage-manager.js';
 import iconUrl from '../assets/lce-icon.svg';
 
 const SWATCH_W = 64;   // 色塊寬度（與十六進位欄位齊平）
@@ -117,6 +118,7 @@ function load() {
 }
 
 function exit() {
+    closeStorageManager();
     saveFeatureSettings();
     stopBarDrag();
     if (typeof PreferenceSubscreenExtensionsClear === 'function') PreferenceSubscreenExtensionsClear();
@@ -133,6 +135,7 @@ function run() {
     const title = currentCategory ? `${T('lce_settings_title')} — ${T('cat_' + currentCategory)}` : T('lce_settings_title');
     DrawText(title, 300, 125, 'Black', 'Gray');
     DrawButton(1815, 75, 90, 90, '', 'White', 'Icons/Exit.png');
+    if (isStorageManagerOpen()) positionStorageManager();
 
     let y = Y_START;
     if (!currentCategory) {
@@ -227,7 +230,8 @@ function fireSideEffect(key, def) {
 
 function click() {
     if (MouseIn(1815, 75, 90, 90)) {
-        if (currentCategory === null) { exit(); }
+        if (isStorageManagerOpen()) { closeStorageManager(); }
+        else if (currentCategory === null) { exit(); }
         else { currentCategory = null; currentSetting = ''; }
         return;
     }
@@ -235,7 +239,11 @@ function click() {
     if (currentCategory === null) {
         let y = Y_START;
         for (const category of CATEGORIES) {
-            if (MouseIn(300, y, 400, 64)) { currentCategory = category; currentPage = 0; currentSetting = ''; return; }
+            if (MouseIn(300, y, 400, 64)) {
+                if (category === 'storage') openStorageManager();
+                else { currentCategory = category; currentPage = 0; currentSetting = ''; }
+                return;
+            }
             y += Y_INC;
         }
         return;
