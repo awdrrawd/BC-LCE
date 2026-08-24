@@ -1,6 +1,6 @@
 // ════════════════════════════════════════════════════════════════════════════
 // 儲存層：AES-GCM 加密 + IndexedDB 角色快照 + localStorage 帳號清單
-// 全部沿用 MPL 的 key 與資料格式，帳號 / 頭像 / 金鑰雙向共用。
+// 沿用 MPL 的資料庫與帳號 key；新頭像改存 WebP Blob，並相容舊版 data URL。
 // captureAndSaveProfile 完成後以事件通知 UI 重刷（避免與 UI 模組互相 import）。
 // ════════════════════════════════════════════════════════════════════════════
 
@@ -200,27 +200,20 @@ export function removeAccount(accountName) {
     saveAccounts(loadAccounts().filter(a => a.accountName !== key));
 }
 
-// ── 角色快照（頭像 + 暱稱 + ID）—— 與 MPL 相同格式 ─────────────────────────
+// ── 角色快照（頭像 + 暱稱 + ID）────────────────────────────────────────────
 
 /**
  * 一張拍成功的頭像至少該有這麼多位元組。
  *
  * 判斷「拍到空白」不能只看 canvas 存不存在：角色外觀還沒載完時 Player.Canvas
  * 是有尺寸的，只是內容一片空，畫出來就是一格純底色 —— toDataURL 仍會回傳一個
- * 看起來很正常的字串。而 JPEG 對純色的壓縮率極高，這種空白圖大概只有 6~700 位元組，
+ * 看起來很正常的資料。而 WebP 對純色的壓縮率極高，空白圖會明顯小於真正的角色頭像，
  * 真的有角色的頭像則遠大於此，所以用大小當「有沒有東西」的判準最省事也夠準。
  */
 const MIN_AVATAR_BYTES = 900;
 
-/** data URL 的實際位元組數（base64 每 4 字元 = 3 位元組）。 */
-function dataUrlBytes(url) {
-    const i = url.indexOf(',');
-    if (i < 0) return 0;
-    return Math.floor((url.length - i - 1) * 3 / 4);
-}
-
-/** @returns {string|null} 頭像 data URL；拍不到或拍到空白時回傳 null。 */
-export function makeAvatarDataUrl(size = 56) {
+/** @returns {Promise<Blob|null>} WebP 頭像；拍不到或拍到空白時回傳 null。 */
+export async function makeAvatarBlob(size = 56) {
     try {
         const src = Player?.Canvas;
         if (!src?.width || !src?.height) return null;
@@ -229,11 +222,11 @@ export function makeAvatarDataUrl(size = 56) {
         const ctx = off.getContext('2d');
         ctx.fillStyle = '#0a0c12';
         ctx.fillRect(0, 0, size, size);
-        const sx = src.width * 0.39, sy = src.height * 0.40;
-        const sw = src.width * 0.22, sh = src.height * 0.12;
-        ctx.drawImage(src, sx, sy, sw, sh, 0, 0, size, size);
-        const url = off.toDataURL('image/jpeg', 0.85);
-        return dataUrlBytes(url) >= MIN_AVATAR_BYTES ? url : null;
+        const cropSize = 210;
+        const sx = src.width / 2 - cropSize / 2;
+        ctx.drawImage(src, sx, 740, cropSize, cropSize, 0, 0, size, size);
+        const blob = await new Promise(resolve => off.toBlob(resolve, 'image/webp', 0.9));
+        return blob?.size >= MIN_AVATAR_BYTES ? blob : null;
     } catch { return null; }
 }
 
@@ -245,23 +238,25 @@ export async function captureAndSaveProfile() {
     try {
         if (typeof Player === 'undefined' || !Player?.AccountName) return false;
         const accountName = Player.AccountName.toUpperCase();
-        const avatarDataUrl = makeAvatarDataUrl(56);
+        const avatarBlob = await makeAvatarBlob(56);
 
         // 拍不到就沿用上一張，絕不能把 null 寫回去：那會把先前拍好的頭像洗掉，
         // 卡片永遠只剩貓咪佔位圖 —— 而且越是「退出太快」這種拍不到的時機，
         // 越不該把既有的好資料砸掉。
-        const prev = avatarDataUrl ? null : await dbGet(accountName);
+        const prev = avatarBlob ? null : await dbGet(accountName);
 
         await dbPut({
             accountName,
             name:          Player.Name        || '',
             nickname:      Player.Nickname    || null,
             memberNumber:  Player.MemberNumber ?? null,
-            avatarDataUrl: avatarDataUrl ?? prev?.avatarDataUrl ?? null,
+            avatarBlob:    avatarBlob ?? prev?.avatarBlob ?? null,
+            // 舊版以 base64 data URL 儲存；保留讀取相容性，成功拍到 Blob 後即不再複製。
+            avatarDataUrl: avatarBlob ? null : (prev?.avatarDataUrl ?? null),
             savedAt:       Date.now(),
         });
         window.dispatchEvent(new CustomEvent(ACCOUNTS_UPDATED_EVENT));
-        return !!avatarDataUrl;
+        return !!avatarBlob;
     } catch (e) {
         console.warn('🐈‍⬛ [LCE] 快照失敗:', e);
         return false;

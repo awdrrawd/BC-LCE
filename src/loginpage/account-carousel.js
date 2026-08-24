@@ -106,8 +106,15 @@ export function buildCarousel(focusName) {
                 const displayName = profile.nickname || profile.name || '';
                 if (displayName) nm.textContent = displayName;
                 if (profile.memberNumber) id.textContent = '#' + profile.memberNumber;
-                if (profile.avatarDataUrl) {
-                    const img = mk('img', '', { src: profile.avatarDataUrl, alt: displayName });
+                const avatarSrc = profile.avatarBlob instanceof Blob
+                    ? URL.createObjectURL(profile.avatarBlob)
+                    : profile.avatarDataUrl;
+                if (avatarSrc) {
+                    const img = mk('img', '', { src: avatarSrc, alt: displayName });
+                    if (profile.avatarBlob instanceof Blob) {
+                        img.addEventListener('load', () => URL.revokeObjectURL(avatarSrc), { once: true });
+                        img.addEventListener('error', () => URL.revokeObjectURL(avatarSrc), { once: true });
+                    }
                     av.innerHTML = ''; av.appendChild(img);
                 }
             });
