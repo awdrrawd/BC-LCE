@@ -28,6 +28,19 @@ const OVERRIDE_KEY = 'WCEOverrides';   // ExtensionSettings 鍵（與 WCE 相同
 const HIDE_PROP = 'wceOverrideHide';   // item.Property 欄位（與 WCE 相同，勿改）
 const STYLE_ID = 'lce-layering-hide';
 
+/** WCE 的圖層隱藏已開啟，因此由 WCE 接管。 */
+function wceOwnsLayeringHide() {
+    try {
+        return typeof globalThis.fbcSettingValue === 'function'
+            && globalThis.fbcSettingValue(CAP) === true;
+    } catch { return false; }
+}
+
+/** LCE 只在自己開啟、且 WCE 沒有開啟時接管上層行為。 */
+function lceOwnsLayeringHide() {
+    return !!getFeature(CAP) && !wceOwnsLayeringHide();
+}
+
 // ⚠ 只適用於「舊版 R129」的 #layering（它是自訂 CSS grid，grid-template 裡沒有隱藏設定用的兩列）。
 // R130 起 BC 把 #layering 改成 Screen 元件框架（.screen > .screen-main-container > main.screen-main），
 // 版面由框架自己管；若在新版還去覆寫 #layering 的 grid-template，整個選單會被擠爆（＝UI變形）。
@@ -58,7 +71,7 @@ const LAYERING_CSS = `
 
 /** 依設定注入/移除分層選單的版面 CSS（只有舊版 R129 需要；R130+ 交給 Screen 框架）。 */
 function applyLayeringStyle() {
-    if (getFeature(CAP)) {
+    if (lceOwnsLayeringHide()) {
         const legacyLayout = typeof GameVersion !== 'undefined' && GameVersion === 'R129';
         injectStyle(STYLE_ID, legacyLayout ? LAYERING_CSS : '.layering-pair { justify-content: start; }');
     } else {
@@ -87,6 +100,8 @@ function patch(name, patches, hint) {
  */
 export function refreshLayeringCapability() {
     if (typeof Player === 'undefined' || !Player) return;
+    // WCE 接管時不觸碰共用的 BCECapabilities，避免 LCE 把 WCE 的能力宣告移除。
+    if (wceOwnsLayeringHide()) return;
     if (!Array.isArray(Player.BCECapabilities)) Player.BCECapabilities = [];
     const has = Player.BCECapabilities.includes(CAP);
     const want = !!getFeature(CAP);
@@ -124,6 +139,7 @@ export function installLayeringHide() {
         if (e.detail?.key !== CAP) return;
         refreshLayeringCapability();
         applyLayeringStyle();
+        if (wceOwnsLayeringHide()) return;
         // 開/關後重新對房間報名，讓別人的 BCECapabilities 跟著更新（進而顯示/隱藏效果）。
         try {
             if (typeof ServerPlayerIsInChatRoom === 'function' && ServerPlayerIsInChatRoom()
@@ -137,7 +153,9 @@ export function installLayeringHide() {
     hook('Layering.Load', 10, async (args, next) => {
         const ret = await next(args);
         try {
-            if (!getFeature(CAP) || CurrentScreen === 'Crafting') return ret;
+            // WCE 可能在 LCE 安裝後才開/關此設定；每次開選單都重新校正所有權與 CSS。
+            applyLayeringStyle();
+            if (!lceOwnsLayeringHide() || CurrentScreen === 'Crafting') return ret;
             if (!Layering?.Character?.BCECapabilities?.includes(CAP)) return ret;
             const defaultItemHide = Layering.Asset?.Hide || [];
             if (defaultItemHide.length === 0) return ret;
@@ -237,7 +255,7 @@ export function installLayeringHide() {
     // 「重設」按鈕：清掉 override、把勾選框全部勾回（同 WCE _ResetClickListener）
     hook('Layering._ResetClickListener', 10, (args, next) => {
         try {
-            if (getFeature(CAP) && CurrentScreen !== 'Crafting') {
+            if (lceOwnsLayeringHide() && CurrentScreen !== 'Crafting') {
                 if (Layering?.Item?.Property) delete Layering.Item.Property[HIDE_PROP];
                 document.querySelectorAll('input[name=checkbox-hide]').forEach((el) => { el.checked = true; });
             }
@@ -266,6 +284,7 @@ export function installLayeringHide() {
     hook('ServerAppearanceLoadFromBundle', 5, (args, next) => {
         const ret = next(args);
         try {
+            if (wceOwnsLayeringHide()) return ret;
             const [C] = args;
             if (C?.IsPlayer?.() && Array.isArray(C.Appearance) && typeof LZString !== 'undefined') {
                 let updated = false;
@@ -288,7 +307,8 @@ export function installLayeringHide() {
     hook('ChatRoomSyncMemberJoin', 1, (args, next) => {
         const ret = next(args);
         try {
-            if (Player?.Appearance?.some(a => Array.isArray(a?.Property?.[HIDE_PROP]))
+            if (!wceOwnsLayeringHide()
+                && Player?.Appearance?.some(a => Array.isArray(a?.Property?.[HIDE_PROP]))
                 && typeof ChatRoomCharacterUpdate === 'function') ChatRoomCharacterUpdate(Player);
         } catch { /* ignore */ }
         return ret;
@@ -298,7 +318,8 @@ export function installLayeringHide() {
         const fromMain = typeof PreferenceSubscreen !== 'undefined' && PreferenceSubscreen?.name === 'Main';
         const ret = next(args);
         try {
-            if (fromMain && Player?.Appearance?.some(a => Array.isArray(a?.Property?.[HIDE_PROP]))
+            if (!wceOwnsLayeringHide()
+                && fromMain && Player?.Appearance?.some(a => Array.isArray(a?.Property?.[HIDE_PROP]))
                 && typeof ChatRoomCharacterUpdate === 'function') ChatRoomCharacterUpdate(Player);
         } catch { /* ignore */ }
         return ret;
