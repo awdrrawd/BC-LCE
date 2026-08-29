@@ -22,7 +22,9 @@ function privateNetworkAccessPlugin() {
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [privateNetworkAccessPlugin()],
-  base: './',
+  // main.js 可由 GitHub main 分支的 jsDelivr URL 載入，大型背景素材仍由
+  // Pages 的完整 dist 提供，避免將圖片／影片全部提交到 main 分支。
+  base: 'https://awdrrawd.github.io/BC-LCE/',
   define: {
     __LCE_VERSION__: JSON.stringify(pkg.version),
   },

@@ -56,7 +56,7 @@ src/
   settings/          遊戲內設定頁（PreferenceRegisterExtensionSetting 九宮格）
   assets/            圖示
 
-loader.user.js       正式版載入器（讀 GitHub Pages 的 dist/assets/main.js）
+loader.user.js       正式版載入器（讀 GitHub main 分支的 dist/assets/main.js）
 loader.local.user.js 本地開發載入器（讀 http://localhost:5174/assets/main.js）
 ```
 

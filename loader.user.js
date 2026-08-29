@@ -18,5 +18,5 @@ window.Liko = window.Liko ?? {};
 if (window.Liko.LCE && window.Liko.LCE.version) {
   console.warn('🐈‍⬛ [LCE] ⚠️ Already loaded, skipping duplicate import.');
 } else {
-  import(`https://awdrrawd.github.io/BC-LCE/assets/main.js?v=` + new Date().getTime());
+  import(`https://cdn.jsdelivr.net/gh/awdrrawd/BC-LCE@main/dist/assets/main.js?v=` + new Date().getTime());
 }
