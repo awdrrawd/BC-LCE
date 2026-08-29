@@ -13,12 +13,10 @@ import { getFeature } from '../core/feature-settings.js';
 import { T } from '../core/i18n.js';
 // 與聊天嵌入共用同一份「本次連線已授權來源」名單（WCE 也是共用同一個 map），
 // 在聊天嵌入授權過的來源，這裡就不會再問一次。
-import { sessionCustomOrigins } from './chat-augments.js';
+import { isOriginTrusted, requestOriginTrust, sessionCustomOrigins } from './trusted-domains.js';
 
 const LOG = '🐈‍⬛ [LCE]';
 const NEW_ACCOUNT_MS = 30000;              // 建立不到 30 秒就進房 = 異常新（同 WCE）
-const TRUSTED = ['https://fs.kinkop.eu', 'https://i.imgur.com'];
-
 function hook(name, priority, fn) {
     try { modApi.hookFunction(name, priority, fn); }
     catch (e) { console.warn(LOG, 'misc hook 未掛上:', name, e?.message ?? e); }
@@ -29,20 +27,10 @@ let promptOpen = false;
 
 function askOrigin(origin, type) {
     if (promptOpen) return;
-    if (!(typeof FUSAM === 'object' && FUSAM?.modals)) return;
     promptOpen = true;
-    FUSAM.modals.open({
-        prompt: T('domain_prompt')
-            .replace('{content}', T(type === 'image' ? 'domain_image' : type === 'music' ? 'domain_music' : 'domain_content'))
-            .replace('{origin}', origin)
-            .replace('{trusted}', TRUSTED.includes(origin) ? T('domain_trusted') : ''),
-        callback: (act) => {
-            promptOpen = false;
-            if (act === 'submit') sessionCustomOrigins.set(origin, 'allowed');
-            else if (act === 'cancel') sessionCustomOrigins.set(origin, 'denied');
-        },
-        buttons: { cancel: T('domain_deny'), submit: T('domain_allow') },
-    });
+    const content = T(type === 'image' ? 'domain_image' : type === 'music' ? 'domain_music' : 'domain_content');
+    requestOriginTrust(origin, content, { persistent: type === 'image' })
+        .finally(() => { promptOpen = false; });
 }
 
 let installed = false;
@@ -110,7 +98,7 @@ export function installMisc() {
             const imageOrigin = ImageURL && new URL(ImageURL).origin;
             const musicOrigin = MusicURL && new URL(MusicURL).origin;
 
-            if (imageOrigin && !sessionCustomOrigins.has(imageOrigin)) askOrigin(imageOrigin, 'image');
+            if (imageOrigin && !isOriginTrusted(imageOrigin) && !sessionCustomOrigins.has(imageOrigin)) askOrigin(imageOrigin, 'image');
             else if (musicOrigin && !sessionCustomOrigins.has(musicOrigin)) askOrigin(musicOrigin, 'music');
 
             // 全部都已授權才放行；否則擋下（不載入）

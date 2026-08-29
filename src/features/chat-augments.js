@@ -8,6 +8,7 @@
 
 import { getFeature } from '../core/feature-settings.js';
 import { T } from '../core/i18n.js';
+import { isOriginTrusted, requestOriginTrust, sessionCustomOrigins } from './trusted-domains.js';
 
 const STYLE_ID = 'lce-augment-style';
 const HANDLED_ATTR = 'data-lce-handled';
@@ -19,8 +20,8 @@ const EMBED = { Image: 'img', None: '', Untrusted: 'none-img' };
 // Emote(*…*) 與 Action(…) 的網址也轉連結。
 const MSG_CLASSES = ['ChatMessageChat', 'ChatMessageWhisper', 'ChatMessageEmote', 'ChatMessageAction'];
 
-// 本次連線內被使用者授權的來源（同 WCE 的 sessionCustomOrigins；不持久化）
-export const sessionCustomOrigins = new Map();
+// 保留舊 import 路徑，讓已引用 chat-augments 的 LCE 模組不必同步改動。
+export { sessionCustomOrigins } from './trusted-domains.js';
 
 const TRUSTED_HOSTS = [
     'cdn.discordapp.com', 'media.discordapp.com', 'i.imgur.com',
@@ -53,7 +54,8 @@ function parseUrl(word) {
 const IMAGE_EXT_RE = /\/[^/]+\.(png|jpe?g|gif|webp|bmp|avif|apng|jfif|svg|ico)$/iu;
 
 function allowedToEmbed(url) {
-    const trusted = TRUSTED_HOSTS.includes(url.host) || sessionCustomOrigins.get(url.origin) === 'allowed';
+    const trusted = TRUSTED_HOSTS.includes(url.host) || isOriginTrusted(url.origin)
+        || sessionCustomOrigins.get(url.origin) === 'allowed';
     if (IMAGE_EXT_RE.test(url.pathname)) {
         return trusted ? EMBED.Image : EMBED.Untrusted;
     }
@@ -133,7 +135,7 @@ export function processChatAugmentsForLine(el, scrollToEnd, isChat) {
                 } else {
                     domNode = document.createTextNode(url.href);
                     if (embedType !== EMBED.None) {
-                        // 非可信任網域：給一顆授權鈕（僅本次連線）
+                        // 非可信任網域：可選永久信任、本次信任或拒絕。
                         const promptTrust = document.createElement('a');
                         promptTrust.href = '#';
                         promptTrust.title = T('augment_trust_session');
@@ -141,28 +143,22 @@ export function processChatAugmentsForLine(el, scrollToEnd, isChat) {
                         promptTrust.onclick = (e) => {
                             e.preventDefault();
                             e.stopPropagation();
-                            const target = e.target;
-                            if (!(typeof FUSAM === 'object' && FUSAM?.modals)) return;
-                            FUSAM.modals.open({
-                                prompt: T('augment_trust_prompt').replace('{origin}', url.origin),
-                                callback: (act) => {
-                                    if (act !== 'submit') return;
-                                    sessionCustomOrigins.set(url.origin, 'allowed');
-                                    const parent = target.parentElement;
-                                    if (!parent) return;
-                                    parent.removeChild(target);
-                                    // 下面會清空 parent 重建，得先把名稱節點撈出來保住。
-                                    // 聊天室的名稱是 .ChatMessageName，即時通信的是 .lce-msg-sender —— 兩邊都要認，
-                                    // 只認前者的話 IM 的名稱會被 innerHTML='' 清掉且補不回來。
-                                    const name = parent.querySelector('.ChatMessageName, .lce-msg-sender');
-                                    parent.innerHTML = '';
-                                    if (name) { parent.appendChild(name); parent.appendChild(document.createTextNode(' ')); }
-                                    const ogText = (isChat ? parent.parentElement : parent)?.getAttribute('lce-original-text');
-                                    if (!ogText) return;
-                                    parent.appendChild(document.createTextNode(ogText));
-                                    processChatAugmentsForLine(el, scrollToEnd, true);
-                                },
-                                buttons: { submit: T('augment_trust_session') },
+                            const target = e.currentTarget;
+                            requestOriginTrust(url.origin, T('domain_image'), { persistent: true }).then((act) => {
+                                if (act !== 'submit' && act !== 'always') return;
+                                const parent = target.parentElement;
+                                if (!parent) return;
+                                parent.removeChild(target);
+                                // 下面會清空 parent 重建，得先把名稱節點撈出來保住。
+                                // 聊天室的名稱是 .ChatMessageName，即時通信的是 .lce-msg-sender —— 兩邊都要認，
+                                // 只認前者的話 IM 的名稱會被 innerHTML='' 清掉且補不回來。
+                                const name = parent.querySelector('.ChatMessageName, .lce-msg-sender');
+                                parent.innerHTML = '';
+                                if (name) { parent.appendChild(name); parent.appendChild(document.createTextNode(' ')); }
+                                const ogText = (isChat ? parent.parentElement : parent)?.getAttribute('lce-original-text');
+                                if (!ogText) return;
+                                parent.appendChild(document.createTextNode(ogText));
+                                processChatAugmentsForLine(el, scrollToEnd, true);
                             });
                         };
                         newChildren.push(document.createTextNode(' '));

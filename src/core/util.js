@@ -61,6 +61,69 @@ export function injectStyle(id, css) {
 /** 移除指定 id 的 <style> */
 export function removeStyle(id) { document.getElementById(id)?.remove(); }
 
+/**
+ * 讓可捲動 DOM 容器支援以滑鼠／觸控直接拖曳，放開後保留短暫慣性。
+ * 回傳清理函式；重複安裝在同一元素時只會沿用既有實例。
+ */
+export function enableMomentumScroll(container) {
+    if (!container) return () => {};
+    if (container._lceMomentumCleanup) return container._lceMomentumCleanup;
+    let pointerId = null, lastY = 0, lastTime = 0, velocity = 0;
+    let dragged = false, inertiaFrame = 0, suppressClick = false;
+    const stopInertia = () => { if (inertiaFrame) cancelAnimationFrame(inertiaFrame); inertiaFrame = 0; };
+    const runInertia = () => {
+        if (Math.abs(velocity) < 0.015) { inertiaFrame = 0; return; }
+        const before = container.scrollTop;
+        container.scrollTop += velocity * 16;
+        velocity *= 0.94;
+        if (container.scrollTop === before) { inertiaFrame = 0; return; }
+        inertiaFrame = requestAnimationFrame(runInertia);
+    };
+    const down = e => {
+        if (e.button !== 0 || e.target.closest('input,select,textarea,button,a,label')) return;
+        stopInertia(); pointerId = e.pointerId; lastY = e.clientY; lastTime = performance.now();
+        velocity = 0; dragged = false; suppressClick = false;
+    };
+    const move = e => {
+        if (pointerId !== e.pointerId) return;
+        const now = performance.now(), dy = e.clientY - lastY, elapsed = Math.max(1, now - lastTime);
+        if (!dragged && Math.abs(dy) > (e.pointerType === 'touch' ? 8 : 4)) {
+            dragged = true; container.classList.add('lce-drag-scrolling');
+            container.setPointerCapture?.(pointerId);
+        }
+        if (!dragged) return;
+        e.preventDefault(); container.scrollTop -= dy;
+        velocity = velocity * 0.65 + ((-dy / elapsed) * 1.35) * 0.35;
+        lastY = e.clientY; lastTime = now;
+    };
+    const finish = e => {
+        if (pointerId !== e.pointerId) return;
+        if (container.hasPointerCapture?.(pointerId)) container.releasePointerCapture(pointerId);
+        pointerId = null; container.classList.remove('lce-drag-scrolling'); suppressClick = dragged;
+        if (dragged && Math.abs(velocity) >= 0.015) inertiaFrame = requestAnimationFrame(runInertia);
+        setTimeout(() => { suppressClick = false; dragged = false; });
+    };
+    const click = e => {
+        if (!suppressClick) return;
+        e.preventDefault(); e.stopImmediatePropagation();
+    };
+    container.addEventListener('pointerdown', down);
+    container.addEventListener('pointermove', move, { passive: false });
+    container.addEventListener('pointerup', finish);
+    container.addEventListener('pointercancel', finish);
+    container.addEventListener('click', click, true);
+    container._lceMomentumCleanup = () => {
+        stopInertia();
+        container.removeEventListener('pointerdown', down);
+        container.removeEventListener('pointermove', move);
+        container.removeEventListener('pointerup', finish);
+        container.removeEventListener('pointercancel', finish);
+        container.removeEventListener('click', click, true);
+        delete container._lceMomentumCleanup;
+    };
+    return container._lceMomentumCleanup;
+}
+
 const _utf8Encoder = typeof TextEncoder !== 'undefined' ? new TextEncoder() : null;
 
 /**

@@ -11,6 +11,7 @@ import { T } from '../core/i18n.js';
 import { applyTheme } from '../features/theme.js';
 import { listSystemFonts } from '../features/theme-font.js';
 import { openStorageManager, closeStorageManager, isStorageManagerOpen, positionStorageManager } from './storage-manager.js';
+import { closeTrustedDomainManager, isTrustedDomainManagerOpen, openTrustedDomainManager, positionTrustedDomainManager } from './trusted-domain-manager.js';
 import iconUrl from '../assets/lce-icon.svg';
 
 const SWATCH_W = 64;   // 色塊寬度（與十六進位欄位齊平）
@@ -119,6 +120,7 @@ function load() {
 
 function exit() {
     closeStorageManager();
+    closeTrustedDomainManager();
     saveFeatureSettings();
     stopBarDrag();
     if (typeof PreferenceSubscreenExtensionsClear === 'function') PreferenceSubscreenExtensionsClear();
@@ -136,6 +138,7 @@ function run() {
     DrawText(title, 300, 125, 'Black', 'Gray');
     DrawButton(1815, 75, 90, 90, '', 'White', 'Icons/Exit.png');
     if (isStorageManagerOpen()) positionStorageManager();
+    if (isTrustedDomainManagerOpen()) positionTrustedDomainManager();
 
     let y = Y_START;
     if (!currentCategory) {
@@ -144,6 +147,8 @@ function run() {
             DrawTextFit(T('cat_' + category), 310, y + 32, 380, 'Black');
             y += Y_INC;
         }
+        DrawButton(800, Y_START, 400, 64, '', 'White');
+        DrawTextFit(T('trusted_domains_title'), 810, Y_START + 32, 380, 'Black');
         ctx.textAlign = 'center';
         return;
     }
@@ -231,12 +236,14 @@ function fireSideEffect(key, def) {
 function click() {
     if (MouseIn(1815, 75, 90, 90)) {
         if (isStorageManagerOpen()) { closeStorageManager(); }
+        else if (isTrustedDomainManagerOpen()) { closeTrustedDomainManager(); }
         else if (currentCategory === null) { exit(); }
         else { currentCategory = null; currentSetting = ''; }
         return;
     }
 
     if (currentCategory === null) {
+        if (MouseIn(800, Y_START, 400, 64)) { openTrustedDomainManager(); return; }
         let y = Y_START;
         for (const category of CATEGORIES) {
             if (MouseIn(300, y, 400, 64)) {
