@@ -14,6 +14,7 @@
 import { openDB } from 'idb';
 import modApi from '../modsdk.js';
 import { getFeature } from '../core/feature-settings.js';
+import { shouldLceHandle } from '../core/wce-compat.js';
 import { createPositionableButton, exposeButton } from '../core/public-api.js';
 import { T } from '../core/i18n.js';
 import { processChatAugmentsForLine } from './chat-augments.js';
@@ -41,7 +42,7 @@ let unreadSinceOpened = 0;
 let loaded = false;
 const friendMessages = new Map();
 
-const imOn = () => !!getFeature('instantMessenger');
+const imOn = () => shouldLceHandle('instantMessenger');
 
 /** 切掉 BcUtil/WCE 附在訊息尾端的中繼資料。 */
 export function stripBeepMetadata(msg) {

@@ -21,6 +21,7 @@ import { getFeature } from '../core/feature-settings.js';
 import { SETTING_CHANGED_EVENT } from '../core/constants.js';
 import { injectStyle, removeStyle } from '../core/util.js';
 import { T } from '../core/i18n.js';
+import { isWceFeatureEnabled, shouldLceHandle } from '../core/wce-compat.js';
 
 const LOG = '🐈‍⬛ [LCE]';
 const CAP = 'layeringHide';            // 能力名（沿用 WCE 的字串，才能與 WCE 使用者互通）
@@ -30,15 +31,12 @@ const STYLE_ID = 'lce-layering-hide';
 
 /** WCE 的圖層隱藏已開啟，因此由 WCE 接管。 */
 function wceOwnsLayeringHide() {
-    try {
-        return typeof globalThis.fbcSettingValue === 'function'
-            && globalThis.fbcSettingValue(CAP) === true;
-    } catch { return false; }
+    return isWceFeatureEnabled(CAP);
 }
 
 /** LCE 只在自己開啟、且 WCE 沒有開啟時接管上層行為。 */
 function lceOwnsLayeringHide() {
-    return !!getFeature(CAP) && !wceOwnsLayeringHide();
+    return shouldLceHandle(CAP);
 }
 
 // ⚠ 只適用於「舊版 R129」的 #layering（它是自訂 CSS grid，grid-template 裡沒有隱藏設定用的兩列）。

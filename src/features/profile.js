@@ -26,6 +26,7 @@
 
 import modApi from '../modsdk.js';
 import { getFeature } from '../core/feature-settings.js';
+import { shouldLceHandle } from '../core/wce-compat.js';
 import { createPositionableButton, exposeButton } from '../core/public-api.js';
 import { T } from '../core/i18n.js';
 import { positionElement, injectStyle } from '../core/util.js';
@@ -51,7 +52,7 @@ function hook(name, priority, fn) {
     catch (e) { console.warn('🐈‍⬛ [LCE] profile hook 未掛上:', name, e?.message ?? e); }
 }
 
-const richOn = () => !!getFeature('richOnlineProfile');
+const richOn = () => shouldLceHandle('richOnlineProfile');
 const protectOn = () => !!getFeature('profileEditProtect');
 const anyOn = () => richOn() || protectOn();
 

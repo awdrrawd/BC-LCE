@@ -13,6 +13,7 @@
 
 import modApi from '../modsdk.js';
 import { getFeature } from '../core/feature-settings.js';
+import { isWceFeatureEnabled } from '../core/wce-compat.js';
 import { T } from '../core/i18n.js';
 import { LOCAL_MARKER } from './local-messages.js';
 
@@ -28,8 +29,8 @@ const SKIP_SCREENS = ['FriendList', 'Relog', 'Login'];
 let lastFriends = [];
 let listenerBound = false;
 
-const onlineOn = () => !!getFeature('friendOnlineNotifyEnabled');
-const offlineOn = () => !!getFeature('friendOfflineNotifyEnabled');
+const onlineOn = () => !!getFeature('friendOnlineNotifyEnabled') && !isWceFeatureEnabled('friendPresenceNotifications');
+const offlineOn = () => !!getFeature('friendOfflineNotifyEnabled') && !isWceFeatureEnabled('friendPresenceNotifications');
 const skipScreen = () => typeof CurrentScreen === 'undefined' || SKIP_SCREENS.includes(CurrentScreen);
 
 /** HTML 逸出：名稱是使用者可控的，直接塞進 ChatRoomSendLocal 會被當成標記解析。 */

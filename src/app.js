@@ -52,7 +52,8 @@ import { installVertical } from './features/vertical/index.js';
 import { injectLoginStyles } from './loginpage/styles.js';
 import { refreshAccounts } from './loginpage/account-carousel.js';
 import { installLoginPage, teardownLoginPage } from './loginpage/index.js';
-import { ensureFusamVisible } from './loginpage/bc.js';
+import { ensureAddonManagersVisible } from './loginpage/bc.js';
+import { isWceLoaded, isWceFeatureEnabled, shouldLceHandle, WCE_OVERLAPS } from './core/wce-compat.js';
 
 // 重複載入防護：已載入就直接結束（loader 也有前置檢查，這裡才是真正的旗標擁有者）。
 window.Liko = window.Liko ?? {};
@@ -75,7 +76,7 @@ if (LCE_ALREADY_LOADED) {
     // 全域設定與 --lce-login-accent，晚一步第一幀會閃 fallback 色。
     safe('全域設定', initGlobalFeatures);
     safe('介面配色', installUiColors);
-    safe('FUSAM 置頂', ensureFusamVisible);   // 常駐，遊戲內開插件管理器也要蓋過 LCE 浮層
+    safe('外掛管理器置頂', ensureAddonManagersVisible); // FUSAM／PCM 在登入頁和遊戲內都蓋過 LCE 浮層
     safe('登入頁', installLoginPage);
 
     // 等待 BC 核心就緒。globals 幾乎都在腳本執行後的頭一兩秒內出現，所以採兩段式輪詢：
@@ -163,6 +164,8 @@ if (LCE_ALREADY_LOADED) {
             // 功能設定
             getFeature,
             setFeature,
+            // 共存診斷：只有 WCE 完整啟動且對應功能真的開啟時，LCE 才會避讓。
+            WCECompatibility: Object.freeze({ isLoaded: isWceLoaded, isFeatureEnabled: isWceFeatureEnabled, shouldLceHandle, overlaps: WCE_OVERLAPS }),
             // 主題色 API：建議用 LCE.Theme.*（Theme.enabled 判斷開關；未啟用時顏色一律 null）。
             Theme,
             isThemeEnabled,

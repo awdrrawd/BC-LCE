@@ -15,6 +15,7 @@
 
 import modApi from '../modsdk.js';
 import { getFeature } from '../core/feature-settings.js';
+import { shouldLceHandle } from '../core/wce-compat.js';
 
 const LOG = '🐈‍⬛ [LCE]';
 const LEVEL_INTENSITY = { low: 1, medium: 3, high: 5 };
@@ -102,7 +103,7 @@ function messageReplacements(msg) {
 
         if (!inOOC && parseUrl(words[i])) {
             newWords.push('( ', words[i], ' )');
-        } else if (getFeature('stutters') && !inOOC) {
+        } else if (shouldLceHandle('stutters') && !inOOC) {
             const { results, stutter } = stutterWord(words[i], firstStutter);
             hasStuttered ||= stutter;
             newWords.push(...results);
@@ -141,7 +142,7 @@ export function installAntiGarble() {
     // 本來就會剝掉外層括號，所以圖片嵌入照常運作。
     hook('ChatRoomSendChat', 100, (args, next) => {
         try {
-            if (!getFeature('urlAsOoc')) return next(args);
+            if (!shouldLceHandle('urlAsOoc')) return next(args);
             const text = ElementValue('InputChat');
             // 已經是 OOC 或指令就別動
             if (!text || text.startsWith('(') || text.startsWith('/') || text.startsWith('*')) return next(args);
@@ -155,7 +156,7 @@ export function installAntiGarble() {
     hook('ChatRoomGenerateChatRoomChatMessage', 100, (args, next) => {
         const [type, , replyId, ...rest] = args;
         let msg = args[1];
-        if (!getFeature('antiGarble') || type === 'Emote') return next(args);
+        if (!shouldLceHandle('antiGarble') || type === 'Emote') return next(args);
 
         // OOC 自動補右括號（沿用 BC 的 OOCAutoClose 行為）
         const lastRange = SpeechGetOOCRanges(msg).pop();
@@ -193,7 +194,7 @@ export function installAntiGarble() {
                         originalMsg = SpeechTransformGagGarble(originalMsg, Math.min(gagIntensity, LEVEL_INTENSITY[lvl]));
                     }
                     if (stutterMode === 'preserve' && stutterIntensity > 0) {
-                        originalMsg = getFeature('stutters')
+                        originalMsg = shouldLceHandle('stutters')
                             ? stutterWord(originalMsg, true).results.join('')
                             : SpeechTransformStutter(originalMsg, stutterIntensity);
                     }
@@ -213,7 +214,7 @@ export function installAntiGarble() {
     // 興奮結巴：接在 BC 的語音轉換流程上（stutters 關閉時保留 BC 原本的 stutter 效果）
     hook('SpeechTransformProcess', 5, (args, next) => {
         const [C, m, effects, ignoreOOC] = args;
-        if (!getFeature('stutters')) return next(args);
+        if (!shouldLceHandle('stutters')) return next(args);
         const { msg, hasStuttered } = messageReplacements(m || '');
         const result = next([C, msg, effects.filter(f => f !== 'stutter'), ignoreOOC]);
         if (hasStuttered) result.effects.push('stutter');
@@ -227,7 +228,7 @@ export function installAntiGarble() {
                 Description: 'LCE: 失聰時顯示原文',
                 Priority: 90,
                 Callback: (data, _sender, msg, metadata) => {
-                    if (data.Type === 'Chat' && getFeature('antiDeaf')
+                    if (data.Type === 'Chat' && shouldLceHandle('antiDeaf')
                         && Player.GetDeafLevel() > 0 && !metadata.OriginalMsg) {
                         metadata.OriginalMsg = msg;
                     }

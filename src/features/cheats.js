@@ -11,6 +11,7 @@
 
 import modApi from '../modsdk.js';
 import { getFeature } from '../core/feature-settings.js';
+import { isWceFeatureEnabled, shouldLceHandle } from '../core/wce-compat.js';
 import { T } from '../core/i18n.js';
 import { deepCopy } from '../core/util.js';
 import { lceChatNotify } from '../commands/commander.js';
@@ -44,7 +45,7 @@ function newRand(seed) {
 const PIN_SPACING = 100, PIN_WIDTH = 200, PIN_X = 1575, PIN_Y = 300;
 
 function drawLockpickHints() {
-    if (!getFeature('lockpick') || typeof StruggleLockPickOrder === 'undefined' || !StruggleLockPickOrder) return;
+    if (!shouldLceHandle('lockpick') || typeof StruggleLockPickOrder === 'undefined' || !StruggleLockPickOrder) return;
     const rand = newRand(parseInt(StruggleLockPickOrder.join(''), 10));
     const threshold = SkillGetWithRatio(Player, 'LockPicking') / 20;   // 技能越高揭示越多
     const hints = StruggleLockPickOrder.map(a => (rand() < threshold ? a : false));
@@ -81,7 +82,7 @@ function trustLevel(memberNumber) {
     return TRUST.stranger;
 }
 
-const antiCheatOn = () => !!getFeature('antiCheatLevelEnabled');
+const antiCheatOn = () => !!getFeature('antiCheatLevelEnabled') && !isWceFeatureEnabled('itemAntiCheat');
 
 /** 依設定的權限階梯判斷該來源是否豁免檢查。 */
 function isExempt(memberNumber) {
@@ -291,7 +292,7 @@ export function installCheats() {
 
     // 自動掙扎：柔軟度小遊戲直接判定通過
     hook('StruggleFlexibilityCheck', 20, (args, next) => {
-        if (getFeature('autoStruggle') && StruggleProgressFlexCircles?.length > 0) {
+        if (shouldLceHandle('autoStruggle') && StruggleProgressFlexCircles?.length > 0) {
             StruggleProgressFlexCircles.splice(0, 1);
             return true;
         }
@@ -301,7 +302,7 @@ export function installCheats() {
     // 自動掙扎：力量/柔軟度持續推進
     setInterval(() => {
         try {
-            if (!getFeature('autoStruggle')) return;
+            if (!shouldLceHandle('autoStruggle')) return;
             if (typeof StruggleProgress !== 'number' || StruggleProgress < 0) return;
             if (StruggleProgressCurrentMinigame === 'Strength') StruggleStrengthProcess(false);
             else if (StruggleProgressCurrentMinigame === 'Flexibility' && StruggleProgressFlexCircles?.length > 0) {
@@ -313,7 +314,7 @@ export function installCheats() {
     // 自動掙扎：靈巧度需要抓準時機（複製 BC StruggleDexterity 的判定）
     setInterval(() => {
         try {
-            if (!getFeature('autoStruggle')) return;
+            if (!shouldLceHandle('autoStruggle')) return;
             if (typeof StruggleProgress !== 'number' || StruggleProgress < 0) return;
             if (StruggleProgressCurrentMinigame !== 'Dexterity') return;
             const distMult = Math.max(-0.5, Math.min(1,
@@ -338,7 +339,7 @@ export function installCheats() {
 }
 
 /** 綑綁時是否允許使用分層選單（供 layering 相關流程查詢）。 */
-export const layeringAllowedWhileBound = () => !!getFeature('allowLayeringWhileBound');
+export const layeringAllowedWhileBound = () => shouldLceHandle('allowLayeringWhileBound');
 
 /** IM 是否可繞過 BCX beep 限制。 */
 export const imBypassBCX = () => !!getFeature('allowIMBypassBCX');

@@ -14,6 +14,8 @@ import modApi from '../modsdk.js';
 import { getFeature } from '../core/feature-settings.js';
 import { SETTING_CHANGED_EVENT } from '../core/constants.js';
 import { T } from '../core/i18n.js';
+import { openModalAsync } from '../core/modal-service.js';
+import { isWceFeatureEnabled, shouldLceHandle } from '../core/wce-compat.js';
 
 const LOG = '🐈‍⬛ [LCE]';
 const DEFAULT_WARDROBE_SIZE = 24;
@@ -54,7 +56,7 @@ function sanitizeBundles(list) {
  *   別急著建空衣櫃覆蓋雲端）；手動開啟時用較輕的提示（第一次啟用，想從別的裝置匯入就選取消）。
  */
 export async function loadExtendedWardrobe(wardrobe, init = false) {
-    if (!getFeature('extendedWardrobe')) return wardrobe;
+    if (!shouldLceHandle('extendedWardrobe')) return wardrobe;
 
     const wData = Player.ExtensionSettings?.[WARDROBE_KEY];
     WardrobeSize = EXPANDED_WARDROBE_SIZE;
@@ -63,13 +65,11 @@ export async function loadExtendedWardrobe(wardrobe, init = false) {
     if (!wData) {
         // 沒有既有資料：可能是第一次啟用，也可能是伺服器暫時讀不到。
         // 直接建立空衣櫃會覆蓋掉雲端既有資料，所以先問過再說（同 WCE）。
-        if (typeof FUSAM === 'object' && FUSAM?.modals) {
-            const [answ] = await FUSAM.modals.openAsync({
-                prompt: T(init ? 'wardrobe_new_prompt' : 'wardrobe_new_prompt_toggle'),
-                buttons: { cancel: T('wardrobe_cancel'), submit: T('wardrobe_ok') },
-            });
-            if (answ === 'submit') extendedLoaded = true;
-        }
+        const [answ] = await openModalAsync({
+            prompt: T(init ? 'wardrobe_new_prompt' : 'wardrobe_new_prompt_toggle'),
+            buttons: { cancel: T('wardrobe_cancel'), submit: T('wardrobe_ok') },
+        });
+        if (answ === 'submit') extendedLoaded = true;
         return wardrobe;
     }
 
@@ -118,7 +118,7 @@ export function installWardrobe() {
     // ── 角色預覽衣櫃：把 Appearance 的衣櫃導向 Wardrobe 畫面 ──
     hook('CharacterAppearanceWardrobeLoad', 20, (args, next) => {
         const [C] = args;
-        if (getFeature('privateWardrobe') && CurrentScreen === 'Appearance') {
+        if (shouldLceHandle('privateWardrobe') && CurrentScreen === 'Appearance') {
             inCustomWardrobe = true;
             targetCharacter = isCharacter(C) ? C : CharacterGetCurrent();
             CommonSetScreen('Character', 'Wardrobe');
@@ -173,7 +173,7 @@ export function installWardrobe() {
         if (MouseIn(10, 74, 64, 64)) { excludeBodyparts = !excludeBodyparts; return null; }
         const ret = next(args);
         // 翻到還沒載入的頁時補載入角色預覽
-        if (getFeature('privateWardrobe') && WardrobeOffset >= WardrobeCharacter.length
+        if (shouldLceHandle('privateWardrobe') && WardrobeOffset >= WardrobeCharacter.length
             && (MouseIn(415, 25, 60, 60) || MouseIn(1000, 25, 60, 60))) {
             WardrobeLoadCharacters(false);
         }
@@ -206,7 +206,7 @@ export function installWardrobe() {
         const [C] = args;
         if (inCustomWardrobe && isCharacter(C) && C.IsPlayer() && targetCharacter) args[0] = targetCharacter;
         // 該格已有內容（以 Pronouns 判斷存過檔）才問，空格不會被打擾
-        if (getFeature('confirmWardrobeSave') && Player.Wardrobe?.length > args[1]
+        if (shouldLceHandle('confirmWardrobeSave') && Player.Wardrobe?.length > args[1]
             && Player.Wardrobe[args[1]]?.some(a => a.Group === 'Pronouns')) {
             if (!window.confirm(T('wardrobe_override_confirm'))) return null;
         }
@@ -218,7 +218,7 @@ export function installWardrobe() {
         (inCustomWardrobe && CharacterAppearanceReturnScreen?.[1] === 'ChatRoom') || next(args));
 
     document.addEventListener('keydown', (e) => {
-        if (!getFeature('privateWardrobe')) return;
+        if (!shouldLceHandle('privateWardrobe')) return;
         if (e.key === 'Escape' && inCustomWardrobe) { WardrobeExit(); e.stopPropagation(); e.preventDefault(); }
     }, true);
 
@@ -245,7 +245,7 @@ export function installWardrobe() {
 export function applyExtendedWardrobe(init = false) {
     try {
         if (!Player?.Wardrobe) return;
-        if (getFeature('extendedWardrobe')) {
+        if (shouldLceHandle('extendedWardrobe')) {
             // 只把額外格載入記憶體（顯示/使用），**不要**回頭呼叫 CharacterCompressWardrobe：
             // 那等於每次登入就把剛載入的衣櫃原封再存一次，會把 sanitizeBundles 補上的 TypeRecord
             // （比舊的 Property.Type 字串肥很多）永久寫回 FBCWardrobe，讓精簡的舊存檔一次膨脹好幾倍
@@ -253,7 +253,7 @@ export function applyExtendedWardrobe(init = false) {
             // 存檔交給使用者實際變更衣櫃時 BC 觸發的 CharacterCompressWardrobe 即可（同 WCE：載入只載入）。
             loadExtendedWardrobe(Player.Wardrobe, init)
                 .catch(e => console.warn(LOG, '拓展衣櫃初始化失敗:', e));
-        } else {
+        } else if (!isWceFeatureEnabled('extendedWardrobe')) {
             // 關閉 → 還原成 BC 預設的 24 格
             WardrobeSize = DEFAULT_WARDROBE_SIZE;
             WardrobeFixLength();

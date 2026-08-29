@@ -6,6 +6,7 @@
 
 import modApi from '../modsdk.js';
 import { getFeature } from '../core/feature-settings.js';
+import { shouldLceHandle } from '../core/wce-compat.js';
 
 let installed = false;
 
@@ -47,7 +48,7 @@ export function installBehaviors() {
 
     // 離開確認
     window.addEventListener('beforeunload', (e) => {
-        if (!getFeature('confirmLeave')) return;
+        if (!shouldLceHandle('confirmLeave')) return;
         if (typeof Player === 'undefined' || !Player?.AccountName) return;
         e.preventDefault();
         e.returnValue = '';

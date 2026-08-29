@@ -11,6 +11,7 @@
 
 import modApi from '../modsdk.js';
 import { getFeature } from '../core/feature-settings.js';
+import { shouldLceHandle } from '../core/wce-compat.js';
 import { loadAccounts, decryptPassword } from '../core/storage.js';
 import { T } from '../core/i18n.js';
 
@@ -81,7 +82,10 @@ let lastAttempt = 0;
 let backoff = RELOG_MIN_INTERVAL;
 
 function hook(name, priority, fn) {
-    try { modApi.hookFunction(name, priority, fn); }
+    try {
+        modApi.hookFunction(name, priority, (args, next) =>
+            shouldLceHandle('relogin') ? fn(args, next) : next(args));
+    }
     catch (e) { console.warn(LOG, 'relogin hook 未掛上:', name, e?.message ?? e); }
 }
 
@@ -106,7 +110,7 @@ async function savedPassword(accountName) {
 }
 
 async function relog() {
-    if (!getFeature('relogin')) return;
+    if (!shouldLceHandle('relogin')) return;
     if (!Player?.AccountName || LoginSubmitted || breakCircuit || breakCircuitFull) return;
     if (typeof ServerSocket === 'undefined' || !ServerSocket?.connected) return;
 

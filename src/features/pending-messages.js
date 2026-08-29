@@ -5,6 +5,7 @@
 
 import modApi from '../modsdk.js';
 import { getFeature } from '../core/feature-settings.js';
+import { shouldLceHandle } from '../core/wce-compat.js';
 
 const STYLE_ID = 'lce-pending-style';
 const HIDDEN_TYPE = 'Hidden';
@@ -54,7 +55,7 @@ export function installPendingMessages() {
     hook('ChatRoomMessage', 0, (args, next) => {
         const ret = next(args);
         try {
-            if (getFeature('pendingMessages') && args?.length && isChatMessage(args[0]) && Array.isArray(args[0].Dictionary)) {
+            if (shouldLceHandle('pendingMessages') && args?.length && isChatMessage(args[0]) && Array.isArray(args[0].Dictionary)) {
                 const tag = args[0].Dictionary.find?.(d => d.Tag === 'lce_nonce');
                 if (tag) document.querySelector(`[data-nonce='${tag.Text}']`)?.remove();
             }
@@ -65,7 +66,7 @@ export function installPendingMessages() {
     // 送出 → 先畫暫存訊息
     hook('ServerSend', 10, (args, next) => {
         try {
-            if (getFeature('pendingMessages') && args?.length >= 2 && args[0] === 'ChatRoomChat'
+            if (shouldLceHandle('pendingMessages') && args?.length >= 2 && args[0] === 'ChatRoomChat'
                 && isChatMessage(args[1]) && args[1].Type !== HIDDEN_TYPE && !args[1].Target) {
                 nonce++;
                 if (nonce >= Number.MAX_SAFE_INTEGER) nonce = 0;

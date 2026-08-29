@@ -8,6 +8,7 @@
 
 import { getFeature } from '../core/feature-settings.js';
 import { T } from '../core/i18n.js';
+import { shouldLceHandle } from '../core/wce-compat.js';
 import { isOriginTrusted, requestOriginTrust, sessionCustomOrigins } from './trusted-domains.js';
 
 const STYLE_ID = 'lce-augment-style';
@@ -216,7 +217,7 @@ function scan() {
     // chatColors：可讀性調色（body class 切換即可，關閉時自動還原）
     document.body?.classList.toggle('lce-colors', !!getFeature('chatColors'));
 
-    if (CurrentScreen !== 'ChatRoom' || !getFeature('augmentChat')) return;
+    if (CurrentScreen !== 'ChatRoom' || !shouldLceHandle('augmentChat')) return;
     const unhandled = document.querySelectorAll(`.ChatMessage:not([${HANDLED_ATTR}=true])`);
     for (const msgEl of unhandled) {
         msgEl.setAttribute(HANDLED_ATTR, 'true');

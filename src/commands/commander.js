@@ -8,6 +8,8 @@
 import modApi from '../modsdk.js';
 import { MOD_VER, LCE_EXT_KEY } from '../core/constants.js';
 import { getFeature } from '../core/feature-settings.js';
+import { openModal, openModalAsync } from '../core/modal-service.js';
+import { isWceLoaded } from '../core/wce-compat.js';
 import { isExpressionEngineStarted } from '../features/expressions.js';
 import { LOCAL_MARKER } from '../features/local-messages.js';
 import { toggleThemeTestBalloon } from '../features/theme-test.js';
@@ -152,7 +154,7 @@ function openSettings() {
     }
 }
 
-function lceDebug() {
+export function buildLceDebugReport() {
     const info = [];
     info.push(`Browser: ${navigator.userAgent}`);
     info.push(`Game Version: ${typeof GameVersion !== 'undefined' ? GameVersion : '?'}`);
@@ -163,78 +165,75 @@ function lceDebug() {
     } catch { /* ignore */ }
     info.push(`表情引擎: ${isExpressionEngineStarted() ? '已啟動' : '未啟動'}`
         + ` (自動慾望表情=${getFeature('autoArousalExpression')}, 活動表情=${getFeature('activityExpressions')})`);
-    const print = info.join('\n');
+    return info.join('\n');
+}
+
+function lceDebug() {
+    const print = buildLceDebugReport();
     // 資料已在剪貼簿，聊天室裡的那份 10 秒後自動移除，免得洗版。
     lceChatNotify(`${print}\n\n**已複製到剪貼簿。**（10 秒後自動移除）`, { autoRemoveMs: 10000 });
     navigator.clipboard?.writeText(print).catch(() => {});
     return print;
 }
 
-function exportLooks(target) {
+async function exportLooks(target) {
     const targetCharacter = (target ? Character.find(c => c.MemberNumber === parseInt(target)) : Player) ?? null;
     if (!targetCharacter) { lceChatNotify(`找不到會員 ${target}`); return; }
-    if (!(typeof FUSAM === 'object' && FUSAM?.modals)) { lceChatNotify('需要 FUSAM 對話框支援。'); return; }
-
-    let includeBinds = false, includeLocks = false, includeBase = false;
-    FUSAM.modals.openAsync({ prompt: '包含綑綁物品？', buttons: { cancel: 'No', submit: 'Yes' } })
-        .then(([bindSubmit]) => {
-            includeBinds = bindSubmit === 'submit';
-            if (includeBinds) {
-                return FUSAM.modals.openAsync({ prompt: '包含鎖？', buttons: { cancel: 'No', submit: 'Yes' } })
-                    .then(([lockSubmit]) => { includeLocks = lockSubmit === 'submit'; });
-            }
-            return null;
-        })
-        .then(() => FUSAM.modals.openAsync({ prompt: '包含身高、體型、髮型等？', buttons: { cancel: 'No', submit: 'Yes' } }))
-        .then(([baseSubmit]) => {
-            includeBase = baseSubmit === 'submit';
-            const base = targetCharacter.Appearance.filter(a => a.Asset.Group.IsDefault && !a.Asset.Group.Clothing);
-            const clothes = targetCharacter.Appearance.filter(a => a.Asset.Group.Category === 'Appearance' && a.Asset.Group.Clothing);
-            const binds = targetCharacter.Appearance.filter(a => a.Asset.Group.Category === 'Item' && !a.Asset.Group.BodyCosplay);
-            const appearance = [...clothes];
-            if (includeBinds) appearance.push(...binds);
-            if (includeBase) appearance.push(...base);
-            const looks = appearance.map(i => {
-                const property = i.Property ? { ...i.Property } : {};
-                if (!includeLocks && property.LockedBy) { delete property.LockedBy; delete property.LockMemberNumber; }
-                if (property?.LockMemberNumber) property.LockMemberNumber = Player.MemberNumber;
-                return { Group: i.Asset.Group.Name, Name: i.Asset.Name, Color: i.Color, Difficulty: i.Difficulty, Property: property, Craft: i.Craft };
-            });
-            const exportString = LZString.compressToBase64(JSON.stringify(looks));
-            FUSAM.modals.openAsync({
-                prompt: '複製下方外觀字串', input: { initial: exportString, readonly: true, type: 'textarea' }, buttons: { submit: 'Done' },
-            });
-            return navigator.clipboard.writeText(exportString).then(() => lceChatNotify('外觀字串已複製到剪貼簿。'));
-        })
-        .catch(e => console.warn(LOG, 'exportlooks 失敗:', e));
+    try {
+        const [bindSubmit] = await openModalAsync({ prompt: '包含綑綁物品？', buttons: { cancel: 'No', submit: 'Yes' } });
+        const includeBinds = bindSubmit === 'submit';
+        let includeLocks = false;
+        if (includeBinds) {
+            const [lockSubmit] = await openModalAsync({ prompt: '包含鎖？', buttons: { cancel: 'No', submit: 'Yes' } });
+            includeLocks = lockSubmit === 'submit';
+        }
+        const [baseSubmit] = await openModalAsync({ prompt: '包含身高、體型、髮型等？', buttons: { cancel: 'No', submit: 'Yes' } });
+        const includeBase = baseSubmit === 'submit';
+        const base = targetCharacter.Appearance.filter(a => a.Asset.Group.IsDefault && !a.Asset.Group.Clothing);
+        const clothes = targetCharacter.Appearance.filter(a => a.Asset.Group.Category === 'Appearance' && a.Asset.Group.Clothing);
+        const binds = targetCharacter.Appearance.filter(a => a.Asset.Group.Category === 'Item' && !a.Asset.Group.BodyCosplay);
+        const appearance = [...clothes];
+        if (includeBinds) appearance.push(...binds);
+        if (includeBase) appearance.push(...base);
+        const looks = appearance.map(i => {
+            const property = i.Property ? { ...i.Property } : {};
+            if (!includeLocks && property.LockedBy) { delete property.LockedBy; delete property.LockMemberNumber; }
+            if (property?.LockMemberNumber) property.LockMemberNumber = Player.MemberNumber;
+            return { Group: i.Asset.Group.Name, Name: i.Asset.Name, Color: i.Color, Difficulty: i.Difficulty, Property: property, Craft: i.Craft };
+        });
+        const exportString = LZString.compressToBase64(JSON.stringify(looks));
+        openModal({
+            prompt: '複製下方外觀字串', input: { initial: exportString, readonly: true, type: 'textarea' }, buttons: { submit: 'Done' },
+        });
+        await navigator.clipboard.writeText(exportString);
+        lceChatNotify('外觀字串已複製到剪貼簿。');
+    } catch (e) { console.warn(LOG, 'exportlooks 失敗:', e); }
 }
 
-function importLooks() {
+async function importLooks() {
     if (!Player.CanChangeOwnClothes() || !OnlineGameAllowChange()) {
         lceChatNotify('綑綁中或線上遊戲時無法變更外觀。'); return;
     }
-    if (!(typeof FUSAM === 'object' && FUSAM?.modals)) { lceChatNotify('需要 FUSAM 對話框支援。'); return; }
-    FUSAM.modals.open({
+    const [act, bundleString] = await openModalAsync({
         prompt: '貼上你的外觀字串', input: { initial: '', readonly: false, type: 'textarea' },
-        callback: (act, bundleString) => {
-            if (act !== 'submit') return;
-            if (!bundleString) { lceChatNotify('未提供外觀字串。'); return; }
-            try {
-                const bundle = bundleString.startsWith('[') ? parseJSON(bundleString) : parseJSON(LZString.decompressFromBase64(bundleString));
-                if (!Array.isArray(bundle) || bundle.length === 0 || !bundle[0].Group) throw new Error('Invalid bundle');
-                for (const item of Player.Appearance) {
-                    if (item.Property?.LockedBy && !DialogCanUnlock(Player, item)) {
-                        const itemBundle = { Group: item.Asset.Group.Name, Name: item.Asset.Name, Color: item.Color, Difficulty: item.Difficulty, Property: item.Property };
-                        const idx = bundle.findIndex(v => v.Group === item.Asset.Group.Name);
-                        if (idx < 0) bundle.push(itemBundle); else bundle[idx] = itemBundle;
-                    }
-                }
-                ServerAppearanceLoadFromBundle(Player, 'Female3DCG', bundle, Player.MemberNumber);
-                ChatRoomCharacterUpdate(Player);
-                lceChatNotify('已套用外觀。');
-            } catch (e) { console.error(e); lceChatNotify('無法解析外觀字串。'); }
-        },
+        buttons: { cancel: '取消', submit: '匯入' },
     });
+    if (act !== 'submit') return;
+    if (!bundleString) { lceChatNotify('未提供外觀字串。'); return; }
+    try {
+        const bundle = bundleString.startsWith('[') ? parseJSON(bundleString) : parseJSON(LZString.decompressFromBase64(bundleString));
+        if (!Array.isArray(bundle) || bundle.length === 0 || !bundle[0].Group) throw new Error('Invalid bundle');
+        for (const item of Player.Appearance) {
+            if (item.Property?.LockedBy && !DialogCanUnlock(Player, item)) {
+                const itemBundle = { Group: item.Asset.Group.Name, Name: item.Asset.Name, Color: item.Color, Difficulty: item.Difficulty, Property: item.Property };
+                const idx = bundle.findIndex(v => v.Group === item.Asset.Group.Name);
+                if (idx < 0) bundle.push(itemBundle); else bundle[idx] = itemBundle;
+            }
+        }
+        ServerAppearanceLoadFromBundle(Player, 'Female3DCG', bundle, Player.MemberNumber);
+        ChatRoomCharacterUpdate(Player);
+        lceChatNotify('已套用外觀。');
+    } catch (e) { console.error(e); lceChatNotify('無法解析外觀字串。'); }
 }
 
 function beep(command, target) {
@@ -463,6 +462,9 @@ const COMMAND_LIST = [
     { Tag: 'lcedebug', Description: '取得除錯資訊並複製到剪貼簿', Action: () => { lceDebug(); } },
 ];
 
+const WCE_COMMANDS = new Set(['exportlooks', 'importlooks', 'beep', 'w', 'versions']);
+const commandOwnedByWce = command => isWceLoaded() && WCE_COMMANDS.has(command.Tag);
+
 /** 引起高潮（移植自 CRA）。 */
 function doOrgasm() {
     try {
@@ -484,7 +486,7 @@ function showHelp() {
     wrap.appendChild(head);
 
     for (const c of COMMAND_LIST) {
-        if (c.HelpHidden) continue;   // /lce 本身不列進說明
+        if (c.HelpHidden || commandOwnedByWce(c)) continue;
         const row = document.createElement('div');
         row.className = 'lce-help-row';
         row.appendChild(chatButton(`/${c.Tag}`, () => {
@@ -508,10 +510,25 @@ function showHelp() {
 }
 
 let installed = false;
+let debugRegistered = false;
+
+function installDebugProvider() {
+    (function wait(n = 120) {
+        if (debugRegistered) return;
+        const register = window.FUSAM?.registerDebugMethod;
+        if (typeof register === 'function') {
+            try { register.call(window.FUSAM, 'LCE', buildLceDebugReport); debugRegistered = true; }
+            catch (error) { console.warn(LOG, '註冊 LCE 診斷失敗:', error); }
+            return;
+        }
+        if (n > 0) setTimeout(() => wait(n - 1), 500);
+    })();
+}
 
 /** 等 Commands 就緒後註冊 LCE 指令。指令系統是必要功能，沒有開關。 */
 export function installCommander() {
     if (installed) return;
+    installDebugProvider();
     (function wait(n = 240) {
         if (typeof Commands === 'undefined' || !Commands || typeof CommandCombine !== 'function') {
             if (n <= 0) { console.warn(LOG, '找不到 Commands，指令未註冊'); return; }
@@ -519,7 +536,7 @@ export function installCommander() {
             return;
         }
         // HelpOnly（如 profiles）只出現在說明清單，實際指令由各自的 feature 註冊，這裡不重複註冊。
-        CommandCombine(COMMAND_LIST.filter(c => !c.HelpOnly));
+        CommandCombine(COMMAND_LIST.filter(c => !c.HelpOnly && !commandOwnedByWce(c)));
         installed = true;
     })();
 }

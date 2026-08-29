@@ -44,12 +44,12 @@ export const LCE_EXT_KEY = 'LCE';             // Player.ExtensionSettings 的鍵
 export const FEATURE_SETTINGS_VERSION = 1;    // 設定結構版本，日後遷移用
 
 /**
- * z-index 分層。stage 疊在 canvas 之上、fusam 之下；設定浮層蓋過 stage；fusam 蓋過一切。
+ * z-index 分層。stage 疊在 canvas 之上；設定浮層蓋過 stage；外掛管理器蓋過一切。
  */
 export const Z = {
     STAGE:    100,
     SETTINGS: 400,
-    FUSAM:    1000,
+    ADDON_MANAGER: 1000,
 };
 
 // 進入 LCE 登入模式時要隱藏的 BC 原生登入元素（不含 MainCanvas —— 保留 canvas 供座標對齊）
@@ -63,8 +63,11 @@ export const BC_HIDE_IDS = [
     'login-footer', 'LanguageDropdown',
 ];
 
-// 需要維持可見的第三方插件元素（FUSAM）
-export const BC_PASSTHROUGH_IDS = ['fusam-show-button', 'fusam-addon-manager-container'];
+// 需要維持可見的第三方外掛管理器元素（FUSAM / PCM）。
+export const BC_PASSTHROUGH_IDS = [
+    'fusam-show-button', 'fusam-addon-manager-container',
+    'bc-plugin-btn-group', 'bc-plugin-panel', 'pcm-fusam-modal-root',
+];
 
 // 第三方插件在登入頁加的 HTML 元素（Themed-BC 的登入選項按鈕/彈窗）——LCE 啟用時遮蔽。
 // WCE 的「存檔登入」是直接畫在 MainCanvas 上，會被滿版背景圖蓋住，不需另外處理。

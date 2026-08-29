@@ -15,6 +15,7 @@ import { openDB } from 'idb';
 import modApi from '../modsdk.js';
 import { MOD_VER } from '../core/constants.js';
 import { getFeature } from '../core/feature-settings.js';
+import { shouldLceHandle } from '../core/wce-compat.js';
 import { createPositionableButton, exposeButton, LCE_API } from '../core/public-api.js';
 import { T } from '../core/i18n.js';
 import { positionElement, deepCopy } from '../core/util.js';
@@ -75,7 +76,10 @@ async function setNote(memberNumber, note) {
 const parseJSON = (s) => { try { return s ? JSON.parse(s) : null; } catch { return null; } };
 
 function hook(name, priority, fn) {
-    try { modApi.hookFunction(name, priority, fn); }
+    try {
+        modApi.hookFunction(name, priority, (args, next) =>
+            shouldLceHandle('pastProfiles') ? fn(args, next) : next(args));
+    }
     catch (e) { console.warn(LOG, 'pastProfiles hook 未掛上:', name, e?.message ?? e); }
 }
 
@@ -344,7 +348,7 @@ let installed = false;
 
 export async function installPastProfiles() {
     if (installed) return;
-    if (!getFeature('pastProfiles')) return;   // 同 WCE：關閉時整個功能不初始化（需重整才生效）
+    if (!getFeature('pastProfiles')) return;
     installed = true;
     injectStyle();
 
@@ -367,7 +371,7 @@ export async function installPastProfiles() {
         return;
     }
 
-    exposeButton('pastProfiles', { ...notesButtonApi, isEnabled: () => !!getFeature('pastProfiles') });
+    exposeButton('pastProfiles', { ...notesButtonApi, isEnabled: () => shouldLceHandle('pastProfiles') });
     LCE_API.pastProfiles = { get: getNote, set: setNote };
 
     if (typeof ElementCreateTextArea === 'function') ElementCreateTextArea(NOTE_ID);

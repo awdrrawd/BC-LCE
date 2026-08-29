@@ -11,6 +11,7 @@ import modApi from '../modsdk.js';
 import { MOD_VER } from '../core/constants.js';
 import { getFeature } from '../core/feature-settings.js';
 import { T } from '../core/i18n.js';
+import { shouldLceHandle } from '../core/wce-compat.js';
 // 與聊天嵌入共用同一份「本次連線已授權來源」名單（WCE 也是共用同一個 map），
 // 在聊天嵌入授權過的來源，這裡就不會再問一次。
 import { isOriginTrusted, requestOriginTrust, sessionCustomOrigins } from './trusted-domains.js';
@@ -69,7 +70,7 @@ export function installMisc() {
     // ── 異常新帳號自動 ghost + 黑名單 ──
     const onMemberJoin = (data) => {
         try {
-            if (!getFeature('ghostNewUsers')) return;
+            if (!shouldLceHandle('ghostNewUsers')) return;
             if (!data?.Character?.Creation) return;
             if (Date.now() - data.Character.Creation >= NEW_ACCOUNT_MS) return;
             ChatRoomListUpdate(Player.BlackList, true, data.Character.MemberNumber);
@@ -92,7 +93,7 @@ export function installMisc() {
 
     // ── 房間自訂背景/音樂的網域確認 ──
     hook('ChatAdminRoomCustomizationProcess', 20, (args, next) => {
-        if (!getFeature('customContentDomainCheck')) return next(args);
+        if (!shouldLceHandle('customContentDomainCheck')) return next(args);
         try {
             const [{ ImageURL, MusicURL }] = args;
             const imageOrigin = ImageURL && new URL(ImageURL).origin;
