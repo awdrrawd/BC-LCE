@@ -4,6 +4,7 @@ dist/*
 !dist/assets/
 dist/assets/*
 !dist/assets/main.js
+!dist/assets/app.js
 *.log
 .DS_Store
 

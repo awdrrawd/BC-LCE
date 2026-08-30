@@ -22,9 +22,15 @@ function privateNetworkAccessPlugin() {
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [privateNetworkAccessPlugin()],
-  // main.js 可由 GitHub main 分支的 jsDelivr URL 載入，大型背景素材仍由
-  // Pages 的完整 dist 提供，避免將圖片／影片全部提交到 main 分支。
-  base: 'https://awdrrawd.github.io/BC-LCE/',
+  base: './',
+  // JS chunk 維持相對路徑：localhost/main.js 載 localhost/app.js，
+  // jsDelivr/main.js 載 jsDelivr/app.js。只有大型圖片／影片改由 Pages 提供。
+  experimental: {
+    renderBuiltUrl(filename, { type }) {
+      if (type === 'asset') return `https://awdrrawd.github.io/BC-LCE/${filename}`;
+      return { relative: true };
+    },
+  },
   define: {
     __LCE_VERSION__: JSON.stringify(pkg.version),
   },
@@ -46,7 +52,6 @@ export default defineConfig({
     rollupOptions: {
       input: 'src/main.js',
       output: {
-        inlineDynamicImports: true,
         entryFileNames: 'assets/[name].js',
         chunkFileNames: 'assets/[name].js',
         // 圖片等 asset 加 content hash：內容變更時檔名跟著變，避免瀏覽器讀到舊快取。

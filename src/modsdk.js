@@ -9,14 +9,18 @@ import { MOD_VER } from './core/constants.js';
 window.Liko = window.Liko ?? {};
 export const LCE_ALREADY_LOADED = !!(window.Liko.LCE && window.Liko.LCE.version);
 
-const modApi = LCE_ALREADY_LOADED
-  ? createNoopModApi()
-  : bcModSdk.registerMod({
+const existingLceMod = bcModSdk.getModsInfo?.().find(mod => mod.name === 'Liko - LCE');
+if (existingLceMod) {
+  console.warn('🐈‍⬛ [LCE] Already registered with Mod SDK, aborting duplicate init.');
+  throw new Error('[LCE] Duplicate Mod SDK registration prevented.');
+}
+
+const modApi = LCE_ALREADY_LOADED ? createNoopModApi() : bcModSdk.registerMod({
       name: 'Liko - LCE',
       fullName: 'Liko Club Extensions',
       version: MOD_VER,
       repository: 'https://github.com/awdrrawd/BC-LCE',
-    }, { allowReplace: false });
+  }, { allowReplace: false });
 
 function createNoopModApi() {
   return {
