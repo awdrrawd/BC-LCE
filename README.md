@@ -67,6 +67,15 @@ LCE.version                         // 版本字串
 LCE.getFeature(key) / setFeature(key, value)   // 讀/寫功能設定（會觸發 sideEffects + 存檔）
 LCE.settings                        // 目前設定物件（唯讀 getter）
 
+// 圖片來源信任（origin 會正規化為 https://example.com）
+LCE.TrustedImageOrigins.list()                  // 永久信任來源的複本
+LCE.TrustedImageOrigins.isPermanentlyTrusted(urlOrOrigin)
+LCE.TrustedImageOrigins.isSessionTrusted(urlOrOrigin)
+LCE.TrustedImageOrigins.isTrusted(urlOrOrigin)  // 永久或本次連線信任
+LCE.TrustedImageOrigins.addPermanent(urlOrOrigin)
+LCE.TrustedImageOrigins.removePermanent(urlOrOrigin)
+await LCE.TrustedImageOrigins.request(urlOrOrigin, 'image', { persistent: true })
+
 // 主題色（建議用 Theme.*；未啟用染色時顏色一律 null）
 LCE.Theme.enabled                   // boolean：染色是否啟用
 LCE.Theme.Main / .Accent / .Text …  // hex，或未啟用時 null（另有 Element/ElementHover… 全套）

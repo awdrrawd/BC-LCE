@@ -54,6 +54,24 @@ import { refreshAccounts } from './loginpage/account-carousel.js';
 import { installLoginPage, teardownLoginPage } from './loginpage/index.js';
 import { ensureAddonManagersVisible } from './loginpage/bc.js';
 import { isWceLoaded, isWceFeatureEnabled, shouldLceHandle, WCE_OVERLAPS } from './core/wce-compat.js';
+import { normalizeOrigin, getTrustedOrigins, isOriginTrusted, addTrustedOrigin, removeTrustedOrigin, requestOriginTrust, sessionCustomOrigins } from './features/trusted-domains.js';
+
+const TrustedImageOrigins = Object.freeze({
+    normalize: normalizeOrigin,
+    list: getTrustedOrigins,
+    isPermanentlyTrusted: isOriginTrusted,
+    isSessionTrusted(value) {
+        const origin = normalizeOrigin(value);
+        return !!origin && sessionCustomOrigins.get(origin) === 'allowed';
+    },
+    isTrusted(value) {
+        const origin = normalizeOrigin(value);
+        return !!origin && (isOriginTrusted(origin) || sessionCustomOrigins.get(origin) === 'allowed');
+    },
+    addPermanent: addTrustedOrigin,
+    removePermanent: removeTrustedOrigin,
+    request: requestOriginTrust,
+});
 
 // 重複載入防護：已載入就直接結束（loader 也有前置檢查，這裡才是真正的旗標擁有者）。
 window.Liko = window.Liko ?? {};
@@ -175,6 +193,8 @@ if (LCE_ALREADY_LOADED) {
             getTextColor,
             getPalette,
             isDarkTheme,
+            // 圖片來源信任 API：跨插件請透過此介面，不要直接讀 LCE 的 localStorage key。
+            TrustedImageOrigins,
         });
 
         // settings 必須用 defineProperty 定義成真的 getter，不能寫在上面的 Object.assign 裡：
