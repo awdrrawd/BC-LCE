@@ -9,6 +9,8 @@
 ## 文件
 
 - [ExtensionSettings 與 AccountUpdate 處理說明](docs/extension-settings-account-update.md)
+- [LCE 架構與擴充指南](docs/architecture.md)
+- [互動式功能分支圖](docs/lce-architecture.html)
 
 ## 功能總覽
 
