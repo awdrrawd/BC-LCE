@@ -1,3 +1,4 @@
+import { observeResponsive, responsiveOwns } from '../core/responsive-compat.js';
 // ════════════════════════════════════════════════════════════════════════════
 // 說話時自動開口（autoMouthOnTalk）—— 移植自 BC-Responsive CharTalk.ts
 //
@@ -75,12 +76,13 @@ function cleanup(c) {
 }
 
 function runStep(c) {
+    if (responsiveOwns('mouth')) return;
     const d = charData[c.MemberNumber];
     if (!d) return;
     if (d.animationFrame >= d.animation.length) { cleanup(c); return; }
     const [expression, duration] = d.animation[d.animationFrame++];
     setLocalMouthExpression(c, expression);
-    setTimeout(() => runStep(c), duration);
+    d.timer = setTimeout(() => runStep(c), duration);
 }
 
 function runAnimation(c, list) {
@@ -114,6 +116,14 @@ let installed = false;
 export function installCharTalk() {
     if (installed) return;
     installed = true;
+    observeResponsive((next) => {
+        if (!next.mouth) return;
+        const ids = Object.keys(charData);
+        ids.forEach(id => { clearTimeout(charData[id].timer); delete charData[id]; });
+        for (const c of (globalThis.ChatRoomCharacter || [])) {
+            if (ids.includes(String(c.MemberNumber))) CharacterRefresh(c, false);
+        }
+    });
 
     // 收訊息 → 起動畫
     try {
@@ -123,7 +133,7 @@ export function installCharTalk() {
                 Priority: 500,
                 Callback: (data, sender, msg) => {
                     try {
-                        if (!getFeature('autoMouthOnTalk')) return false;
+                        if (!getFeature('autoMouthOnTalk') || responsiveOwns('mouth')) return false;
                         if (data.Type !== 'Chat' || !sender) return false;
                         if (charData[sender.MemberNumber]) return false;
                         if (isSimpleChat(msg)) animateSpeech(sender, msg);
@@ -137,6 +147,7 @@ export function installCharTalk() {
     // 繪製時暫時替換嘴型，畫完立刻還原（不污染真實表情）
     try {
         modApi.hookFunction('CommonDrawAppearanceBuild', 0, (args, next) => {
+        if (responsiveOwns('mouth')) return next(args);
             const c = args[0];
             const d = c && charData[c.MemberNumber];
             if (!d) return next(args);

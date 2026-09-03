@@ -1,3 +1,4 @@
+import { observeResponsive, responsiveOwns } from '../core/responsive-compat.js';
 // ════════════════════════════════════════════════════════════════════════════
 // 自動慾望表情（autoArousalExpression）＋ 活動表示（activityExpressions）
 // 移植自 WCE automaticExpressions.js（資料表見 expressions-data.js）
@@ -111,7 +112,7 @@ const mustNum = (v, d = 0) => (typeof v === 'number' && !isNaN(v) ? v : d);
  *   2. 引擎真的啟動了（已進過聊天室）—— 否則鉤子會吞掉表情變更卻沒有引擎能套用，
  *      表情就這樣憑空消失。未啟動時一律讓 BC 走自己的原生路徑。
  */
-const engineOn = () => engineStarted && !!getFeature('animationEngine');
+const engineOn = () => engineStarted && !!getFeature('animationEngine') && !responsiveOwns('expressions');
 
 function hook(name, priority, fn) {
     try { modApi.hookFunction(name, priority, fn); }
@@ -185,6 +186,7 @@ function bcxRule(name) {
 
 // ───────────────────────── 佇列 ─────────────────────────
 export function pushEvent(evt) {
+    if (responsiveOwns('expressions')) return;
     if (!evt) return;
     // 依事件類型分別由兩個設定控制（取代 WCE 的總開關）
     switch (evt.Type) {
@@ -687,6 +689,21 @@ export const isExpressionEngineStarted = () => engineStarted;
 export function installExpressions() {
     if (installed) return;
     installed = true;
+    observeResponsive((next, previous) => {
+        if (next.expressions === previous.expressions) return;
+        queue.length = 0;
+        for (const map of [manualComponents, broadcast, lastSentAt]) {
+            for (const key of Object.keys(map)) delete map[key];
+        }
+        if (!next.expressions && engineStarted && globalThis.Player?.ArousalSettings) {
+            PreviousArousal = { ...Player.ArousalSettings };
+            // Adopt the present face/pose after handoff rather than replaying stale events.
+            pushEvent({ Type: MANUAL_EVT, Duration: -1,
+                Expression: Object.fromEntries(faceComponents().map(t => [t, [{ Expression: expression(t)[0], Duration: -1 }]])),
+                Poses: [{ Pose: [...(Player.ActivePose || [])], Duration: -1 }],
+            });
+        }
+    });
 
     // 等到第一次進聊天室才啟動。不設次數上限 —— 使用者可能登入後過很久才進房，
     // 一旦放棄就再也不會綁 socket，整個引擎會靜靜地失效（同 WCE 的 waitFor，無逾時）。
