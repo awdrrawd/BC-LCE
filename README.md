@@ -101,10 +101,10 @@ LCE.Button.Messenger.resetZIndex()
 await LCE.pastProfiles.get(memberNumber)
 await LCE.pastProfiles.set(memberNumber, note)
 
-// WPS 相容層（FCM > LCE > 獨立 WPS）
-LCE.WPS.apiVersion
-await LCE.WPS.share(memberNumber)       // FCM 有可分享資料時優先交給 FCM
-LCE.WPS.handlesReceive()                // LCE 是否為目前的 WPS 接收者
+// Profile 分享能力（接收優先序：FCM > LCE > 獨立 WPS）
+LCE.ProfileShare.apiVersion
+await LCE.ProfileShare.share(memberNumber)  // FCM 有可分享資料時優先交給 FCM
+LCE.ProfileShare.handlesReceive()           // LCE 是否為目前的 LIKOSHARE 接收者
 
 // 表情引擎診斷、登入頁熱移除等，見 main.js 的 Object.assign 區塊
 ```

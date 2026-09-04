@@ -13,7 +13,6 @@
 
 import { openDB } from 'idb';
 import modApi from '../modsdk.js';
-import { MOD_VER } from '../core/constants.js';
 import { getFeature } from '../core/feature-settings.js';
 import { shouldLceHandle } from '../core/wce-compat.js';
 import { createPositionableButton, exposeButton, LCE_API } from '../core/public-api.js';
@@ -368,11 +367,6 @@ export async function installPastProfiles() {
     installed = true;
     injectStyle();
 
-    // 宣告 LCE 已內建 WCE Profile Share：獨立的 Liko - WPS 外掛看到這個旗標就會自行停用，
-    // 避免同一則分享被處理兩次（見該外掛開頭的 `if (window.Liko.WPS) return;`）。
-    window.Liko = window.Liko ?? {};
-    if (!window.Liko.WPS) window.Liko.WPS = `LCE-${MOD_VER}`;
-
     try {
         db = await openDB(DB_NAME, DB_VER, {
             upgrade(odb, ov, nv, tx) {
@@ -389,7 +383,7 @@ export async function installPastProfiles() {
 
     exposeButton('pastProfiles', { ...notesButtonApi, isEnabled: () => shouldLceHandle('pastProfiles') });
     LCE_API.pastProfiles = { get: getNote, set: setNote };
-    LCE_API.WPS = Object.freeze({
+    LCE_API.ProfileShare = Object.freeze({
         apiVersion: 1,
         share: shareProfile,
         handlesReceive: () => !fcmWpsApi(),
