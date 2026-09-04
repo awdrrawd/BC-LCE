@@ -31,12 +31,11 @@ const DB_VER = 31;
 // ── WCE Profile Share（WPS）互通協定 ──
 // 移植自 Liko - WPS 外掛：把個資切塊後用隱藏聊天訊息傳給房內其他人，對方能一鍵開啟並存下。
 // 這些常數（前綴、開啟標記、每塊大小）必須與 WPS 外掛完全一致，才能雙向互通，勿更動。
-const WPS_PREFIX = '[LIKOSHARE]';
-const WPS_OPEN_MARK = 'LIKOSHARE_OPEN';
+const PROFILE_SHARE_PREFIX = '[PROFILESHARE]';
 const WPS_CHUNK_SIZE = 800;
 const wpsIncoming = new Map();   // shareId → { total, chunks[] }：組裝中的分塊
 
-function fcmHandlesProfileShare() {
+function higherProfileReceiverAvailable() {
     const fcm = window.Liko?.FCM;
     return fcm?.apiVersion >= 1 && typeof fcm.profiles?.share === 'function';
 }
@@ -277,7 +276,7 @@ async function shareProfile(memberNumber) {
         const total = Math.ceil(encoded.length / WPS_CHUNK_SIZE);
         for (let i = 0; i < total; i++) {
             const chunk = encoded.slice(i * WPS_CHUNK_SIZE, (i + 1) * WPS_CHUNK_SIZE);
-            ServerSend('ChatRoomChat', { Type: 'Hidden', Content: `${WPS_PREFIX} ${shareId} ${i + 1}/${total} ${chunk}` });
+            ServerSend('ChatRoomChat', { Type: 'Hidden', Content: `${PROFILE_SHARE_PREFIX} ${shareId} ${i + 1}/${total} ${chunk}` });
         }
         const displayName = profile.lastNick || profile.name || String(memberNumber);
         lceChatNotify(T('profiles_shared_self').replace('{name}', displayName).replace('{id}', String(memberNumber)));
@@ -288,7 +287,7 @@ async function shareProfile(memberNumber) {
 
 /** 收到隱藏分塊訊息 → 組回完整 payload → 顯示可一鍵開啟的本地訊息。回傳是否為 WPS 訊息。 */
 function handleShareMessage(data) {
-    if (!data?.Content?.startsWith(WPS_PREFIX)) return false;
+    if (!data?.Content?.startsWith(PROFILE_SHARE_PREFIX)) return false;
     try {
         const parts = data.Content.split(' ');
         const shareId = parts[1];
@@ -377,7 +376,7 @@ export async function installPastProfiles() {
     LCE_API.ProfileShare = Object.freeze({
         apiVersion: 1,
         share: shareProfile,
-        handlesReceive: () => !fcmHandlesProfileShare(),
+        handlesReceive: () => !higherProfileReceiverAvailable(),
     });
 
     if (typeof ElementCreateTextArea === 'function') ElementCreateTextArea(NOTE_ID);
@@ -387,10 +386,10 @@ export async function installPastProfiles() {
         noteInput.classList.add('lce-hidden');
     }
 
-    // 收 WPS 分享：隱藏訊息（Type:"Hidden"）帶 [LIKOSHARE] 前綴的就是分享分塊，攔下來自己處理。
+    // 收取 PROFILESHARE 分享：攔截帶有協定前綴的隱藏分塊訊息並自行處理。
     hook('ChatRoomMessage', 0, (args, next) => {
         const [data] = args;
-        if (fcmHandlesProfileShare()) return next(args);
+        if (higherProfileReceiverAvailable()) return next(args);
         if (data?.Type === 'Hidden' && handleShareMessage(data)) return undefined;
         return next(args);
     });

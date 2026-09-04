@@ -104,7 +104,7 @@ await LCE.pastProfiles.set(memberNumber, note)
 // Profile 分享能力（接收優先序：FCM > LCE > 獨立 WPS）
 LCE.ProfileShare.apiVersion
 await LCE.ProfileShare.share(memberNumber)  // 使用 LCE 保存的 Profile 發送
-LCE.ProfileShare.handlesReceive()           // LCE 是否為目前的 LIKOSHARE 接收者
+LCE.ProfileShare.handlesReceive()           // LCE 是否為目前的 PROFILESHARE 接收者
 
 // 表情引擎診斷、登入頁熱移除等，見 main.js 的 Object.assign 區塊
 ```
