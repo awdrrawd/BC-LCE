@@ -37,6 +37,14 @@ const WPS_OPEN_MARK = 'LIKOSHARE_OPEN';
 const WPS_CHUNK_SIZE = 800;
 const wpsIncoming = new Map();   // shareId → { total, chunks[] }：組裝中的分塊
 
+function fcmWpsApi() {
+    const fcm = window.Liko?.FCM;
+    return fcm?.apiVersion >= 1
+        && typeof fcm.profiles?.has === 'function'
+        && typeof fcm.profiles?.share === 'function'
+        ? fcm.profiles : null;
+}
+
 const {
     api: notesButtonApi,
     getPosition: getNotesButtonPosition,
@@ -244,6 +252,12 @@ function openSharedCharacter(profile) {
 
 /** 把某會員的個資切塊後用隱藏訊息送給房內所有人。 */
 async function shareProfile(memberNumber) {
+    const fcm = fcmWpsApi();
+    if (fcm) {
+        try {
+            if (await fcm.has(memberNumber) && await fcm.share(memberNumber)) return true;
+        } catch (e) { console.warn(LOG, 'FCM Profile 分享失敗，改用 LCE:', e); }
+    }
     if (!db) { lceChatNotify(T('profiles_none')); return; }
     if (CurrentScreen !== 'ChatRoom' || typeof ServerSend !== 'function') {
         lceChatNotify(T('profiles_none')); return;   // 不在房間裡就沒有對象可分享
@@ -277,7 +291,9 @@ async function shareProfile(memberNumber) {
         }
         const displayName = profile.lastNick || profile.name || String(memberNumber);
         lceChatNotify(T('profiles_shared_self').replace('{name}', displayName).replace('{id}', String(memberNumber)));
+        return true;
     } catch (e) { console.warn(LOG, '分享個資失敗:', e); }
+    return false;
 }
 
 /** 收到隱藏分塊訊息 → 組回完整 payload → 顯示可一鍵開啟的本地訊息。回傳是否為 WPS 訊息。 */
@@ -373,6 +389,11 @@ export async function installPastProfiles() {
 
     exposeButton('pastProfiles', { ...notesButtonApi, isEnabled: () => shouldLceHandle('pastProfiles') });
     LCE_API.pastProfiles = { get: getNote, set: setNote };
+    LCE_API.WPS = Object.freeze({
+        apiVersion: 1,
+        share: shareProfile,
+        handlesReceive: () => !fcmWpsApi(),
+    });
 
     if (typeof ElementCreateTextArea === 'function') ElementCreateTextArea(NOTE_ID);
     noteInput = document.getElementById(NOTE_ID);
@@ -384,6 +405,7 @@ export async function installPastProfiles() {
     // 收 WPS 分享：隱藏訊息（Type:"Hidden"）帶 [LIKOSHARE] 前綴的就是分享分塊，攔下來自己處理。
     hook('ChatRoomMessage', 0, (args, next) => {
         const [data] = args;
+        if (fcmWpsApi()) return next(args);
         if (data?.Type === 'Hidden' && handleShareMessage(data)) return undefined;
         return next(args);
     });
