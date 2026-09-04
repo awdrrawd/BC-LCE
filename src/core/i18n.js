@@ -2,21 +2,21 @@
 // i18n（依 BC 語言選擇字表）
 //
 // 字表是 LCE 自己的 —— 別的插件的字庫裡沒有我們的鍵，這部分共用不了。
-// 每個語系一個獨立語系包，放在專案根目錄的 Translation/<code>.js —— 抽到根目錄是為了
+// 每個語系一個獨立純 JSON 字庫，放在專案根目錄的 Translation/<CODE>.json —— 抽到根目錄是為了
 // 讓只想改翻譯、不熟程式結構的人容易找到、容易改。完整字表、登入頁+設定頁已合併。
 //
-// 「現在是什麼語言」的判斷走 window.Liko.I18N 這個共用註冊處：誰先載入誰建立，
-// 之後所有 Liko 插件共用同一套語言判斷與切換通知。見 core/i18n-registry.js。
+// 「現在是什麼語言」的判斷走 window.Liko.__Sys_i18n__ 共用引擎，
+// 與 AFC / FCM / PCM 共用語言判斷與切換通知。見 core/i18n-registry.js。
 // ════════════════════════════════════════════════════════════════════════════
 
 import { getSharedI18n } from './i18n-registry.js';
-import twTable from '../../Translation/tw.js';
-import cnTable from '../../Translation/cn.js';
-import enTable from '../../Translation/en.js';
-import deTable from '../../Translation/de.js';
-import frTable from '../../Translation/fr.js';
-import ruTable from '../../Translation/ru.js';
-import uaTable from '../../Translation/ua.js';
+import twTable from '../../Translation/TW.json';
+import cnTable from '../../Translation/CN.json';
+import enTable from '../../Translation/EN.json';
+import deTable from '../../Translation/DE.json';
+import frTable from '../../Translation/FR.json';
+import ruTable from '../../Translation/RU.json';
+import uaTable from '../../Translation/UA.json';
 
 // 鍵一律用正規化語系碼（TW/CN/EN/DE/FR/RU/UA），與 i18n-registry 的 normalize()
 // 以及對外 register() 一致 —— 內外命名同一套，不用再做映射。
