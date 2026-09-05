@@ -1,3 +1,5 @@
+import { createScope } from '../../core/lifecycle.js';
+import { createHook } from '../../core/hooks.js';
 // ════════════════════════════════════════════════════════════════════════════
 // 直式版面（UI 替換）—— 移植自 MPL
 //
@@ -9,7 +11,6 @@
 // 每個模組都必須能隨時 remove 還原，因為使用者可能隨時轉螢幕或關設定。
 // ════════════════════════════════════════════════════════════════════════════
 
-import modApi from '../../modsdk.js';
 import { getFeature } from '../../core/feature-settings.js';
 import { isPortrait } from '../../core/util.js';
 import { SETTING_CHANGED_EVENT } from '../../core/constants.js';
@@ -25,10 +26,9 @@ import {
 
 const LOG = '🐈‍⬛ [LCE]';
 
-function hook(name, priority, fn) {
-    try { modApi.hookFunction(name, priority, fn); }
-    catch (e) { console.warn(LOG, 'vertical hook 未掛上:', name, e?.message ?? e); }
-}
+const registerHook = createHook('vertical');
+let scope = null;
+function hook(name, priority, fn) { scope.add(registerHook(name, priority, fn)); }
 
 const wantCr = () => isPortrait() && getFeature('verticalChatRoom');
 const wantCsh = () => isPortrait() && getFeature('verticalChatSearch');
@@ -43,6 +43,7 @@ function removeAll() {
 
 /** 每幀由 DrawProcess 呼叫：依目前場景決定要啟用/關閉哪個直式模組。 */
 function checkScene() {
+    if (!installed) return;
     const scr = typeof CurrentScreen !== 'undefined' ? CurrentScreen : '';
     const hasDialog = typeof CurrentCharacter !== 'undefined' && CurrentCharacter !== null;
     const cr = wantCr();
@@ -74,6 +75,7 @@ function checkScene() {
 }
 
 function handleResize() {
+    if (!installed) return;
     // 假輸入框開著時不重算：手機鍵盤彈出會觸發 resize，重算會把版面弄爛
     if (isFakeInputVisible()) return;
     if (isCrActive()) { if (!wantCr()) crRemove(); else crMaintain(); }
@@ -87,6 +89,7 @@ let installed = false;
 export function installVertical() {
     if (installed) return;
     installed = true;
+    scope = createScope();
 
     injectChatRoomStyles();
 
@@ -111,13 +114,13 @@ export function installVertical() {
     hook('ChatSearchRun', 0, (args, next) => { const r = next(args); cshSyncIfNeeded(); return r; });
     hook('ChatSelectLoad', 0, (args, next) => {
         const r = next(args);
-        if (isCsActive()) requestAnimationFrame(buildCsBg);
+        if (isCsActive()) scope.frame(buildCsBg);
         return r;
     });
     hook('ChatSearchLoad', 0, (args, next) => {
         const r = next(args);
         // BC 載入後還會非同步補房間資料，等一下再刷才有東西
-        if (isCshActive()) setTimeout(() => { if (isCshActive()) renderCshList(); }, 600);
+        if (isCshActive()) scope.timeout(() => { if (isCshActive()) renderCshList(); }, 600);
         return r;
     });
 
@@ -130,17 +133,17 @@ export function installVertical() {
         return r;
     });
 
-    window.addEventListener('resize', handleResize);
-    window.addEventListener('orientationchange', () => setTimeout(handleResize, 100));
+    scope.listen(window, 'resize', handleResize);
+    scope.listen(window, 'orientationchange', () => scope.timeout(handleResize, 100));
 
     // 鍵盤彈出時 visualViewport 會縮小，假輸入框覆蓋層要跟著縮才不會被推走
-    window.visualViewport?.addEventListener('resize', () => {
+    scope.listen(window.visualViewport, 'resize', () => {
         const overlay = document.getElementById('lce-cr-fake-input-overlay');
         if (overlay) overlay.style.height = window.visualViewport.height + 'px';
     });
 
     // 設定被關掉時立刻還原，不用等使用者轉螢幕
-    window.addEventListener(SETTING_CHANGED_EVENT, (e) => {
+    scope.listen(window, SETTING_CHANGED_EVENT, (e) => {
         if (e.detail?.key === 'verticalChatRoom' || e.detail?.key === 'verticalChatSearch') {
             try { checkScene(); } catch { /* ignore */ }
         }
@@ -149,6 +152,9 @@ export function installVertical() {
 
 /** 全部關閉並還原（供 console 或除錯用）。 */
 export function uninstallVertical() {
+    installed = false;
+    scope?.dispose();
+    scope = null;
     removeAll();
     removeChatRoomStyles();
 }

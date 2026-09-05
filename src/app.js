@@ -1,3 +1,4 @@
+import { runSafely } from './core/lifecycle.js';
 // ════════════════════════════════════════════════════════════════════════════
 // Liko Club Extensions (LCE) — 進入點
 // 職責：重複載入防護、安裝各功能模組、等待 BC 核心後初始化、掛載公開 API。
@@ -9,52 +10,53 @@ import { LCE_ALREADY_LOADED } from './modsdk.js';
 import { MOD_VER } from './core/constants.js';
 import { reloadSettings } from './core/state.js';
 import { refreshI18n } from './core/i18n.js';
-import { getCryptoKey, captureAndSaveProfile } from './core/storage.js';
+import { getCryptoKey } from './storage/credentials.js';
+import { captureAndSaveProfile } from './loginpage/profile-capture.js';
 import { loadFeatureSettings, postFeatureSettings, getFeature, setFeature, fSettings, initGlobalFeatures } from './core/feature-settings.js';
 import { Theme, isThemeEnabled, getMainColor, getAccentColor, getTextColor, getPalette, isDarkTheme } from './core/theme-api.js';
 import { installSettingsPage } from './settings/settings-page.js';
 import { installCommander } from './commands/commander.js';
-import { applyTheme, installThemeEngine } from './features/theme.js';
-import { installThemeFont } from './features/theme-font.js';
-import { installSafeword } from './features/safeword.js';
+import { applyTheme, installThemeEngine } from './features/theme/index.js';
+import { installThemeFont } from './features/theme/theme-font.js';
+import { installSafeword } from './features/safety/safeword.js';
 import { installBehaviors } from './features/behaviors.js';
-import { installProfile } from './features/profile.js';
-import { installChat } from './features/chat.js';
-import { installChatAugments } from './features/chat-augments.js';
-import { installChatScrollFreeze } from './features/chat-scroll-freeze.js';
-import { installWhisperTarget } from './features/whisper-target.js';
-import { installPendingMessages } from './features/pending-messages.js';
-import { installFriendPresence } from './features/friend-presence.js';
-import { installLocalMessages } from './features/local-messages.js';
-import { installUiColors } from './features/ui-colors.js';
-import { installWelcome } from './features/welcome.js';
-import { installHello } from './features/hello.js';
-import { installBadges } from './features/badges.js';
-import { installPastProfiles } from './features/past-profiles.js';
-import { installInstantMessenger } from './features/instant-messenger.js';
-import { installCharTalk } from './features/char-talk.js';
-import { installAntiGarble } from './features/anti-garble.js';
-import { installArousal } from './features/arousal.js';
-import { installPerformance } from './features/performance.js';
-import { installCheats } from './features/cheats.js';
+import { installProfile } from './features/social/profile.js';
+import { installChat } from './features/chat/index.js';
+import { installChatAugments } from './features/chat/chat-augments.js';
+import { installChatScrollFreeze } from './features/chat/chat-scroll-freeze.js';
+import { installWhisperTarget } from './features/chat/whisper-target.js';
+import { installPendingMessages } from './features/chat/pending-messages.js';
+import { installFriendPresence } from './features/social/friend-presence.js';
+import { installLocalMessages } from './features/chat/local-messages.js';
+import { installUiColors } from './features/theme/ui-colors.js';
+import { installWelcome } from './features/social/welcome.js';
+import { installHello } from './features/social/hello.js';
+import { installBadges } from './features/social/badges.js';
+import { installPastProfiles } from './features/social/past-profiles.js';
+import { installInstantMessenger } from './features/messenger/index.js';
+import { installCharTalk } from './features/expressions/char-talk.js';
+import { installAntiGarble } from './features/chat/anti-garble.js';
+import { installArousal } from './features/expressions/arousal.js';
+import { installPerformance } from './features/performance/index.js';
+import { installCheats } from './features/safety/cheats.js';
 import { installMisc } from './features/misc.js';
 import { installRegionSwitch } from './features/region-switch.js';
-import { installHiddenArousal } from './features/hidden-arousal.js';
-import { installWardrobe } from './features/wardrobe.js';
-import { installLayeringHide } from './features/layering-hide.js';
-import { installRelogin, debugRelogSnapshot } from './features/relogin.js';
+import { installHiddenArousal } from './features/expressions/hidden-arousal.js';
+import { installWardrobe } from './features/wardrobe/index.js';
+import { installLayeringHide } from './features/wardrobe/layering-hide.js';
+import { installRelogin, debugRelogSnapshot } from './features/safety/relogin.js';
 import {
     installExpressions, isExpressionEngineStarted, debugExpressions,
     getExpressionQueue, getExpressionHookOrder, faceComponents,
-} from './features/expressions.js';
-import { ArousalExpressionStages, EventExpressions, ActivityTriggers } from './features/expressions-data.js';
+} from './features/expressions/index.js';
+import { ArousalExpressionStages, EventExpressions, ActivityTriggers } from './features/expressions/data.js';
 import { installVertical } from './features/vertical/index.js';
 import { injectLoginStyles } from './loginpage/styles.js';
 import { refreshAccounts } from './loginpage/account-carousel.js';
 import { installLoginPage, teardownLoginPage } from './loginpage/index.js';
 import { ensureAddonManagersVisible } from './loginpage/bc.js';
 import { isWceLoaded, isWceFeatureEnabled, shouldLceHandle, WCE_OVERLAPS } from './core/wce-compat.js';
-import { normalizeOrigin, getTrustedOrigins, isOriginTrusted, addTrustedOrigin, removeTrustedOrigin, requestOriginTrust, sessionCustomOrigins } from './features/trusted-domains.js';
+import { normalizeOrigin, getTrustedOrigins, isOriginTrusted, isTrustedOrigin, addTrustedOrigin, removeTrustedOrigin, requestOriginTrust, sessionCustomOrigins } from './features/trusted-domains.js';
 
 const TrustedImageOrigins = Object.freeze({
     normalize: normalizeOrigin,
@@ -64,10 +66,7 @@ const TrustedImageOrigins = Object.freeze({
         const origin = normalizeOrigin(value);
         return !!origin && sessionCustomOrigins.get(origin) === 'allowed';
     },
-    isTrusted(value) {
-        const origin = normalizeOrigin(value);
-        return !!origin && (isOriginTrusted(origin) || sessionCustomOrigins.get(origin) === 'allowed');
-    },
+    isTrusted: isTrustedOrigin,
     addPermanent: addTrustedOrigin,
     removePermanent: removeTrustedOrigin,
     request: requestOriginTrust,
@@ -84,10 +83,7 @@ if (LCE_ALREADY_LOADED) {
     const LOG = '🐈‍⬛ [LCE]';
     // 逐步初始化：單一步驟丟例外只記警告並跳過，不會連累後面的模組
     //（原本全部擠在一個 .then() 裡，任一個 throw 就整串中斷，一顆壞掉半個插件就黑了）。
-    const safe = (label, fn) => {
-        try { fn(); }
-        catch (e) { console.warn(LOG, `初始化步驟「${label}」失敗（已跳過，不影響其他模組）:`, e); }
-    };
+    const safe = runSafely;
 
     // ── 登入前就要就緒的（登入頁的版面/染色/FUSAM 都吃這些） ──
     // initGlobalFeatures / installUiColors 必須在 installLoginPage 之前：登入頁第一次套版就要讀得到

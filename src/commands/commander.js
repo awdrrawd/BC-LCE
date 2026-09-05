@@ -1,3 +1,5 @@
+import { gotoRoom } from '../game/room-navigation.js';
+import { parseJSON } from '../core/serialization.js';
 // ════════════════════════════════════════════════════════════════════════════
 // Commander —— WCE 指令系統移植（src/functions/commands.ts）
 // 排除：toy（buttplug）、uwall/ulist、r/anim/pose（動畫引擎），依需求不搬。
@@ -10,65 +12,18 @@ import { MOD_VER, LCE_EXT_KEY } from '../core/constants.js';
 import { getFeature } from '../core/feature-settings.js';
 import { openModal, openModalAsync } from '../core/modal-service.js';
 import { isWceLoaded } from '../core/wce-compat.js';
-import { isExpressionEngineStarted } from '../features/expressions.js';
-import { LOCAL_MARKER } from '../features/local-messages.js';
-import { toggleThemeTestBalloon } from '../features/theme-test.js';
+import { isExpressionEngineStarted } from '../features/expressions/index.js';
+import { lceChatNotify } from '../ui/chat/notification.js';
+import { toggleThemeTestBalloon } from '../features/theme/theme-test.js';
 
 const LOG = '🐈‍⬛ [LCE]';
 
-function parseJSON(s) { try { return s ? JSON.parse(s) : null; } catch { return null; } }
 
 /**
  * 在聊天室輸出一則本地訊息（不送伺服器）。移植自 WCE fbcChatNotify。
  * lce-local 是給 features/local-messages.js 認的標記（淡紫底 + 黑字）。
  */
-export function lceChatNotify(node, opts) {
-    const div = document.createElement('div');
-    div.setAttribute('class', `ChatMessage lce-notification ${LOCAL_MARKER}`);
-    div.setAttribute('data-time', typeof ChatRoomCurrentTime === 'function' ? ChatRoomCurrentTime() : '');
-    div.setAttribute('data-sender', Player?.MemberNumber?.toString() ?? '');
-    if (typeof node === 'string') div.appendChild(document.createTextNode(node));
-    else if (Array.isArray(node)) div.append(...node);
-    else div.appendChild(node);
-    // 很長的訊息（versions、profiles…）右下角補工具列，讓使用者自己收合/刪掉、免得洗版。
-    //   closable    → ✖ 刪除整則
-    //   collapsible → ▼/▲ 收合本體，只留標記為 .lce-collapse-keep 的元素（通常是標題）與工具列
-    if (opts?.closable || opts?.collapsible) {
-        div.classList.add('lce-closable');
-        const tools = document.createElement('div');
-        tools.className = 'lce-notify-tools';
-        if (opts?.collapsible) {
-            div.classList.add('lce-collapsible');
-            const c = document.createElement('button');
-            c.type = 'button';
-            c.className = 'lce-notify-collapse';
-            c.textContent = '▲';
-            c.title = '收合／展開';
-            c.onclick = (e) => {
-                e.preventDefault();
-                const collapsed = div.classList.toggle('lce-collapsed');
-                c.textContent = collapsed ? '▼' : '▲';
-            };
-            tools.appendChild(c);
-        }
-        if (opts?.closable) {
-            const x = document.createElement('button');
-            x.type = 'button';
-            x.className = 'lce-notify-close';
-            x.textContent = '✖';
-            x.title = '刪除此訊息';
-            x.onclick = (e) => { e.preventDefault(); try { div.remove(); } catch { /* 已被清掉就算了 */ } };
-            tools.appendChild(x);
-        }
-        div.appendChild(tools);
-    }
-    if (typeof ChatRoomAppendChat === 'function') ChatRoomAppendChat(div);
-    // 過一段時間自動移除（例如刪除確認框：只保留 10 秒，避免留在聊天室裡卡著）。
-    if (opts?.autoRemoveMs > 0) {
-        setTimeout(() => { try { div.remove(); } catch { /* 已被清掉就算了 */ } }, opts.autoRemoveMs);
-    }
-    return div;
-}
+export { lceChatNotify } from '../ui/chat/notification.js';
 
 /** 依名稱/會員編號找出房間內角色。移植自 WCE findDrawnCharacters。 */
 function findDrawnCharacters(target, limitVisible = false) {
@@ -86,54 +41,6 @@ function findDrawnCharacters(target, limitVisible = false) {
             || c.Name.split(' ')[0].toLowerCase() === target?.toLowerCase());
     }
     return members.filter(Boolean);
-}
-
-/**
- * 無視限制切換/離開房間。
- *
- * 不走 WCE 的 ChatRoomJoinLeash + 搜尋那條路 —— 那條路會 race：
- * ChatSearchQuery 是 `await ServerRoomSearch(...)`，而 ServerRoomSearch 對「同一個查詢
- * 還在進行中」會直接回 ServerInProgressError，ChatSearchQuery 收到 err 就 return，
- * 於是 ChatSearchResultResponse 沒被呼叫 → ChatSearchAutoJoinRoom 沒跑 → leash 沒人理，
- * 人離開了房間卻停在搜尋頁。ChatSearchLoad 自己也會送查詢，所以撞不撞得到看運氣，
- * 這就是「有時候可以、有時候不行」的來源。
- *
- * 改用 BC 自己的加入機制 ServerRoomJoin()：直接送 ChatRoomJoin 並等 "JoinedRoom"，
- * 成功後伺服器的 ChatRoomSync 會自己把畫面切進房間。這正是 BC 重新登入時
- * 回到原房間用的流程（見 Server.js 的 ServerRoomJoin 呼叫處），與搜尋完全無關，
- * 房名大小寫也由伺服器比對。
- */
-function gotoRoom(roomName) {
-    // 確保 BC 的 leash 自動加入不會插手
-    if (typeof ChatRoomJoinLeash !== 'undefined') ChatRoomJoinLeash = '';
-    if (typeof DialogLeave === 'function') DialogLeave();
-    if (CurrentScreen === 'ChatRoom' && typeof ChatRoomLeave === 'function') ChatRoomLeave(false);
-
-    // 我們是刻意要去別的地方，所以把「上一個房間」清掉：
-    // 否則 ChatSearchAutoJoinRoom 的 ReturnToChatRoom 分支會搶著把你拉回剛離開的房間。
-    if (typeof ChatRoomSetLastChatRoom === 'function') ChatRoomSetLastChatRoom(null);
-
-    if (!roomName) {
-        CommonSetScreen('Room', 'MainHall');
-        return;
-    }
-
-    if (typeof ServerRoomJoin !== 'function') {
-        lceChatNotify('此 BC 版本沒有 ServerRoomJoin，無法直接前往房間。');
-        CommonSetScreen('Room', 'MainHall');
-        return;
-    }
-
-    // 先落到大廳畫面再送加入請求：失敗時人就停在搜尋頁，跟 BC 重登的行為一致。
-    Promise.resolve(CommonSetScreen('Online', 'ChatSearch'))
-        .then(() => ServerRoomJoin(roomName))
-        .then((ret) => {
-            if (ret?.err) {
-                console.warn(LOG, 'gotoroom 加入失敗:', ret.error);
-                lceChatNotify(`無法加入房間 "${roomName}"：${ret.error?.message ?? ret.error?.name ?? '未知錯誤'}`);
-            }
-        })
-        .catch(e => console.warn(LOG, 'gotoroom 失敗:', e));
 }
 
 /**

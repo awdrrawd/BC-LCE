@@ -1,4 +1,244 @@
-<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>AFC 功能分支圖</title><style>:root{color-scheme:dark;--a:#a56cff;--b:#17131e;--l:#665778}*{box-sizing:border-box}body{margin:0;background:#0d0b11;color:#f5f1fa;font:14px system-ui}.app{display:grid;grid-template-columns:240px 1fr;min-height:100vh}aside{padding:22px 14px;background:#121017;border-right:1px solid #352e40}h1{font-size:20px;margin:0 8px 16px}h2{margin:0 0 6px}input{width:100%;padding:10px;background:#0d0b11;border:1px solid #40364c;color:#fff;border-radius:7px}.g{margin:18px 8px 6px;color:#9f96aa;font-size:11px}button{color:#eee;background:transparent;border:0;cursor:pointer}.f{width:100%;padding:10px;text-align:left;border-radius:7px}.f:hover,.f.on{background:#2b2040;color:#d6c0ff}.main{padding:24px;min-width:0}.sub{color:#aaa1b4}.tree{margin-top:18px;padding:30px;min-height:560px;background:radial-gradient(circle at 20%,#20172c,#100e15 60%);border:1px solid #352d40;border-radius:12px;overflow:auto}.root,.branch,.file{padding:9px 11px;background:#211b2a;border:1px solid #493d57;border-left:4px solid var(--c,var(--a));border-radius:7px}.root{background:#382557}.bundle{display:grid;grid-template-columns:180px 220px minmax(280px,1fr);gap:70px;align-items:center;min-width:850px}.branches{display:grid;gap:16px}.row{display:grid;grid-template-columns:220px minmax(280px,1fr);gap:70px;align-items:center}.files{display:grid;gap:6px}.branch,.file{position:relative;text-align:left}.branch:before,.file:before{content:'';position:absolute;right:100%;top:50%;width:70px;border-top:2px solid var(--l)}.type{display:block;color:var(--c);font-size:10px}.detail{margin-top:14px;padding:14px;border-left:3px solid var(--a);background:var(--b)}code{color:#d9c8f5}@media(max-width:700px){.app{display:block}aside{position:static}.bundle{transform-origin:left top}.main{padding:15px}}</style></head><body><div class="app"><aside><h1>AFC 功能分支圖</h1><input id="q" placeholder="搜尋功能"><nav id="nav"></nav></aside><main class="main"><h2 id="title"></h2><div id="desc" class="sub"></div><section id="tree" class="tree"></section><div id="detail" class="detail"></div></main></div><script>
+<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>LCE 功能分支圖</title><style>:root{color-scheme:dark;--a:#a56cff;--b:#17131e;--l:#665778}*{box-sizing:border-box}body{margin:0;background:#0d0b11;color:#f5f1fa;font:14px system-ui}.app{display:grid;grid-template-columns:240px 1fr;min-height:100vh}aside{padding:22px 14px;background:#121017;border-right:1px solid #352e40}h1{font-size:20px;margin:0 8px 16px}h2{margin:0 0 6px}input{width:100%;padding:10px;background:#0d0b11;border:1px solid #40364c;color:#fff;border-radius:7px}.g{margin:18px 8px 6px;color:#9f96aa;font-size:11px}button{color:#eee;background:transparent;border:0;cursor:pointer}.f{width:100%;padding:10px;text-align:left;border-radius:7px}.f:hover,.f.on{background:#2b2040;color:#d6c0ff}.main{padding:24px;min-width:0}.sub{color:#aaa1b4}.tree{margin-top:18px;padding:30px;min-height:560px;background:radial-gradient(circle at 20%,#20172c,#100e15 60%);border:1px solid #352d40;border-radius:12px;overflow:auto}.root,.branch,.file{padding:9px 11px;background:#211b2a;border:1px solid #493d57;border-left:4px solid var(--c,var(--a));border-radius:7px}.root{background:#382557}.bundle{display:grid;grid-template-columns:180px 220px minmax(280px,1fr);gap:70px;align-items:center;min-width:850px}.branches{display:grid;gap:16px}.row{display:grid;grid-template-columns:220px minmax(280px,1fr);gap:70px;align-items:center}.files{display:grid;gap:6px}.branch,.file{position:relative;text-align:left}.branch:before,.file:before{content:'';position:absolute;right:100%;top:50%;width:70px;border-top:2px solid var(--l)}.type{display:block;color:var(--c);font-size:10px}.detail{margin-top:14px;padding:14px;border-left:3px solid var(--a);background:var(--b)}code{color:#d9c8f5}@media(max-width:700px){.app{display:block}aside{position:static}.bundle{transform-origin:left top}.main{padding:15px}}</style></head><body><div class="app"><aside><h1>LCE 功能分支圖</h1><input id="q" placeholder="搜尋功能"><nav id="nav"></nav><p><a href="./unfinished-work.md" style="color:#d6c0ff">未完工作與實測清單</a></p><p><a href="./architecture.md" style="color:#d6c0ff">資料夾配置與責任</a></p><small>更新：2026-09-05<br>依責任呈現，非完整 import 圖</small></aside><main class="main"><h2 id="title"></h2><div id="desc" class="sub"></div><section id="tree" class="tree"></section><div id="detail" class="detail"></div></main></div><script>
 document.title='LCE 功能分支圖';document.querySelector('h1').textContent='LCE 功能分支圖';
-const D=[['登入介面','橫式登入、帳號輪播、背景與設定浮層',[['UI','登入主流程','loginpage/index.js,loginpage/login-ui.js'],['UI','帳號與背景','loginpage/account-carousel.js,loginpage/background.js'],['UI','設定介面','loginpage/settings-ui.js'],['Core','登入儲存','core/storage.js,core/state.js']]],['聊天與社交','聊天增強、好友通知、Profile 與即時訊息',[['Feature','聊天','features/chat.js,features/chat-augments.js,features/whisper-target.js'],['Feature','社交與 Profile','features/friend-presence.js,features/profile.js,features/past-profiles.js'],['Feature','即時訊息','features/instant-messenger.js,features/pending-messages.js'],['Security','信任來源','features/trusted-domains.js']]],['主題與 UI','BC 染色、字型、狀態色與直式版面',[['Theme','主題引擎','features/theme.js,features/theme-colors.js,features/theme-font.js'],['Theme','UI 顏色','features/ui-colors.js'],['Layout','直式版面','features/vertical/index.js,features/vertical/chatroom.js,features/vertical/chatsearch.js'],['Style','樣式','features/styles/*']]],['沉浸與表情','表情動畫、姿勢、慾望與防亂碼',[['Feature','表情引擎','features/expressions.js,features/expressions-data.js'],['Feature','慾望','features/arousal.js,features/hidden-arousal.js'],['Feature','說話與防亂碼','features/char-talk.js,features/anti-garble.js'],['Feature','行為','features/behaviors.js']]],['衣櫃與圖層','拓展衣櫃、預覽與圖層隱藏',[['Feature','衣櫃','features/wardrobe.js'],['Feature','圖層隱藏','features/layering-hide.js'],['Compat','WCE 相容','core/wce-compat.js'],['Core','功能設定','core/feature-settings.js,core/settings-schema.js']]],['效能與安全','效能、作弊控制、重連與安全功能',[['Feature','效能','features/performance.js,features/chat-scroll-freeze.js'],['Feature','作弊與安全','features/cheats.js,features/safeword.js'],['Feature','重連與區域','features/relogin.js,features/region-switch.js'],['Feature','雜項','features/misc.js']]],['設定與公開 API','九宮格設定、容量管理、指令與 API',[['UI','設定頁','settings/settings-page.js'],['Storage','容量管理','settings/storage-manager.js'],['Security','信任管理','settings/trusted-domain-manager.js'],['Core','公開 API','core/public-api.js,core/theme-api.js'],['Command','指令','commands/commander.js']]]];
-let A=D[0];const nav=document.querySelector('#nav'),tree=document.querySelector('#tree'),detail=document.querySelector('#detail');function list(q=''){nav.innerHTML='<div class=g>全部功能</div>';D.filter(x=>x.join().toLowerCase().includes(q.toLowerCase())).forEach(x=>{let b=document.createElement('button');b.className='f '+(x===A?'on':'');b.textContent=x[0];b.onclick=()=>{A=x;list(q);draw()};nav.append(b)})}function draw(){title.textContent=A[0];desc.textContent=A[1];tree.innerHTML=`<div class=bundle><div class=root>${A[0]}</div><div class=branches>${A[2].map(x=>`<div class=row><button class=branch style="--c:var(--a)" data-files="${x[2]}"><span class=type>${x[0]}</span>${x[1]}</button><div class=files>${x[2].split(',').map(f=>`<button class=file data-files="${f}"><span class=type>FILE</span>${f}</button>`).join('')}</div></div>`).join('')}</div></div>`;tree.querySelectorAll('button').forEach(b=>b.onclick=()=>show(b.textContent,b.dataset.files));show(A[0],A[2].flatMap(x=>x[2].split(',')).join(','))}function show(n,f){detail.innerHTML=`<b>${n}</b><br>${f.split(',').map(x=>`<code>src/${x}</code>`).join('　')}`}q.oninput=()=>list(q.value);list();draw();</script></body></html>
+const D = [
+  [
+    "設定更新流程",
+    "UI／API → 驗證批次 → 更新記憶體與副作用 → 通知 → 保存。失敗回傳不等於回滾；伺服器保存尚無確認協定。",
+    [
+      [
+        "入口",
+        "設定頁與選擇器",
+        "settings/settings-page.js,settings/pickers.js,core/theme-api.js"
+      ],
+      [
+        "設定",
+        "驗證與更新",
+        "core/feature-settings.js,core/settings-values.js,core/settings-schema.js"
+      ],
+      [
+        "操作",
+        "主題快照與遊戲副作用",
+        "settings/theme-actions.js,game/setting-effects.js,game/language.js"
+      ],
+      [
+        "儲存",
+        "全域設定根",
+        "core/settings-root.js"
+      ]
+    ]
+  ],
+  [
+    "登入與儲存",
+    "登入狀態由 loginpage 擁有；帳號、憑證與桌布各有儲存責任，core 舊入口保留相容轉匯出。",
+    [
+      [
+        "UI",
+        "登入與帳號輪播",
+        "loginpage/index.js,loginpage/login-ui.js,loginpage/account-carousel.js,loginpage/settings-ui.js"
+      ],
+      [
+        "狀態",
+        "登入狀態與擷取",
+        "loginpage/state.js,loginpage/profile-capture.js"
+      ],
+      [
+        "儲存",
+        "連線、帳號、加密",
+        "storage/databases.js,storage/accounts.js,storage/credentials.js"
+      ],
+      [
+        "背景",
+        "桌布讀取與過期請求取消",
+        "loginpage/background.js,storage/wallpaper.js"
+      ],
+      [
+        "相容",
+        "舊匯出入口",
+        "core/state.js,core/storage.js"
+      ]
+    ]
+  ],
+  [
+    "聊天事件",
+    "容器初次出現／替換／功能啟用時補掃；平常處理 DOM 增量。通知與指令註冊各自負責。",
+    [
+      [
+        "事件",
+        "共用聊天監聽",
+        "ui/chat/pipeline.js"
+      ],
+      [
+        "處理",
+        "文字標記與嵌入",
+        "features/chat/index.js,ui/chat/markup.js,features/chat/chat-augments.js"
+      ],
+      [
+        "信任",
+        "圖片來源決策",
+        "features/trusted-domains.js"
+      ],
+      [
+        "共用",
+        "通知、動作與房間導覽",
+        "ui/chat/notification.js,game/chat-actions.js,game/room-navigation.js"
+      ],
+      [
+        "指令",
+        "註冊與操作",
+        "commands/commander.js"
+      ]
+    ]
+  ],
+  [
+    "私聊 IM",
+    "先接收排隊 → 共用歷史載入 → 合併呈現 → 保存。讀取失敗保留待處理訊息，下次收訊／開窗重試。資料庫 lce-im V1、history 與原始格式不變。",
+    [
+      [
+        "控制",
+        "對話、未讀、呈現與 hooks",
+        "features/messenger/index.js"
+      ],
+      [
+        "資料",
+        "編解碼與輸入簡寫",
+        "features/messenger/codec.js"
+      ],
+      [
+        "儲存",
+        "讀取失敗禁止覆寫",
+        "features/messenger/history.js"
+      ]
+    ]
+  ],
+  [
+    "主題與 SVG",
+    "保留 Canvas／HTML 各自染色規則；自有 SVG 保留 inline／URL。設定事件驅動主題重新套用。",
+    [
+      [
+        "主題",
+        "引擎、色盤與字型",
+        "features/theme/index.js,features/theme/theme-colors.js,features/theme/theme-font.js"
+      ],
+      [
+        "圖示",
+        "來源政策與自有 SVG",
+        "features/theme/image-policy.js,assets/icons.js,assets/lce-icon.svg"
+      ],
+      [
+        "UI",
+        "LCE 介面色彩",
+        "features/theme/ui-colors.js"
+      ],
+      [
+        "樣式",
+        "BC HTML 樣式",
+        "features/theme/styles/*"
+      ]
+    ]
+  ],
+  [
+    "直式介面",
+    "控制器擁有分頁／手勢狀態；卡片與詳情負責呈現。刷新／卸載取消舊動畫回呼。",
+    [
+      [
+        "生命週期",
+        "安裝與卸載",
+        "features/vertical/index.js,core/lifecycle.js"
+      ],
+      [
+        "控制",
+        "聊天室與搜尋頁",
+        "features/vertical/chatroom.js,features/vertical/chatsearch.js"
+      ],
+      [
+        "呈現",
+        "卡片、詳情與關係",
+        "features/vertical/room-view.js,features/vertical/relations.js"
+      ],
+      [
+        "共用",
+        "搜尋區域與動畫完成",
+        "game/room-search.js,ui/transition.js"
+      ]
+    ]
+  ],
+  [
+    "表情與姿勢",
+    "事件準備 → 時間序列 → 仲裁／衝突 → BC 寫入與廣播。計算集中管理；表情資料表未改動。",
+    [
+      [
+        "引擎",
+        "佇列與遊戲整合",
+        "features/expressions/index.js"
+      ],
+      [
+        "計算",
+        "事件、時間與姿勢衝突",
+        "features/expressions/calculations.js"
+      ],
+      [
+        "資料",
+        "既有表情與活動列表",
+        "features/expressions/data.js"
+      ],
+      [
+        "功能",
+        "說話、慾望與防亂碼",
+        "features/expressions/char-talk.js,features/expressions/arousal.js,features/chat/anti-garble.js"
+      ]
+    ]
+  ],
+  [
+    "效能與相容",
+    "按狀態責任分組；聊天容量 observer 與文字加工分開。共用 hook 保留優先權與功能判斷。",
+    [
+      [
+        "效能",
+        "組裝入口",
+        "features/performance/index.js"
+      ],
+      [
+        "狀態",
+        "容量、貼圖與幀率",
+        "features/performance/chat-capacity.js,features/performance/textures.js,features/performance/frames.js"
+      ],
+      [
+        "共用",
+        "Hook 與生命週期",
+        "core/hooks.js,core/lifecycle.js,core/serialization.js"
+      ],
+      [
+        "相容",
+        "WCE／Responsive",
+        "core/wce-compat.js,core/responsive-compat.js"
+      ]
+    ]
+  ],
+  [
+    "其他功能",
+    "既有功能保留各自責任；未因檔案大小而繼續拆分。",
+    [
+      [
+        "社交",
+        "好友、Profile 與歷史",
+        "features/social/friend-presence.js,features/social/profile.js,features/social/past-profiles.js"
+      ],
+      [
+        "衣櫃",
+        "衣櫃與圖層",
+        "features/wardrobe/index.js,features/wardrobe/layering-hide.js"
+      ],
+      [
+        "安全",
+        "重連與安全功能",
+        "features/safety/relogin.js,features/safety/cheats.js,features/safety/safeword.js"
+      ],
+      [
+        "管理",
+        "容量、信任與 API",
+        "settings/storage-manager.js,settings/trusted-domain-manager.js,core/public-api.js"
+      ]
+    ]
+  ]
+];
+let A=D[0];const q=document.querySelector('#q'),title=document.querySelector('#title'),desc=document.querySelector('#desc'),nav=document.querySelector('#nav'),tree=document.querySelector('#tree'),detail=document.querySelector('#detail');function list(q=''){nav.innerHTML='<div class=g>全部功能</div>';D.filter(x=>x.join().toLowerCase().includes(q.toLowerCase())).forEach(x=>{let b=document.createElement('button');b.className='f '+(x===A?'on':'');b.textContent=x[0];b.onclick=()=>{A=x;list(q);draw()};nav.append(b)})}function draw(){title.textContent=A[0];desc.textContent=A[1];tree.innerHTML=`<div class=bundle><div class=root>${A[0]}</div><div class=branches>${A[2].map(x=>`<div class=row><button class=branch style="--c:var(--a)" data-files="${x[2]}"><span class=type>${x[0]}</span>${x[1]}</button><div class=files>${x[2].split(',').map(f=>`<button class=file data-files="${f}"><span class=type>FILE</span>${f}</button>`).join('')}</div></div>`).join('')}</div></div>`;tree.querySelectorAll('button').forEach(b=>b.onclick=()=>show(b.textContent,b.dataset.files));show(A[0],A[2].flatMap(x=>x[2].split(',')).join(','))}function show(n,f){detail.innerHTML=`<b>${n}</b><br>${f.split(',').map(x=>`<code>src/${x}</code>`).join('　')}`}q.oninput=()=>list(q.value);list();draw();</script></body></html>

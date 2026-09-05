@@ -16,7 +16,7 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 import { getFeature } from './feature-settings.js';
-import { plainColors, specialColors, composeColors, getHexComputed, isDark } from '../features/theme-colors.js';
+import { plainColors, specialColors, composeColors, getHexComputed, isDark } from '../features/theme/theme-colors.js';
 
 /** 染色總開關目前是否啟用。 */
 export function isThemeEnabled() { return !!getFeature('themeEnabled'); }

@@ -4,12 +4,10 @@
 // 透過 PreferenceRegisterExtensionSetting 註冊，繪製走 BC 全域 DrawText/DrawButton/…。
 // ════════════════════════════════════════════════════════════════════════════
 
-import { CATEGORIES, DEFAULT_FEATURE_SETTINGS, clampBar, gameLanguages } from '../core/settings-schema.js';
-import { SETTING_CHANGED_EVENT } from '../core/constants.js';
-import { fSettings, saveFeatureSettings } from '../core/feature-settings.js';
+import { CATEGORIES, DEFAULT_FEATURE_SETTINGS, clampBar } from '../core/settings-schema.js';
+import { fSettings, saveFeatureSettings, setFeature, runSettingAction } from '../core/feature-settings.js';
 import { T } from '../core/i18n.js';
-import { applyTheme } from '../features/theme.js';
-import { listSystemFonts } from '../features/theme-font.js';
+import { langLabel, openLanguagePicker, openFontPicker, promptInput, openColorPicker } from './pickers.js';
 import { openStorageManager, closeStorageManager, isStorageManagerOpen, positionStorageManager } from './storage-manager.js';
 import { closeTrustedDomainManager, isTrustedDomainManagerOpen, openTrustedDomainManager, positionTrustedDomainManager } from './trusted-domain-manager.js';
 import iconUrl from '../assets/lce-icon.svg';
@@ -157,6 +155,14 @@ function run() {
 
     for (const [key, def] of pageSlice(currentCategory)) {
         const disabled = !!def.disabled?.(fSettings);
+        const hovered = !disabled && MouseIn(300, y, SEL_OFFSET + SEL_WIDTH + SOUND_GAP + SOUND_W - 300, 64);
+        if (hovered) {
+            const alpha = ctx.globalAlpha;
+            try {
+                ctx.globalAlpha = 0.14;
+                DrawRect(294, y - 2, SEL_OFFSET + SEL_WIDTH + SOUND_GAP + SOUND_W - 288, 68, 'Cyan');
+            } finally { ctx.globalAlpha = alpha; }
+        }
         const highlight = currentSetting === key ? 'Red' : 'Black';
 
         if (def.type === 'checkbox') {
@@ -220,19 +226,6 @@ function run() {
     ctx.textAlign = 'center';
 }
 
-/**
- * 套用單一設定的變更。
- * 除了呼叫 schema 的 sideEffects，還會發出 lce-setting-changed 事件 ——
- * schema 不能 import 功能模組（會循環相依：schema ← feature-settings ← 功能模組），
- * 所以需要即時反應的功能（例如拓展衣櫃）改用監聽事件的方式接。
- */
-function fireSideEffect(key, def) {
-    try { def.sideEffects?.(fSettings[key], false, fSettings); }
-    catch (e) { console.warn('🐈‍⬛ [LCE]', e); }
-    try { window.dispatchEvent(new CustomEvent(SETTING_CHANGED_EVENT, { detail: { key, value: fSettings[key] } })); }
-    catch { /* ignore */ }
-}
-
 function click() {
     if (MouseIn(1815, 75, 90, 90)) {
         if (isStorageManagerOpen()) { closeStorageManager(); }
@@ -266,15 +259,14 @@ function click() {
         const disabled = !!def.disabled?.(fSettings);
 
         if (def.type === 'checkbox') {
-            if (MouseIn(300, y, 64, 64) && !disabled) { fSettings[key] = !fSettings[key]; fireSideEffect(key, def); }
+            if (MouseIn(300, y, 64, 64) && !disabled) { setFeature(key, !fSettings[key]); }
         } else if (def.withToggle) {
             const enabled = !!fSettings[`${key}Enabled`];
             if (MouseIn(300, y, 64, 64) && !disabled) {
-                fSettings[`${key}Enabled`] = !enabled; fireSideEffect(key, def);
+                setFeature(`${key}Enabled`, !enabled);
             } else if (enabled && !disabled) {
                 if (def.withSound && MouseIn(...soundRect(y))) {
-                    fSettings[`${key}Sound`] = !fSettings[`${key}Sound`];
-                    fireSideEffect(key, def);
+                    setFeature(`${key}Sound`, !fSettings[`${key}Sound`]);
                 } else {
                     adjustControl(key, def, y);
                 }
@@ -286,15 +278,13 @@ function click() {
         } else if (def.type === 'input' && !disabled) {
             handleInputClick(key, def, y);
         } else if (def.type === 'action' && !disabled) {
-            if (MouseIn(300, y, ACTION_W, 64)) { try { def.run?.(fSettings); } catch (e) { console.warn('🐈‍⬛ [LCE]', e); } actionDone.add(key); }
+            if (MouseIn(300, y, ACTION_W, 64)) { if (runSettingAction(key)) actionDone.add(key); }
         }
 
         if (MouseIn(300, y, 1200, 64)) currentSetting = key;
         y += Y_INC;
     }
 
-    // 主題分類任何變更後即時重新套用染色，讓效果立刻可見
-    if (currentCategory === 'theme') applyTheme();
 }
 
 function adjustControl(key, def, y) {
@@ -302,8 +292,8 @@ function adjustControl(key, def, y) {
         const seg = SEL_WIDTH / 2;
         const idx = def.options.indexOf(fSettings[key]);
         const len = def.options.length;
-        if (MouseIn(SEL_OFFSET + seg, y, seg, 64)) { fSettings[key] = def.options[(idx + 1 + len) % len]; fireSideEffect(key, def); }
-        else if (MouseIn(SEL_OFFSET, y, seg, 64)) { fSettings[key] = def.options[(idx - 1 + len) % len]; fireSideEffect(key, def); }
+        if (MouseIn(SEL_OFFSET + seg, y, seg, 64)) { setFeature(key, def.options[(idx + 1 + len) % len]); }
+        else if (MouseIn(SEL_OFFSET, y, seg, 64)) { setFeature(key, def.options[(idx - 1 + len) % len]); }
     } else if (def.type === 'bar') {
         handleBarClick(key, def, y);
     } else if (def.type === 'input') {
@@ -367,7 +357,7 @@ function barValueFromMouseX(def) {
 function handleBarClick(key, def, y) {
     if (!MouseIn(SEL_OFFSET, y, SEL_WIDTH, 64)) return;
     const next = barValueFromMouseX(def);
-    if (next !== fSettings[key]) { fSettings[key] = next; fireSideEffect(key, def); }
+    if (next !== fSettings[key]) { setFeature(key, next); }
 }
 
 /**
@@ -385,10 +375,11 @@ function startBarDrag(key, def) {
 function applyDraggedBarValue() {
     if (!dragKey || !dragDef || typeof MouseX !== 'number') return;
     const next = barValueFromMouseX(dragDef);
-    if (next !== fSettings[dragKey]) { fSettings[dragKey] = next; fireSideEffect(dragKey, dragDef); }
+    if (next !== fSettings[dragKey]) { setFeature(dragKey, next, { persist: false }); }
 }
 
 function stopBarDrag() {
+    if (dragKey) saveFeatureSettings();
     dragKey = null;
     dragDef = null;
 }
@@ -457,229 +448,6 @@ function handleInputClick(key, def, y) {
     } else if (MouseIn(SEL_OFFSET, y, SEL_WIDTH, 64)) {
         promptInput(key, def);
     }
-}
-
-/** 語言碼 → 顯示用語言名（查不到就顯示碼本身）。 */
-function langLabel(code) {
-    const { codes, labels } = gameLanguages();
-    const i = codes.indexOf(code);
-    return i >= 0 ? labels[i] : String(code ?? '');
-}
-
-let langPickerOpen = false;
-
-/**
- * 開出「遊戲語言」下拉清單（canvas 設定頁上的 HTML 覆蓋層，與字型/調色器同一套做法）。
- * 直接點選要的語言即可，不必用 ◀▶ 一個個繞。語言清單取自 BC 的 TranslationDictionary。
- */
-function openLanguagePicker(key, def) {
-    if (langPickerOpen) return;
-    langPickerOpen = true;
-
-    const backdrop = document.createElement('div');
-    backdrop.id = 'lce-langpicker-backdrop';
-    Object.assign(backdrop.style, {
-        position: 'fixed', inset: '0', background: 'rgba(0,0,0,0.5)', zIndex: '10000',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-    });
-
-    const panel = document.createElement('div');
-    Object.assign(panel.style, {
-        width: 'min(420px,90vw)', maxHeight: '80vh', display: 'flex', flexDirection: 'column',
-        background: 'var(--lce-main,#222)', color: 'var(--lce-text,#eee)',
-        border: '2px solid var(--lce-login-accent,#7214ff)', borderRadius: '8px',
-        overflow: 'hidden', boxShadow: '0 8px 30px rgba(0,0,0,0.6)',
-        // 國旗:與登入頁同招,白嫖 BC country-flag polyfill 注入的 "Twemoji Country Flags"
-        // @font-face;heading 與每個語言 row 都繼承此棧,國旗碼點用它、文字 fallback 到後面。
-        fontFamily: '"Twemoji Country Flags",-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans TC",sans-serif',
-    });
-
-    const heading = document.createElement('div');
-    heading.textContent = T(def.label);
-    Object.assign(heading.style, {
-        padding: '10px', borderBottom: '1px solid var(--lce-login-accent,#7214ff)',
-        background: 'var(--lce-element,#111)', fontSize: '16px', fontWeight: 'bold',
-    });
-
-    const listWrap = document.createElement('div');
-    Object.assign(listWrap.style, { overflowY: 'auto', overflowX: 'hidden', padding: '8px' });
-
-    panel.append(heading, listWrap);
-    backdrop.appendChild(panel);
-    document.body.appendChild(backdrop);
-
-    const close = () => {
-        langPickerOpen = false;
-        backdrop.remove();
-        document.removeEventListener('keydown', onKey, true);
-    };
-    const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); close(); } };
-    document.addEventListener('keydown', onKey, true);
-    backdrop.addEventListener('mousedown', (e) => { if (e.target === backdrop) close(); });
-    panel.addEventListener('mousedown', e => e.stopPropagation());
-
-    const pick = (code) => {
-        if (code !== fSettings[key]) { fSettings[key] = code; fireSideEffect(key, def); }
-        close();
-    };
-
-    const { codes, labels } = gameLanguages();
-    codes.forEach((code, i) => {
-        const row = document.createElement('div');
-        row.textContent = labels[i];
-        const selected = fSettings[key] === code;
-        Object.assign(row.style, {
-            padding: '8px 10px', cursor: 'pointer', borderRadius: '4px', fontSize: '18px',
-            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-            background: selected ? 'var(--lce-login-accent,#7214ff)' : '',
-        });
-        row.addEventListener('mouseenter', () => { if (!selected) row.style.background = 'var(--lce-element-hover,#3a3a3a)'; });
-        row.addEventListener('mouseleave', () => { if (!selected) row.style.background = ''; });
-        row.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); pick(code); });
-        listWrap.appendChild(row);
-    });
-}
-
-let fontPickerOpen = false;
-
-/** 開出「系統已安裝字型」的 HTML 下拉清單（canvas 設定頁上的覆蓋層，與調色器同一套做法）。 */
-function openFontPicker(key, def) {
-    if (fontPickerOpen) return;
-    fontPickerOpen = true;
-
-    const backdrop = document.createElement('div');
-    backdrop.id = 'lce-fontpicker-backdrop';
-    Object.assign(backdrop.style, {
-        position: 'fixed', inset: '0', background: 'rgba(0,0,0,0.5)', zIndex: '10000',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-    });
-
-    const panel = document.createElement('div');
-    Object.assign(panel.style, {
-        width: 'min(520px,90vw)', maxHeight: '80vh', display: 'flex', flexDirection: 'column',
-        background: 'var(--lce-main,#222)', color: 'var(--lce-text,#eee)',
-        border: '2px solid var(--lce-login-accent,#7214ff)', borderRadius: '8px',
-        overflow: 'hidden', boxShadow: '0 8px 30px rgba(0,0,0,0.6)',
-    });
-
-    const search = document.createElement('input');
-    search.type = 'text';
-    search.setAttribute('placeholder', T('themeFont_search'));
-    Object.assign(search.style, {
-        padding: '10px', border: '0', borderBottom: '1px solid var(--lce-login-accent,#7214ff)',
-        background: 'var(--lce-element,#111)', color: 'inherit', fontSize: '16px',
-    });
-
-    const listWrap = document.createElement('div');
-    Object.assign(listWrap.style, { overflowY: 'auto', overflowX: 'hidden', padding: '8px' });
-    listWrap.textContent = '…';
-
-    panel.append(search, listWrap);
-    backdrop.appendChild(panel);
-    document.body.appendChild(backdrop);
-
-    const close = () => {
-        fontPickerOpen = false;
-        backdrop.remove();
-        document.removeEventListener('keydown', onKey, true);
-    };
-    const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); e.preventDefault(); close(); } };
-    document.addEventListener('keydown', onKey, true);
-    backdrop.addEventListener('mousedown', (e) => { if (e.target === backdrop) close(); });
-    // 別讓點擊/輸入穿到底下的 BC canvas
-    panel.addEventListener('mousedown', e => e.stopPropagation());
-    search.addEventListener('keydown', e => e.stopPropagation());
-
-    const pick = (name) => { fSettings[key] = name; fireSideEffect(key, def); close(); };
-
-    const makeRow = (label, value, previewFont) => {
-        const row = document.createElement('div');
-        row.textContent = label;
-        const selected = fSettings[key] === value;
-        Object.assign(row.style, {
-            padding: '8px 10px', cursor: 'pointer', borderRadius: '4px', fontSize: '18px',
-            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-            background: selected ? 'var(--lce-login-accent,#7214ff)' : '',
-        });
-        if (previewFont) row.style.fontFamily = /\s/.test(previewFont) ? `"${previewFont}"` : previewFont;
-        row.addEventListener('mouseenter', () => { if (!selected) row.style.background = 'var(--lce-element-hover,#3a3a3a)'; });
-        row.addEventListener('mouseleave', () => { if (!selected) row.style.background = ''; });
-        row.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); pick(value); });
-        return row;
-    };
-
-    let allFonts = [];
-    const render = (filter = '') => {
-        listWrap.textContent = '';
-        listWrap.appendChild(makeRow(T('themeFont_default'), '', ''));   // 清除 → 用預設字型
-        const f = filter.trim().toLowerCase();
-        for (const name of allFonts) {
-            if (f && !name.toLowerCase().includes(f)) continue;
-            listWrap.appendChild(makeRow(name, name, name));
-        }
-    };
-    search.addEventListener('input', () => render(search.value));
-
-    listSystemFonts()
-        .then((fonts) => { allFonts = fonts; render(); search.focus(); })
-        .catch((e) => { listWrap.textContent = String(e?.message ?? e); });
-}
-
-function promptInput(key, def) {
-    const next = window.prompt(T(def.label), String(fSettings[key] ?? ''));
-    if (next !== null) { fSettings[key] = next; fireSideEffect(key, def); }
-}
-
-let colorPickerOpen = false;
-
-/** 叫出 BC 內建調色器（跟 Themed 一樣）。無此 API 時退回瀏覽器原生調色器。 */
-function openColorPicker(key, def) {
-    const cur = /^#([0-9a-fA-F]{6})$/.test(fSettings[key]) ? fSettings[key] : '#000000';
-
-    if (typeof ColorPickerInit === 'function' && typeof ColorPicker === 'object') {
-        if (colorPickerOpen) return;
-        colorPickerOpen = true;
-        const paddingTop = 75;
-        const paddingRight = 2000 - (1815 + 90);
-        const shape = [2000 - ColorPicker.defaultShape[2] - paddingRight + 25, paddingTop, ColorPicker.defaultShape[2], 1000 - paddingTop * 2];
-        ColorPickerInit({
-            colorState: { colors: [cur], defaultColors: [DEFAULT_FEATURE_SETTINGS[key]?.value ?? '#ffffff'], opacity: [1], editOpacity: false },
-            heading: T(def.label),
-            shape,
-            // BC 呼叫 onInput 的簽名是 (inputElement, event)，不是狀態物件；
-            // 跟 Themed 一樣設為 no-op，顏色只在 onExit（(state, save, root)）套用。
-            onInput: () => null,
-            onExit: (state, save) => {
-                if (save && state?.colors) { fSettings[key] = state.colors[0]; fireSideEffect(key, def); }
-                applyTheme();
-                colorPickerOpen = false;
-                document.getElementById('lce-colorpicker-backdrop')?.toggleAttribute('hidden', true);
-            },
-        }).then((el) => {
-            let backdrop = document.getElementById('lce-colorpicker-backdrop');
-            if (!backdrop) {
-                backdrop = document.createElement('div');
-                backdrop.id = 'lce-colorpicker-backdrop';
-                Object.assign(backdrop.style, { backgroundColor: 'rgba(0,0,0,0.3)', width: '100%', height: '100%', position: 'absolute', top: '0', left: '0' });
-                backdrop.appendChild(el);
-                document.body.appendChild(backdrop);
-            } else {
-                backdrop.toggleAttribute('hidden', false);
-            }
-        }).catch(() => { colorPickerOpen = false; });
-        return;
-    }
-
-    // fallback：瀏覽器原生調色器
-    const input = document.createElement('input');
-    input.type = 'color';
-    input.value = cur;
-    input.style.cssText = 'position:fixed;left:-9999px;top:0';
-    document.body.appendChild(input);
-    const apply = () => { fSettings[key] = input.value; fireSideEffect(key, def); applyTheme(); };
-    input.addEventListener('input', apply);
-    input.addEventListener('change', () => { apply(); input.remove(); });
-    input.click();
 }
 
 // ───────────────────────────── 註冊 ─────────────────────────────

@@ -1,3 +1,5 @@
+import { finishTransform } from '../../ui/transition.js';
+import { playerHasMaleGender, getCurrentSpace, getToggleTargetSpace, applySpace } from '../../game/room-search.js';
 // ════════════════════════════════════════════════════════════════════════════
 // 直式房間清單（verticalChatSearch）—— 移植自 MPL 的 csXxx / cshXxx
 //
@@ -13,7 +15,7 @@ import { injectStyle, removeStyle } from '../../core/util.js';
 import { BASE_URL } from '../../core/constants.js';
 import { T } from '../../core/i18n.js';
 import { forceCanvasStyle, clearCanvasStyle } from './common.js';
-import { getRoomRelations } from './relations.js';
+import { buildRoomCard, cshCloseRoomInfo } from './room-view.js';
 
 const LOG = '🐈‍⬛ [LCE]';
 const CARD_MIN_H = 82;
@@ -24,19 +26,6 @@ const FOOTER_H = 48;
 const bcText = (k) => (typeof TextGet === 'function' ? (TextGet(k) || k) : k);
 
 // ───────────────────────── 區域（Space）工具 ─────────────────────────
-function playerHasMaleGender() {
-    try {
-        const genders = typeof Player?.GetGenders === 'function' ? Player.GetGenders() : [];
-        return Array.isArray(genders) && genders.includes('M');
-    } catch { return false; }
-}
-
-/** @returns {string} 目前搜尋空間（'X' = 混合、'' = 女性） */
-function getCurrentSpace() {
-    if (typeof ChatSearchGetSpace === 'function') return ChatSearchGetSpace();
-    return typeof ChatSearchSpace !== 'undefined' ? ChatSearchSpace : 'X';
-}
-
 const getSpaceButtonIcon = () =>
     (playerHasMaleGender() || getCurrentSpace() === 'X')
         ? BASE_URL + 'Icons/Gender.png'
@@ -45,17 +34,6 @@ const getSpaceButtonIcon = () =>
 function getSpaceButtonLabel() {
     if (playerHasMaleGender()) return T('v_csh_space_male');
     return getCurrentSpace() === 'X' ? T('v_csh_space_to_f') : T('v_csh_space_to_x');
-}
-
-const getToggleTargetSpace = () =>
-    playerHasMaleGender() ? 'X' : (getCurrentSpace() === 'X' ? '' : 'X');
-
-function applySpace(space, queryText = '') {
-    try {
-        if (typeof Player !== 'undefined' && Player?.ChatSearchSettings) Player.ChatSearchSettings.Space = space;
-        if (typeof ChatSearchSpace !== 'undefined') window.ChatSearchSpace = space;
-    } catch (e) { console.warn(LOG, '切換區域失敗:', e); }
-    if (typeof ChatSearchQuery === 'function') ChatSearchQuery(queryText);
 }
 
 // ───────────────────────── ChatSelect ─────────────────────────
@@ -191,6 +169,7 @@ let cshNeedSync = false;
 let cshPage = 1;
 let cshRoomsCache = [];
 let cshAnimating = false;
+let cancelPageTransition = null;
 let cshDrag = null;
 
 export const isCshActive = () => cshActive;
@@ -228,30 +207,6 @@ function getCshRoomsSource() {
 function calcCshPerPage() {
     const listH = window.innerHeight - HEADER_H - FOOTER_H - 24;
     return Math.max(1, Math.floor(listH / (CARD_MIN_H + CARD_GAP))) * 2;
-}
-
-function buildRoomTags(room) {
-    const tags = [];
-    if (room.Space !== undefined && typeof ChatSearchGetSpaceName === 'function') {
-        tags.push(ChatSearchGetSpaceName(room.Space));
-    }
-    if (room.Language && typeof ChatSearchGetLanguageName === 'function') {
-        tags.push(ChatSearchGetLanguageName(room.Language));
-    }
-    if (room.Game) tags.push(bcText(room.Game));
-    if (room.MapType && room.MapType !== 'Never' && typeof ChatSearchGetRoomTypeName === 'function') {
-        tags.push(ChatSearchGetRoomTypeName(room.MapType));
-    }
-    if (Array.isArray(room.BlockCategory)) {
-        for (const b of room.BlockCategory) tags.push(T('v_csh_block_prefix') + bcText(b));
-    }
-    if (Array.isArray(room.Access)) {
-        for (const a of room.Access) {
-            if (a === 'All') continue;
-            tags.push(T('v_csh_access_prefix') + bcText(a + 'Access'));
-        }
-    }
-    return tags;
 }
 
 function refreshCshSpaceButton() {
@@ -507,6 +462,26 @@ function makeHBtn(imgSrc, ariaLabel, onClick, extraClass = '') {
     return btn;
 }
 
+function cancelPageTurn() {
+    cancelPageTransition?.();
+    cancelPageTransition = null;
+    cshAnimating = false;
+}
+
+function commitPageTurn(track, targetPage, transform) {
+    cancelPageTurn();
+    cshAnimating = true;
+    cancelPageTransition = finishTransform(track, () => {
+        cancelPageTransition = null;
+        cshAnimating = false;
+        if (!cshActive || document.getElementById('lce-csh-shell')?._track !== track) return;
+        cshPage = targetPage;
+        renderCshList(false);
+    });
+    track.classList.add('animating');
+    track.style.transform = transform;
+}
+
 function cshAnimatePageTurn(dir) {
     const track = document.getElementById('lce-csh-shell')?._track;
     if (!track || cshAnimating) return;
@@ -516,93 +491,11 @@ function cshAnimatePageTurn(dir) {
     const targetPage = cshPage + dir;
     if (targetPage < 1 || targetPage > totalPages) return;
 
-    cshAnimating = true;
-    track.classList.add('animating');
-    track.style.transform = `translateX(${dir > 0 ? '-100%' : '100%'})`;
-    track.addEventListener('transitionend', () => {
-        cshPage = targetPage;
-        renderCshList(false);
-        cshAnimating = false;
-    }, { once: true });
-}
-
-function buildRoomCard(room) {
-    // 一律優先點 BC 原生的 join button，讓 BC 自己跑加入流程
-    const joinBtn = room?.Order != null
-        ? document.getElementById(`chat-search-room-join-button-${room.Order}`)
-        : null;
-
-    const name = room.Name || T('v_room_unnamed');
-    const memberCount = room.MemberCount ?? null;
-    const limit = room.MemberLimit ?? null;
-    const isFull = memberCount !== null && limit !== null && memberCount >= limit;
-    const hasFriend = Array.isArray(room.Friends) && room.Friends.length > 0;
-
-    const card = document.createElement('div');
-    card.className = 'lce-csh-card' + (isFull ? ' full' : '') + (hasFriend ? ' has-friend' : '');
-
-    const top = document.createElement('div');
-    top.className = 'lce-csh-card-top';
-    if (!room.CanJoin) {
-        const lockEl = document.createElement('span');
-        lockEl.className = 'lce-csh-card-lock';
-        lockEl.textContent = '🔒';
-        top.appendChild(lockEl);
-    }
-    const nameEl = document.createElement('div');
-    nameEl.className = 'lce-csh-card-name';
-    nameEl.textContent = name;
-    top.appendChild(nameEl);
-    card.appendChild(top);
-
-    const infoBtn = document.createElement('button');
-    infoBtn.className = 'lce-csh-card-info';
-    infoBtn.textContent = 'ⓘ';
-    infoBtn.setAttribute('aria-label', T('v_room_info_aria'));
-    infoBtn.addEventListener('click', (e) => { e.stopPropagation(); cshShowRoomInfo(room); });
-    card.appendChild(infoBtn);
-
-    if (room.Creator) {
-        const ownerEl = document.createElement('div');
-        ownerEl.className = 'lce-csh-card-owner';
-        ownerEl.textContent = T('v_room_by_prefix') + room.Creator;
-        card.appendChild(ownerEl);
-    }
-    if (room.Description) {
-        const descEl = document.createElement('div');
-        descEl.className = 'lce-csh-card-desc';
-        descEl.textContent = room.Description;
-        card.appendChild(descEl);
-    }
-
-    const foot = document.createElement('div');
-    foot.className = 'lce-csh-card-foot';
-    const cnt = document.createElement('span');
-    cnt.className = 'lce-csh-card-count' + (isFull ? ' full' : '');
-    cnt.textContent = memberCount !== null ? `👥 ${memberCount}${limit !== null ? '/' + limit : ''}` : '';
-    foot.appendChild(cnt);
-
-    // 同一種關係只顯示一個標籤，但不同關係都要顯示
-    for (const relType of new Set(getRoomRelations(room).map(p => p.relation))) {
-        const rel = document.createElement('span');
-        rel.className = `lce-csh-card-rel ${relType}`;
-        const dot = document.createElement('span');
-        dot.className = 'dot';
-        const text = document.createElement('span');
-        text.textContent = T(`v_rel_${relType}`);
-        rel.append(dot, text);
-        foot.appendChild(rel);
-    }
-    card.appendChild(foot);
-
-    card.addEventListener('click', () => {
-        if (joinBtn) joinBtn.click();
-        else if (typeof ChatSearchClickRoom === 'function') ChatSearchClickRoom(room);
-    });
-    return card;
+    commitPageTurn(track, targetPage, `translateX(${dir > 0 ? '-100%' : '100%'})`);
 }
 
 function buildCshShell() {
+    cancelPageTurn();
     document.getElementById('lce-csh-shell')?.remove();
     const shell = document.createElement('div');
     shell.id = 'lce-csh-shell';
@@ -751,6 +644,7 @@ function cshResetTrackPosition(track, value = 'translateX(0)') {
 }
 
 export function renderCshList(resetPage = false) {
+    cancelPageTurn();
     const shell = document.getElementById('lce-csh-shell');
     const track = shell?._track;
     if (!shell || !track) return;
@@ -831,16 +725,7 @@ function cshBindSwipe(list) {
         const totalPages = Math.max(1, Math.ceil(cshRoomsCache.length / perPage));
         const threshold = Math.min(120, window.innerWidth * 0.20);
 
-        const commit = (delta, to) => {
-            cshAnimating = true;
-            track.classList.add('animating');
-            track.style.transform = to;
-            track.addEventListener('transitionend', () => {
-                cshAnimating = false;
-                cshPage += delta;
-                renderCshList(false);
-            }, { once: true });
-        };
+        const commit = (delta, to) => commitPageTurn(track, cshPage + delta, to);
 
         if (dx > threshold && cshPage > 1) { commit(-1, 'translateX(100%)'); return; }
         if (dx < -threshold && cshPage < totalPages) { commit(1, 'translateX(-100%)'); return; }
@@ -853,112 +738,8 @@ function cshBindSwipe(list) {
     list.addEventListener('pointercancel', endDrag);
 }
 
-function cshCloseRoomInfo() {
-    document.getElementById('lce-csh-info-backdrop')?.remove();
-}
-
-function cshShowRoomInfo(room) {
-    cshCloseRoomInfo();
-
-    const backdrop = document.createElement('div');
-    backdrop.id = 'lce-csh-info-backdrop';
-    backdrop.addEventListener('click', cshCloseRoomInfo);
-    // 擋掉 pointer 事件，否則會被下層的翻頁滑動接走
-    for (const t of ['pointerdown', 'pointermove', 'pointerup']) {
-        backdrop.addEventListener(t, (e) => e.stopPropagation());
-    }
-
-    const sheet = document.createElement('div');
-    sheet.id = 'lce-csh-info-sheet';
-    sheet.addEventListener('click', (e) => e.stopPropagation());
-
-    const handle = document.createElement('div');
-    handle.id = 'lce-csh-info-handle';
-    sheet.appendChild(handle);
-
-    const head = document.createElement('div');
-    head.id = 'lce-csh-info-head';
-    const main = document.createElement('div');
-    main.id = 'lce-csh-info-main';
-    const title = document.createElement('div');
-    title.id = 'lce-csh-info-title';
-    title.textContent = room.Name || T('v_room_unnamed');
-    const ownerEl = document.createElement('div');
-    ownerEl.id = 'lce-csh-info-owner';
-    ownerEl.textContent = room.Creator ? T('v_room_by_prefix') + room.Creator : '';
-    main.append(title, ownerEl);
-
-    const closeBtn = document.createElement('button');
-    closeBtn.id = 'lce-csh-info-close';
-    closeBtn.textContent = '✕';
-    closeBtn.addEventListener('click', cshCloseRoomInfo);
-    head.append(main, closeBtn);
-    sheet.appendChild(head);
-
-    const descEl = document.createElement('div');
-    descEl.id = 'lce-csh-info-desc';
-    descEl.textContent = room.Description || T('v_room_no_desc');
-    sheet.appendChild(descEl);
-
-    const tagsWrap = document.createElement('div');
-    tagsWrap.id = 'lce-csh-info-tags';
-    for (const tagText of buildRoomTags(room)) {
-        const tag = document.createElement('div');
-        tag.className = 'lce-csh-tag';
-        tag.textContent = tagText;
-        tagsWrap.appendChild(tag);
-    }
-    sheet.appendChild(tagsWrap);
-
-    const people = getRoomRelations(room);
-    if (people.length) {
-        const peopleWrap = document.createElement('div');
-        peopleWrap.id = 'lce-csh-info-people';
-        for (const p of people) {
-            const row = document.createElement('div');
-            row.className = 'lce-csh-info-person';
-            const dot = document.createElement('span');
-            dot.className = `lce-csh-rel-dot ${p.relation}`;
-            const name = document.createElement('span');
-            name.textContent = p.memberName;
-            const label = document.createElement('span');
-            label.className = 'lce-csh-rel-label';
-            label.textContent = T(`v_rel_${p.relation}`);
-            row.append(dot, name, label);
-            peopleWrap.appendChild(row);
-        }
-        sheet.appendChild(peopleWrap);
-    }
-
-    const footer = document.createElement('div');
-    footer.id = 'lce-csh-info-footer';
-    const members = document.createElement('div');
-    members.id = 'lce-csh-info-members';
-    members.textContent = `${room.MemberCount ?? 0} / ${room.MemberLimit ?? '?'}`;
-
-    const canJoin = !!(room.CanJoin && (room.MemberCount ?? 0) < (room.MemberLimit ?? 999));
-    const joinBtn2 = document.createElement('button');
-    joinBtn2.id = 'lce-csh-info-join';
-    joinBtn2.textContent = T(canJoin ? 'v_room_can_join' : 'v_room_cannot_join');
-    if (!canJoin) joinBtn2.classList.add('disabled');
-    joinBtn2.addEventListener('click', () => {
-        if (!canJoin) return;
-        cshCloseRoomInfo();
-        const joinBtnDom = room?.Order != null
-            ? document.getElementById(`chat-search-room-join-button-${room.Order}`)
-            : null;
-        if (joinBtnDom) joinBtnDom.click();
-        else if (typeof ChatSearchClickRoom === 'function') ChatSearchClickRoom(room);
-    });
-
-    footer.append(members, joinBtn2);
-    sheet.appendChild(footer);
-
-    backdrop.appendChild(sheet);
-    document.body.appendChild(backdrop);
-}
-
 export function cshRemove() {
+    cancelPageTurn();
     if (!cshActive) return;
     cshActive = false;
     cshAnimating = false;

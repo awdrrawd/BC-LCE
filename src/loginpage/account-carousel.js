@@ -8,12 +8,12 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 import { CANVAS_W, LOGIN_REQUEST_EVENT } from '../core/constants.js';
-import { S } from '../core/state.js';
+import { S } from './state.js';
 import { T } from '../core/i18n.js';
 import { mk } from '../core/util.js';
 import {
     loadAccounts, removeAccount, dbGet, dbDelete, decryptPassword, ACCOUNTS_UPDATED_EVENT,
-} from '../core/storage.js';
+} from '../storage/accounts.js';
 
 const MIN_CARDS = 3;    // 少於此數以虛擬卡填位
 const STEP_DEG  = 22;   // 相鄰卡片的角度間隔

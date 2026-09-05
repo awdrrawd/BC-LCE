@@ -30,6 +30,18 @@ export function isOriginTrusted(value) {
     return !!origin && getTrustedOrigins().includes(origin);
 }
 
+/** Permanent grants apply to images only; other content retains session-only consent. */
+export function getTrustDecision(value, { persistent = true } = {}) {
+    const origin = normalizeOrigin(value);
+    if (!origin) return 'denied';
+    if (persistent && isOriginTrusted(origin)) return 'allowed';
+    return sessionCustomOrigins.get(origin) ?? 'unknown';
+}
+
+export function isTrustedOrigin(value, options) {
+    return getTrustDecision(value, options) === 'allowed';
+}
+
 export function addTrustedOrigin(value) {
     const origin = normalizeOrigin(value);
     if (!origin) return false;

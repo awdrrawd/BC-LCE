@@ -1,3 +1,5 @@
+import { createSocketBinding } from '../core/lifecycle.js';
+import { createHook } from '../core/hooks.js';
 // ════════════════════════════════════════════════════════════════════════════
 // 雜項
 //   插件版本辨識            LCE Hello 只交換版本與能力；完整插件清單交由 BC 原廠遠端查詢
@@ -14,14 +16,11 @@ import { T } from '../core/i18n.js';
 import { shouldLceHandle } from '../core/wce-compat.js';
 // 與聊天嵌入共用同一份「本次連線已授權來源」名單（WCE 也是共用同一個 map），
 // 在聊天嵌入授權過的來源，這裡就不會再問一次。
-import { isOriginTrusted, requestOriginTrust, sessionCustomOrigins } from './trusted-domains.js';
+import { getTrustDecision, isTrustedOrigin, requestOriginTrust, sessionCustomOrigins } from './trusted-domains.js';
 
 const LOG = '🐈‍⬛ [LCE]';
 const NEW_ACCOUNT_MS = 30000;              // 建立不到 30 秒就進房 = 異常新（同 WCE）
-function hook(name, priority, fn) {
-    try { modApi.hookFunction(name, priority, fn); }
-    catch (e) { console.warn(LOG, 'misc hook 未掛上:', name, e?.message ?? e); }
-}
+const hook = createHook('misc');
 
 // ───────────────────────── 第三方內容確認 ─────────────────────────
 let promptOpen = false;
@@ -80,7 +79,8 @@ export function installMisc() {
                 `（建立於 ${((Date.now() - data.Character.Creation) / 1000).toFixed(0)} 秒前）`);
         } catch (e) { console.warn(LOG, 'ghostNewUsers 失敗:', e); }
     };
-    const bind = () => { try { ServerSocket?.on('ChatRoomSyncMemberJoin', onMemberJoin); } catch { /* ignore */ } };
+    const socketBinding = createSocketBinding({ ChatRoomSyncMemberJoin: onMemberJoin });
+    const bind = () => socketBinding.bind(typeof ServerSocket === 'undefined' ? null : ServerSocket);
     (function wait(n = 240) {
         if (typeof ServerSocket === 'undefined' || !ServerSocket) {
             if (n <= 0) return;
@@ -99,12 +99,12 @@ export function installMisc() {
             const imageOrigin = ImageURL && new URL(ImageURL).origin;
             const musicOrigin = MusicURL && new URL(MusicURL).origin;
 
-            if (imageOrigin && !isOriginTrusted(imageOrigin) && !sessionCustomOrigins.has(imageOrigin)) askOrigin(imageOrigin, 'image');
-            else if (musicOrigin && !sessionCustomOrigins.has(musicOrigin)) askOrigin(musicOrigin, 'music');
+            if (imageOrigin && getTrustDecision(imageOrigin) === 'unknown') askOrigin(imageOrigin, 'image');
+            else if (musicOrigin && getTrustDecision(musicOrigin, { persistent: false }) === 'unknown') askOrigin(musicOrigin, 'music');
 
             // 全部都已授權才放行；否則擋下（不載入）
-            if ((!ImageURL || sessionCustomOrigins.get(imageOrigin) === 'allowed')
-                && (!MusicURL || sessionCustomOrigins.get(musicOrigin) === 'allowed')) {
+            if ((!ImageURL || isTrustedOrigin(imageOrigin))
+                && (!MusicURL || isTrustedOrigin(musicOrigin, { persistent: false }))) {
                 return next(args);
             }
         } catch { /* URL 解析失敗就當作不放行 */ }

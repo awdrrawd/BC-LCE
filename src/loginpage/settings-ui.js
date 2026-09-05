@@ -3,7 +3,7 @@
 // 事件綁定集中在 login-ui.bindEvents，此模組只負責 DOM 與純顯示邏輯，避免循環相依。
 // ════════════════════════════════════════════════════════════════════════════
 
-import { S } from '../core/state.js';
+import { S } from './state.js';
 import { T, i18nPlaceholder } from '../core/i18n.js';
 import { mk } from '../core/util.js';
 import { getFeature } from '../core/feature-settings.js';

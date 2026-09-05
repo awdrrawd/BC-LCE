@@ -1,3 +1,8 @@
+import { createThemeActions } from '../settings/theme-actions.js';
+import { applyAnimationEngineSetting } from '../game/setting-effects.js';
+import { grantWardrobe } from '../game/setting-effects.js';
+import { switchGameLanguage } from '../game/language.js';
+export { gameLanguages } from '../game/language.js';
 // ════════════════════════════════════════════════════════════════════════════
 // 功能設定 Schema（仿 WCE src/util/settings.ts 的 defaultSettings）
 // 每一項描述一個設定：型別、預設值、所屬分類、停用條件、切換副作用。
@@ -39,6 +44,8 @@ export const THEME_COLOR_KEYS = [
     'themeInvalid', 'themeEquipped', 'themeCrafted', 'themeBlocked', 'themeLimited',
     'themeAllowed', 'themeRoomFriend', 'themeRoomBlocked', 'themeRoomGame',
 ];
+
+const themeActions = createThemeActions(THEME_COLOR_KEYS, () => DEFAULT_FEATURE_SETTINGS);
 
 // 無副作用的設定用這個：載入時不吵，變更時記一筆。
 // （功能自己在使用時讀 getFeature()，不需要在這裡做任何事 —— 這不是待辦。）
@@ -108,61 +115,6 @@ export function clampBar(def, raw) {
 // 主題色停用條件
 const themeOff  = (s) => !s.themeEnabled;                         // 未開主題 → 全部停用
 const themeAdv  = (s) => !s.themeEnabled || s.themeMode !== 'advanced'; // 進階色僅進階模式可改
-
-// ───────────────────────── 遊戲語言（misc）─────────────────────────
-// BC 只在登入頁提供語言選單，登入後就沒得改（只能刷新頁面）。這裡把它搬進設定頁，
-// 語言清單直接取自 BC 的 TranslationDictionary（與登入頁的選單同一份來源）。
-//
-// TranslationSwitchLanguage(code) 本身只改 TranslationLanguage + localStorage、不重載文字，
-// 所以要沿用登入頁（loginpage/login-ui.js）的重載手續：TextLoad / ActivityDictionaryLoad /
-// AssetLoadDescription。這段只碰 BC 全域，不 import 任何功能模組（避免與 feature-settings 循環相依）。
-
-// 語言清單快取一次（BC 字典載入後就固定）。字典還沒好時回後備清單、且不快取，等下次載入。
-let _langCache = null;
-export function gameLanguages() {
-    if (_langCache) return _langCache;
-    try {
-        if (typeof TranslationDictionary !== 'undefined' && Array.isArray(TranslationDictionary) && TranslationDictionary.length) {
-            const codes = [], labels = [];
-            for (const l of TranslationDictionary) {
-                if (!l?.LanguageCode) continue;
-                codes.push(l.LanguageCode);
-                labels.push((l.Icon ? l.Icon + ' ' : '') + (l.LanguageName || l.EnglishName || l.LanguageCode));
-            }
-            if (codes.length) { _langCache = { codes, labels }; return _langCache; }
-        }
-    } catch { /* ignore */ }
-    return { codes: ['EN'], labels: ['English'] };   // 後備（不快取，等字典載入）
-}
-
-/** BC 目前語言碼（讀不到就退回 localStorage / EN）。 */
-function currentGameLanguage() {
-    return (typeof TranslationLanguage !== 'undefined' && TranslationLanguage)
-        || localStorage.getItem('BondageClubLanguage') || 'EN';
-}
-
-/**
- * 切換遊戲語言。
- *   init  → 只把顯示值對齊「實際語言」，不觸發切換（避免每次登入強制覆寫使用者當下的語言）。
- *   非 init → 真的切語言並重載文字/活動字典/物品說明（同登入頁的手續）。
- * gameLanguage 只是 BC 語言狀態的鏡射，BC 自己把選擇存進 localStorage，這裡不另外持久化。
- */
-function switchGameLanguage(code, init, s) {
-    try {
-        const current = currentGameLanguage();
-        if (init) {
-            if (s && code !== current) s.gameLanguage = current;   // 顯示值對齊實際語言
-            return;
-        }
-        if (!code || code === current) return;
-        if (typeof TranslationSwitchLanguage !== 'function') return;
-        TranslationSwitchLanguage(code);
-        if (typeof TextLoad === 'function')               TextLoad();
-        if (typeof ActivityDictionaryLoad === 'function') ActivityDictionaryLoad();
-        if (typeof AssetLoadDescription === 'function')   AssetLoadDescription('Female3DCG');
-        console.debug('🐈‍⬛ [LCE] setting changed: gameLanguage =', code);
-    } catch (e) { console.warn('🐈‍⬛ [LCE] 切換遊戲語言失敗:', e); }
-}
 
 /**
  * 完整設定表。key 即儲存鍵。
@@ -239,7 +191,7 @@ export const DEFAULT_FEATURE_SETTINGS = {
         type: 'checkbox', value: true, category: 'chat', disabled: () => false, sideEffects: logChange('pendingMessages'),
     },
     // 信息凍結：捲上去看歷史時凍結新訊息、不被別的插件把畫面拉到底。功能本體是外部插件，
-    // 開啟才動態載入、關閉才 teardown —— 開關流程全在 features/chat-scroll-freeze.js，
+    // 開啟才動態載入，關閉不卸載其他插件共用的實體 —— 開關流程全在 features/chat-scroll-freeze.js，
     // 它掛 lce-setting-changed 監聽，故這裡照舊只記一筆即可。
     chatScrollFreeze: {
         label: 's_chatScrollFreeze', desc: 'sd_chatScrollFreeze',
@@ -314,36 +266,20 @@ export const DEFAULT_FEATURE_SETTINGS = {
     saveThemeSlot: {
         label: 's_saveThemeSlot', desc: 'sd_saveThemeSlot', type: 'action', category: 'theme',
         actionLabel: 's_saveThemeSlot_btn', actionDoneLabel: 's_saveThemeSlot_done', disabled: themeOff,
-        run: (s) => {
-            if (!s) return;
-            s.themeSlots = Array.isArray(s.themeSlots) ? s.themeSlots.slice() : [null, null, null];
-            const i = Math.max(0, Math.min(2, parseInt(s.themeSlot || '1', 10) - 1));
-            s.themeSlots[i] = Object.fromEntries(THEME_COLOR_KEYS.map(k => [k, s[k]]));
-        },
+        run: themeActions.saveThemeSlot,
     },
     loadThemeSlot: {
         label: 's_loadThemeSlot', desc: 'sd_loadThemeSlot', type: 'action', category: 'theme',
         actionLabel: 's_loadThemeSlot_btn', actionDoneLabel: 's_loadThemeSlot_done', disabled: themeOff,
-        run: (s) => {
-            if (!s) return;
-            const i = Math.max(0, Math.min(2, parseInt(s.themeSlot || '1', 10) - 1));
-            const snap = Array.isArray(s.themeSlots) ? s.themeSlots[i] : null;
-            if (snap && typeof snap === 'object') for (const k of THEME_COLOR_KEYS) if (k in snap) s[k] = snap[k];
-        },
+        run: themeActions.loadThemeSlot,
     },
     resetTheme: {
         label: 's_resetTheme', desc: 'sd_resetTheme', type: 'action', category: 'theme',
         actionLabel: 's_resetTheme_btn', actionDoneLabel: 's_resetTheme_done', disabled: themeOff,
-        run: (s) => {
-            if (!s) return;
-            for (const k of THEME_COLOR_KEYS) s[k] = DEFAULT_FEATURE_SETTINGS[k].value;
-        },
+        run: themeActions.resetTheme,
     },
 
     // ───────────────────────── ui UI 替換 ─────────────────────────
-    // 註：「美化登入介面」不放在這裡 —— 功能設定要等 Player.AccountName（登入後）才載入，
-    // 而登入頁是在 LoginLoad（登入前）就套用，讀不到這裡的值。該開關由登入頁自己的
-    // 設定浮層管理（存全域 lce_settings 的 enhance，見 loginpage/settings-ui.js）。
     // 橫式 / 直式登入是一對：依螢幕方向各自決定要不要用 LCE 的登入頁，
     // 關掉的那個方向會退回 BC 原生登入頁。兩者都是全域設定（ui 分類），
     // 所以登入頁的設定浮層與遊戲內設定頁改的是同一份值。
@@ -422,20 +358,7 @@ export const DEFAULT_FEATURE_SETTINGS = {
     animationEngine: {
         label: 's_animationEngine', desc: 'sd_animationEngine',
         type: 'checkbox', value: false, category: 'immersion', disabled: () => false,
-        sideEffects: (newValue, init, s) => {
-            // 接管後 BC 原生的慾望表情會與引擎互搶同一張臉
-            if (newValue && Player?.ArousalSettings) Player.ArousalSettings.AffectExpression = false;
-            // 使用者「手動」關掉總開關時，一併關掉附屬功能。
-            // 絕不可在 init 時做：postFeatureSettings 每次載入都會用當下值跑一次
-            // sideEffects 並存檔，而本開關是後加的、預設 false —— 舊存檔的
-            // activityExpressions=true 會在每次登入被靜靜清成 false，表情引擎形同永久停用。
-            // （附屬功能留著 true 也無害：disabled 會擋 UI，engineOn 會擋執行。）
-            if (!init && !newValue) {
-                s.autoArousalExpression = false;
-                s.activityExpressions = false;
-            }
-            if (!init) console.debug('🐈‍⬛ [LCE] setting changed: animationEngine =', newValue);
-        },
+        sideEffects: applyAnimationEngineSetting,
     },
     autoArousalExpression: {
         label: 's_autoArousalExpression', desc: 'sd_autoArousalExpression',
@@ -528,12 +451,7 @@ export const DEFAULT_FEATURE_SETTINGS = {
         label: 's_grantWardrobe', desc: 'sd_grantWardrobe',
         type: 'action', category: 'wardrobe', disabled: () => false,
         actionLabel: 's_grantWardrobe_btn', actionDoneLabel: 's_grantWardrobe_done',
-        run: () => {
-            try {
-                if (typeof LogQuery === 'function' && LogQuery('Wardrobe', 'PrivateRoom')) return;
-                if (typeof LogAdd === 'function') LogAdd('Wardrobe', 'PrivateRoom');
-            } catch (e) { console.warn('🐈‍⬛ [LCE] grantWardrobe 失敗:', e); }
-        },
+        run: grantWardrobe,
     },
 
     // ───────────────────────── performance 性能 ─────────────────────────

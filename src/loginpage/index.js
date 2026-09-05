@@ -8,8 +8,8 @@
 // ════════════════════════════════════════════════════════════════════════════
 
 import modApi from '../modsdk.js';
-import { S, saveSettings } from '../core/state.js';
-import { scheduleProfileCapture } from '../core/storage.js';
+import { S, saveSettings } from './state.js';
+import { scheduleProfileCapture } from './profile-capture.js';
 import {
     checkScene, lceRemove, lceLayout, handleResize, destroyLoginUI,
 } from './login-ui.js';

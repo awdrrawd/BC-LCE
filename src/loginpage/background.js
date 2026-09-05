@@ -7,9 +7,9 @@
 // 新增圖片只要丟進 assets/ 依檔名排序即可自動納入（無需改程式，重新 build 即可）。
 // ════════════════════════════════════════════════════════════════════════════
 
-import { S } from '../core/state.js';
+import { S } from './state.js';
 import { WALLPAPER_UPLOAD_SENTINEL } from '../core/constants.js';
-import { loadWallpaper } from '../core/storage.js';
+import { loadWallpaper } from '../storage/wallpaper.js';
 
 // 建置時把 assets/*.{jpg,jpeg,png,webp} 全部收進來（eager，取 default = 輸出檔的 URL）
 // 路徑相對本檔（src/loginpage/）→ 專案根的 assets/ 需回上兩層。
@@ -64,6 +64,7 @@ export function pickBackground() {
  * object URL 會一直抓著整顆 Blob 不放，反覆換背景就會把記憶體吃光。
  */
 let uploadedObjectUrl = null;
+let backgroundToken = 0;
 
 function releaseUploadedUrl() {
     if (uploadedObjectUrl) { URL.revokeObjectURL(uploadedObjectUrl); uploadedObjectUrl = null; }
@@ -137,11 +138,12 @@ export function handleBackgroundError() {
 }
 
 /** 取得自訂桌布的網址：可能是使用者填的 URL，也可能是上傳進 DB 的那張。 */
-async function resolveCustomUrl() {
+async function resolveCustomUrl(token, image) {
     const v = S.settings.bgCustomUrl;
     if (!v) return null;
     if (v !== WALLPAPER_UPLOAD_SENTINEL) return v;   // 一般網址，直接用
     const blob = await loadWallpaper();
+    if (token !== backgroundToken || document.getElementById('lce-bg-img') !== image) return null;
     if (!blob) return null;                          // 設成上傳但 DB 裡沒東西 → 交回去退回隨機
     releaseUploadedUrl();
     uploadedObjectUrl = URL.createObjectURL(blob);
@@ -153,12 +155,14 @@ async function resolveCustomUrl() {
  * custom 模式要讀 IndexedDB，所以是非同步的；呼叫端不需要等它（背景晚一拍出現無妨）。
  */
 export async function applyBackground() {
+    const token = ++backgroundToken;
     const img = document.getElementById('lce-bg-img');
     if (!img) return;
     fellBack = false;   // 換了新來源，之前那次的失敗不算數
 
     if (S.settings.bgMode === 'custom') {
-        const url = await resolveCustomUrl();
+        const url = await resolveCustomUrl(token, img);
+        if (token !== backgroundToken || document.getElementById('lce-bg-img') !== img) return;
         if (url) {
             // 換過去之前先確定 img 還在（等 DB 的期間使用者可能已經登入、UI 被拆掉了）
             if (!document.getElementById('lce-bg-img')) { releaseUploadedUrl(); return; }
@@ -178,4 +182,10 @@ export async function applyBackground() {
     // 有對應影片 → 準備好就淡入；沒有 → 收掉上一支、維持純圖片
     if (bg.video) applyVideo(bg.video);
     else clearVideo();
+}
+
+export function disposeBackground() {
+    backgroundToken++;
+    clearVideo();
+    releaseUploadedUrl();
 }

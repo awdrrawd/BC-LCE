@@ -1,3 +1,4 @@
+import { playerHasMaleGender, getCurrentSpace, getToggleTargetSpace, setSearchSpace, applySpace } from '../game/room-search.js';
 // ════════════════════════════════════════════════════════════════════════════
 // 混合區／女性區快速切換（regionSwitch）—— 移植自 Liko - Region switch
 //
@@ -32,18 +33,7 @@ let switchButton = null;
 
 const enabled = () => !!getFeature('regionSwitch');
 
-function detectCurrentZone() {
-    try {
-        if (typeof Player !== 'undefined' && Player.ChatSearchSettings) {
-            const space = Player.ChatSearchSettings.Space;
-            if (space === 'X') return true;
-            if (space === '') return false;
-        }
-    } catch (e) {
-        console.warn(LOG, 'Region switch 無法判定區域:', e);
-    }
-    return true;
-}
+const detectCurrentZone = () => getCurrentSpace() === 'X';
 
 function saveZone() {
     try {
@@ -88,38 +78,23 @@ function loadSavedState() {
     stateLoaded = true;
 }
 
-function performSearch() {
-    try {
-        // 僅在聊天搜尋畫面且 InputSearch 元素存在時才搜尋。ChatSearchQuery 是非同步的，
-        // 其伺服器回應會存取 InputSearch DOM；若此時元素已被移除，每個回傳房間都會噴一次
-        // "missing element: InputSearch" 錯誤。
-        if (typeof CurrentScreen === 'undefined' || CurrentScreen !== 'ChatSearch') return;
-        if (!document.getElementById('InputSearch')) return;
-
-        if (inMixedZone) {
-            Player.ChatSearchSettings.Space = 'X';
-            ChatSearchSpace = 'X';
-        } else {
-            Player.ChatSearchSettings.Space = '';
-            ChatSearchSpace = '';
-        }
-        ChatSearchQuery(ChatSearchQueryString);
-    } catch (e) {
-        console.error(LOG, 'Region switch 搜索執行錯誤:', e);
-    }
-}
-
 function switchZone() {
-    inMixedZone = !inMixedZone;
+    if (typeof CurrentScreen === 'undefined' || CurrentScreen !== 'ChatSearch'
+        || !document.getElementById('InputSearch')) return;
+    const space = getToggleTargetSpace();
+    inMixedZone = space === 'X';
     stateLoaded = true;
     saveZone();
     updateButtonAppearance();
-    performSearch();
+    void applySpace(space, typeof ChatSearchQueryString === 'string' ? ChatSearchQueryString : '');
 }
 
 /** 按鈕永遠顯示「按下去會切到哪一區」：目前在混合區 → 顯示女性區圖示/提示。 */
-function buttonTooltip() { return inMixedZone ? T('regionSwitch_toFemale') : T('regionSwitch_toMixed'); }
-function buttonIcon()    { return inMixedZone ? ICONS.female : ICONS.mixed; }
+function buttonTooltip() {
+    if (playerHasMaleGender()) return T('v_csh_space_male');
+    return inMixedZone ? T('regionSwitch_toFemale') : T('regionSwitch_toMixed');
+}
+function buttonIcon() { return playerHasMaleGender() ? ICONS.mixed : (inMixedZone ? ICONS.female : ICONS.mixed); }
 
 function updateButtonAppearance() {
     if (!switchButton) return;
@@ -172,8 +147,8 @@ export function installRegionSwitch() {
             try {
                 loadSavedState();
                 inMixedZone = detectCurrentZone();
-                Player.ChatSearchSettings.Space = inMixedZone ? 'X' : '';
-                ChatSearchSpace = Player.ChatSearchSettings.Space;
+                setSearchSpace(inMixedZone ? 'X' : '');
+                inMixedZone = detectCurrentZone();
                 setTimeout(createSwitchButton, 50);
             } catch (e) {
                 console.error(LOG, 'Region switch ChatSearchLoad hook 錯誤:', e);
@@ -184,7 +159,9 @@ export function installRegionSwitch() {
         modApi.hookFunction('ChatSearchRun', 1, (args, next) => {
             const result = next(args);
             if (!enabled()) { removeButton(); return result; }
+            inMixedZone = detectCurrentZone();
             if (!document.getElementById(BTN_ID)) createSwitchButton();
+            else updateButtonAppearance();
             return result;
         });
     } catch (e) {

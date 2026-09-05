@@ -1,3 +1,4 @@
+import { gameLanguages, currentGameLanguage, switchGameLanguage } from '../game/language.js';
 // ════════════════════════════════════════════════════════════════════════════
 // 登入 UI 主流程：建構、事件、狀態同步、定位、啟用/停用、場景偵測
 // ════════════════════════════════════════════════════════════════════════════
@@ -5,14 +6,15 @@
 import {
     CANVAS_W, CANVAS_H, ICON_PERSON, ICON_LOCK, LOGIN_REQUEST_EVENT, WALLPAPER_UPLOAD_SENTINEL,
 } from '../core/constants.js';
-import { S, saveSettings, loadSettings } from '../core/state.js';
+import { S, saveSettings, loadSettings } from './state.js';
 import { T, i18nText, i18nPlaceholder, refreshI18n } from '../core/i18n.js';
 import { mk, place, getCanvas, isLandscape, isPortrait } from '../core/util.js';
 import { getFeature, setFeature } from '../core/feature-settings.js';
-import { previewLoginAccent, clearLoginAccentPreview } from '../features/ui-colors.js';
-import { addOrUpdateAccount, saveWallpaper, deleteWallpaper } from '../core/storage.js';
+import { previewLoginAccent, clearLoginAccentPreview } from '../features/theme/ui-colors.js';
+import { addOrUpdateAccount } from '../storage/accounts.js';
+import { saveWallpaper, deleteWallpaper } from '../storage/wallpaper.js';
 import { hideBC, showBC } from './bc.js';
-import { applyBackground, handleBackgroundError } from './background.js';
+import { applyBackground, handleBackgroundError, disposeBackground } from './background.js';
 import { buildCarousel, destroyCarousel, setCarouselAxis } from './account-carousel.js';
 import { buildSettingsOverlay, toggleSettings, closeSettings, applyShowSettings } from './settings-ui.js';
 
@@ -190,12 +192,7 @@ function bindEvents() {
                 langEl.value = code;
                 langEl.dispatchEvent(new Event('change', { bubbles: true }));
             }
-        } else if (typeof TranslationSwitchLanguage === 'function') {
-            TranslationSwitchLanguage(code || 'EN');
-            if (typeof TextLoad === 'function')               TextLoad();
-            if (typeof ActivityDictionaryLoad === 'function') ActivityDictionaryLoad();
-            if (typeof AssetLoadDescription === 'function')   AssetLoadDescription('Female3DCG');
-        }
+        } else { switchGameLanguage(code || 'EN'); }
         setTimeout(() => { S.lastStatusMsg = null; syncStatus(); refreshI18n(); }, 100);
     });
 
@@ -298,7 +295,7 @@ function buildLanguageSelect() {
     const sel = document.getElementById('lce-lang-select');
     if (!sel) return;
     sel.innerHTML = '';
-    const currentLang = localStorage.getItem('BondageClubLanguage') || 'EN';
+    const currentLang = currentGameLanguage();
 
     const bcDropdown = document.getElementById('LanguageDropdown');
     if (bcDropdown && bcDropdown.options.length > 0) {
@@ -309,19 +306,11 @@ function buildLanguageSelect() {
         });
         return;
     }
-    if (typeof TranslationDictionary !== 'undefined' && Array.isArray(TranslationDictionary)) {
-        TranslationDictionary.forEach(l => {
-            const opt = mk('option', '', {
-                value: l.LanguageCode,
-                textContent: (l.Icon ? l.Icon + ' ' : '') + (l.LanguageName || l.EnglishName || l.LanguageCode),
-            });
-            opt.selected = l.LanguageCode === currentLang;
-            sel.appendChild(opt);
-        });
-        return;
-    }
-    const fb = mk('option', '', { value: 'EN', textContent: 'English' }); fb.selected = currentLang === 'EN';
-    sel.appendChild(fb);
+    const { codes, labels } = gameLanguages();
+    codes.forEach((code, i) => {
+        const option = mk('option', '', { value: code, textContent: labels[i], selected: code === currentLang });
+        sel.appendChild(option);
+    });
 }
 
 // ── 登入 ──────────────────────────────────────────────────────────────────
@@ -460,6 +449,7 @@ export function lceRemove() {
  * 呼叫前應先 lceRemove()。
  */
 export function destroyLoginUI() {
+    disposeBackground();
     window.removeEventListener(LOGIN_REQUEST_EVENT, doLogin);
     lceRemove();
     destroyCarousel();

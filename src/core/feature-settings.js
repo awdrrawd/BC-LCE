@@ -1,3 +1,5 @@
+import { resolveSettingKey, normalizeSettingValue } from './settings-values.js';
+import { parseJSON } from './serialization.js';
 // ════════════════════════════════════════════════════════════════════════════
 // 功能設定儲存層（仿 WCE src/util/settings.ts）
 //
@@ -12,15 +14,15 @@
 
 import { DEFAULT_FEATURE_SETTINGS, defaultValues, globalKeys, clampBar } from './settings-schema.js';
 import { FEATURE_SETTINGS_VERSION, LCE_EXT_KEY, SETTINGS_KEY, SETTING_CHANGED_EVENT } from './constants.js';
-import { readRoot as readGlobalRoot } from './state.js';
+import { readRoot as readGlobalRoot } from './settings-root.js';
 
 // 載入後即為完整設定物件；載入前為空物件（getFeature 會 fallback 到預設）。
 export let fSettings = {};
+let accountSettingsLoaded = false;
 
 const LOG = '🐈‍⬛ [LCE]';
 
 
-function parseJSON(s) { try { return s ? JSON.parse(s) : null; } catch { return null; } }
 
 function decompress(b) {
     try { return (typeof LZString !== 'undefined' && b) ? LZString.decompressFromBase64(b) : null; }
@@ -44,9 +46,11 @@ function saveGlobalFeatures(obj) {
         const root = readGlobalRoot();
         root.features = obj;
         localStorage.setItem(SETTINGS_KEY, JSON.stringify(root));
+        return true;
     } catch (e) {
         // 配額爆掉不能讓整個存檔流程中斷，DB 那半邊還是要存成功
         console.warn(LOG, '全域設定寫入失敗（ui/theme 這次不會保存）:', e);
+        return false;
     }
 }
 
@@ -153,6 +157,7 @@ export async function loadFeatureSettings() {
     settings.version = FEATURE_SETTINGS_VERSION;
 
     fSettings = settings;
+    accountSettingsLoaded = true;
     return fSettings;
 }
 
@@ -213,12 +218,12 @@ export function saveFeatureSettings() {
     // ── 全域（ui / theme）──
     const globals = {};
     for (const k of gKeys) if (k in fSettings) globals[k] = fSettings[k];
-    saveGlobalFeatures(globals);
+    const globalSaved = saveGlobalFeatures(globals);
 
     // ── 每帳號（其餘）──
-    if (typeof Player === 'undefined' || !Player?.AccountName) return;
+    if (!accountSettingsLoaded || typeof Player === 'undefined' || !Player?.AccountName) return globalSaved;
     try {
-        if (typeof LZString === 'undefined' || !Player.ExtensionSettings) return;
+        if (typeof LZString === 'undefined' || !Player.ExtensionSettings) return false;
         // 全域鍵不再寫進 DB，避免同一份資料兩邊各存一份、日後不知道誰是正本
         const perAccount = {};
         for (const [k, v] of Object.entries(fSettings)) {
@@ -227,10 +232,15 @@ export function saveFeatureSettings() {
         Player.ExtensionSettings[LCE_EXT_KEY] = LZString.compressToBase64(JSON.stringify(perAccount));
         if (typeof ServerPlayerExtensionSettingsSync === 'function') {
             ServerPlayerExtensionSettingsSync(LCE_EXT_KEY);
+        } else {
+            console.warn(LOG, '設定同步未送出：ServerPlayerExtensionSettingsSync 尚未就緒');
+            return false;
         }
     } catch (e) {
         console.warn(LOG, '設定同步到伺服器失敗:', e);
+        return false;
     }
+    return globalSaved;
 }
 
 /** 載入後執行一次所有 sideEffects（init=true），套用設定初始狀態。 */
@@ -243,34 +253,60 @@ export function postFeatureSettings() {
     saveFeatureSettings();
 }
 
-/** 讀取單一設定值；未載入時 fallback 到 schema 預設。 */
+/** Reads include generated toggle/sound defaults before login. */
 export function getFeature(key) {
-    if (key in fSettings) return fSettings[key];
-    return DEFAULT_FEATURE_SETTINGS[key]?.value;
+    if (Object.hasOwn(fSettings, key)) return fSettings[key];
+    const setting = resolveSettingKey(key);
+    if (!setting) return undefined;
+    if (setting.derived === 'Enabled') return setting.def.toggleDefault ?? false;
+    if (setting.derived === 'Sound') return setting.def.soundDefault ?? true;
+    return setting.def.value;
 }
 
-/**
- * 程式化設定單一值：更新、觸發 sideEffects、發出變更事件、存檔。
- *
- * 事件不能只在設定頁發（settings-page.js 的 fireSideEffect）—— 那樣從登入頁的
- * 控制項、指令或公開 API（window.Liko.LCE.setFeature）改值時，所有靠
- * lce-setting-changed 即時反應的功能（介面配色、聊天容量、貼圖畫質…）全都收不到，
- * 設定看起來就像沒生效。這裡是程式化改值的唯一出入口，事件就該在這裡發。
- */
-export function setFeature(key, value) {
-    // withToggle / withSound 產生的 `<key>Enabled` / `<key>Sound` 是合法的設定鍵，
-    // 但它們是動態衍生的、不在 schema 物件裡（設定頁是直接寫 fSettings）。
-    // 不放行的話，從公開 API 或指令改這些開關會靜靜失敗、什麼事都不會發生。
-    // 副作用掛在「本尊」那一項上，所以要拿本尊的 def 來跑（同設定頁的 fireSideEffect）。
-    const owner = DEFAULT_FEATURE_SETTINGS[key] ? key : key.replace(/(Enabled|Sound)$/, '');
-    const def = DEFAULT_FEATURE_SETTINGS[owner];
-    if (!def || def.type === 'action') return;
-    if (owner !== key && !def.withToggle && !def.withSound) return;   // 不是真的衍生鍵
+const sameValue = (a, b) => Object.is(a, b) || (typeof a === 'object' && typeof b === 'object' && JSON.stringify(a) === JSON.stringify(b));
 
-    fSettings[key] = value;
-    try { def.sideEffects?.(fSettings[owner], false, fSettings); }
-    catch (e) { console.warn(LOG, 'sideEffects 失敗:', key, e); }
-    try { window.dispatchEvent(new CustomEvent(SETTING_CHANGED_EVENT, { detail: { key, value } })); }
-    catch { /* ignore */ }
-    saveFeatureSettings();
+/** Atomic value validation; effects and events always see the complete batch. */
+export function updateSettings(patch, { persist = true } = {}) {
+    if (!patch || typeof patch !== 'object' || Array.isArray(patch)) return false;
+    const updates = [];
+    try {
+        for (const [key, value] of Object.entries(patch)) {
+            const setting = resolveSettingKey(key);
+            if (!setting) throw new TypeError('Unknown setting: ' + key);
+            const normalized = normalizeSettingValue(setting, value);
+            if (!sameValue(getFeature(key), normalized)) updates.push({ ...setting, value: normalized });
+        }
+    } catch (error) { console.warn(LOG, '設定值無效:', error); return false; }
+    if (!updates.length) return persist ? saveFeatureSettings() : true;
+    const before = structuredClone({ ...defaultValues(), ...fSettings });
+    for (const { key, value } of updates) fSettings[key] = value;
+    let applied = true;
+    for (const ownerKey of new Set(updates.map(update => update.ownerKey))) {
+        try { DEFAULT_FEATURE_SETTINGS[ownerKey].sideEffects?.(fSettings[ownerKey], false, fSettings); }
+        catch (error) { applied = false; console.warn(LOG, 'sideEffects 失敗:', ownerKey, error); }
+    }
+    // Effects may change dependent toggles. Include those changes in the same transaction.
+    const changes = Object.keys(fSettings).filter(key => !sameValue(before[key], fSettings[key])).map(key => ({
+        key, ownerKey: resolveSettingKey(key)?.ownerKey ?? key, value: fSettings[key], previousValue: before[key],
+    }));
+    for (const change of changes) {
+        try { window.dispatchEvent(new CustomEvent(SETTING_CHANGED_EVENT, { detail: { ...change, changes } })); }
+        catch (error) { console.warn(LOG, '設定事件失敗:', error); }
+    }
+    const saved = persist ? saveFeatureSettings() : true;
+    return applied && saved;
+}
+
+export function setFeature(key, value, options) {
+    return updateSettings({ [key]: value }, options);
+}
+
+/** Actions operate on a draft and commit through the same pipeline as ordinary controls. */
+export function runSettingAction(key, options) {
+    const def = Object.hasOwn(DEFAULT_FEATURE_SETTINGS, key) && DEFAULT_FEATURE_SETTINGS[key];
+    if (!def || def.type !== 'action' || def.disabled?.(fSettings)) return false;
+    const draft = structuredClone({ ...defaultValues(), ...fSettings });
+    try { if (def.run?.(draft) === false) return false; } catch (error) { console.warn(LOG, '設定動作失敗:', key, error); return false; }
+    const patch = Object.fromEntries(Object.entries(draft).filter(([key, value]) => resolveSettingKey(key) && !sameValue(getFeature(key), value)));
+    return updateSettings(patch, options);
 }
