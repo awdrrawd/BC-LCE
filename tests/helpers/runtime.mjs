@@ -82,6 +82,9 @@ export function runtime({ globals = {}, mocks = {}, append = {} } = {}) {
     window.dispatchEvent = event => { events.push(event); return originalDispatch(event); };
     const context = vm.createContext({
         window, document: doc, URL, Blob, TextEncoder, TextDecoder, structuredClone, crypto: webcrypto,
+        // WebCrypto runs in the host realm. Node 20 rejects foreign-realm
+        // ArrayBuffers in decrypt(), so expose matching binary constructors.
+        ArrayBuffer, Uint8Array, DataView,
         btoa, atob, console: { debug() {}, info() {}, log() {}, error() {}, warn: (...args) => warnings.push(args) },
         setTimeout: () => 1, clearTimeout() {}, setInterval: () => 1, clearInterval() {},
         requestAnimationFrame: () => 1, cancelAnimationFrame() {},
