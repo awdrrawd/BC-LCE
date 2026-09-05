@@ -23,6 +23,12 @@ export function shouldLceHandle(lceKey, wceKey = lceKey) {
 }
 
 export const WCE_OVERLAPS = Object.freeze({
+    manualCacheClear: 'manualCacheClear',
+    automateCacheClear: 'automateCacheClear',
+    whisperTargetReset: 'whisperTargetFixes',
+    uwall: 'uwall',
+    chatColors: 'chatColors',
+    whisperItalic: 'whisperInput',
     augmentChat: 'augmentChat',
     richOnlineProfile: 'richOnlineProfile',
     extendedWardrobe: 'extendedWardrobe',

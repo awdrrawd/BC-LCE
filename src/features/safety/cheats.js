@@ -317,7 +317,7 @@ export function installCheats() {
     // UWALL：把狀態同步到 OnlineSharedSettings，讓其他插件知道你開了反作弊
     hook('ServerPlayerSync', 0, (args, next) => {
         try {
-            const on = !!getFeature('uwall');
+            const on = !!getFeature('uwall') || isWceFeatureEnabled('uwall');
             if (Player?.OnlineSharedSettings && Player.OnlineSharedSettings.Uwall !== on) {
                 Player.OnlineSharedSettings.Uwall = on;
                 ServerAccountUpdate.QueueData({ OnlineSharedSettings: Player.OnlineSharedSettings });

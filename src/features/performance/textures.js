@@ -1,5 +1,6 @@
 import { createHook } from '../../core/hooks.js';
 import { getFeature } from '../../core/feature-settings.js';
+import { shouldLceHandle } from '../../core/wce-compat.js';
 import { SETTING_CHANGED_EVENT } from '../../core/constants.js';
 const LOG = '🐈‍⬛ [LCE]';
 const hook = createHook('performance');
@@ -39,7 +40,7 @@ export function doClearCaches() {
 function clearWhenSafe() {
     const start = Date.now();
     (function wait() {
-        if (!getFeature('automateCacheClear')) return;
+        if (!shouldLceHandle('automateCacheClear')) return;
         if (Date.now() - start > CACHE_CLEAR_INTERVAL) return;   // 等太久就放棄，下輪再說
         const ok = typeof CurrentScreen !== 'undefined' && CurrentScreen === 'ChatRoom'
             && !CurrentCharacter && document.hasFocus();
@@ -90,7 +91,12 @@ export function installTexturePerformance() {
     hook('ChatRoomMenuBuild', 10, (args, next) => {
         const ret = next(args);
         try {
-            if (getFeature('manualCacheClear') && typeof ChatRoomMenuButtons !== 'undefined'
+            if (!shouldLceHandle('manualCacheClear') && typeof ChatRoomMenuButtons !== 'undefined') {
+                for (let i = ChatRoomMenuButtons.length - 1; i >= 0; i--) {
+                    if (ChatRoomMenuButtons[i] === 'lceClearCache') ChatRoomMenuButtons.splice(i, 1);
+                }
+            }
+            if (shouldLceHandle('manualCacheClear') && typeof ChatRoomMenuButtons !== 'undefined'
                 && !ChatRoomMenuButtons.includes('lceClearCache')) {
                 const at = ChatRoomMenuButtons.indexOf('Cut');
                 ChatRoomMenuButtons.splice(at < 0 ? 0 : at, 0, 'lceClearCache');
@@ -106,11 +112,12 @@ export function installTexturePerformance() {
 
     hook('ChatRoomMenuPerformAction', 10, (args, next) => {
         if (args[0] !== 'lceClearCache') return next(args);
+        if (!shouldLceHandle('manualCacheClear')) return;
         return doClearCaches();
     });
 
     // 每小時自動清
-    setInterval(() => { if (getFeature('automateCacheClear')) clearWhenSafe(); }, CACHE_CLEAR_INTERVAL);
+    setInterval(() => { if (shouldLceHandle('automateCacheClear')) clearWhenSafe(); }, CACHE_CLEAR_INTERVAL);
 
     // 降低角色貼圖解析度
     hook('GLDrawBingImageToTextureInfo', 10, (args, next) => {

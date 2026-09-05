@@ -12,7 +12,7 @@ import { createHook } from '../../core/hooks.js';
 // ════════════════════════════════════════════════════════════════════════════
 
 import modApi from '../../modsdk.js';
-import { getFeature } from '../../core/feature-settings.js';
+import { shouldLceHandle } from '../../core/wce-compat.js';
 import { T } from '../../core/i18n.js';
 import { LOCAL_MARKER } from './local-messages.js';
 
@@ -20,7 +20,7 @@ const LOG = '🐈‍⬛ [LCE]';
 const GRACE_MS = 60 * 1000;   // 離開後的寬限：一分鐘內回來就不清（同 WCE）
 const LEAVE_PREFIXES = ['ServerLeave', 'ServerBan', 'ServerKick', 'ServerDisconnect'];
 
-const resetOn = () => !!getFeature('whisperTargetReset');
+const resetOn = () => shouldLceHandle('whisperTargetReset', 'whisperTargetFixes');
 const target = () => (typeof ChatRoomTargetMemberNumber !== 'undefined' ? ChatRoomTargetMemberNumber : -1);
 
 /** memberNumber → 計時器 id（同時最多一個，因為一次只有一個私聊對象）。 */
@@ -60,7 +60,7 @@ export function installWhisperTarget() {
                     leaveTimers[msg.Sender] = setTimeout(() => {
                         delete leaveTimers[msg.Sender];
                         // 一分鐘後仍指著同一人才清 —— 中途換了對象或已自行改回就不動
-                        if (target() === msg.Sender) clearTargetNotify();
+                        if (resetOn() && target() === msg.Sender) clearTargetNotify();
                     }, GRACE_MS);
                 } else if (content.startsWith('ServerEnter')) {
                     cancelTimer(msg.Sender);   // 寬限內回來 → 取消清除

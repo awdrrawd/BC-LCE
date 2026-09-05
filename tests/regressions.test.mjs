@@ -2,6 +2,44 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { runtime, documentFixture, Element } from './helpers/runtime.mjs';
 
+test('cache controls yield dynamically to WCE and cancel a waiting automatic clear', async () => {
+    const wce = { manualCacheClear: true, automateCacheClear: true };
+    let interval, retry, refreshes = 0;
+    const player = { FBC: '6.3.19', MemberNumber: 1, IsOnline: () => true };
+    const rt = runtime({ globals: { Player: player, FBC_VERSION: '6.3.19', fbcSettingValue: key => wce[key],
+        Character: [player], ChatRoomCharacter: [player], CurrentScreen: 'ChatRoom', CurrentCharacter: null,
+        CharacterRefresh: () => refreshes++, CharacterDelete: () => assert.fail('player removed'),
+        ChatRoomMenuButtons: ['Cut', 'clearCache', 'lceClearCache'],
+        setInterval: callback => { interval = callback; return 1; }, setTimeout: callback => { retry = callback; return 2; } } });
+    rt.document.hasFocus = () => true;
+    const settings = await rt.load('src/core/feature-settings.js');
+    settings.setFeature('manualCacheClear', true); settings.setFeature('automateCacheClear', true);
+    const textures = await rt.load('src/features/performance/textures.js'); textures.installTexturePerformance();
+    const build = rt.hooks.get('ChatRoomMenuBuild'); build([], () => {});
+    assert.deepEqual(Array.from(rt.context.ChatRoomMenuButtons), ['Cut', 'clearCache']);
+    interval(); assert.equal(refreshes, 0);
+    wce.manualCacheClear = false; build([], () => {});
+    assert.equal(rt.context.ChatRoomMenuButtons.filter(x => x === 'lceClearCache').length, 1);
+    wce.automateCacheClear = false; interval(); assert.equal(refreshes, 1);
+    rt.context.CurrentScreen = 'Preference'; interval(); assert.equal(typeof retry, 'function');
+    wce.automateCacheClear = true; rt.context.CurrentScreen = 'ChatRoom'; retry(); assert.equal(refreshes, 1);
+});
+
+test('whisper reset yields to WCE even if WCE takes ownership after the timer starts', async () => {
+    let wceEnabled = false, callback, resets = 0;
+    const rt = runtime({ globals: { Player: { FBC: '6.3.19' }, FBC_VERSION: '6.3.19',
+        fbcSettingValue: key => key === 'whisperTargetFixes' && wceEnabled,
+        ChatRoomTargetMemberNumber: 2, ChatRoomSetTarget: () => resets++,
+        setTimeout: cb => { callback = cb; return 1; } } });
+    const settings = await rt.load('src/core/feature-settings.js'); settings.setFeature('whisperTargetReset', true);
+    const feature = await rt.load('src/features/chat/whisper-target.js'); feature.installWhisperTarget();
+    rt.hooks.get('ChatRoomMessageDisplay')([{ Type: 'Action', Sender: 2, Content: 'ServerLeave' }], () => {});
+    wceEnabled = true; callback(); assert.equal(resets, 0);
+    wceEnabled = false;
+    rt.hooks.get('ChatRoomMessageDisplay')([{ Type: 'Action', Sender: 2, Content: 'ServerLeave' }], () => {});
+    callback(); assert.equal(resets, 1);
+});
+
 test('hook registration exposes failures and clears them after successful retry', async () => {
     let fail = true;
     const rt = runtime({ mocks: { 'src/modsdk.js': { default: { hookFunction() {

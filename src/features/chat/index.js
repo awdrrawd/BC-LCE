@@ -1,4 +1,5 @@
 import { registerChatProcessor } from '../../ui/chat/pipeline.js';
+import { shouldLceHandle } from '../../core/wce-compat.js';
 import { joinRoom } from '../../game/room-navigation.js';
 import { decorateChatText } from '../../ui/chat/markup.js';
 import { sendActionText } from '../../game/chat-actions.js';
@@ -296,7 +297,7 @@ function updateWhisperItalic() {
     if (!ic) return;
     const whispering = typeof ChatRoomTargetMemberNumber !== 'undefined'
         && ChatRoomTargetMemberNumber != null && ChatRoomTargetMemberNumber >= 0;
-    ic.classList.toggle(WHISPER_CLASS, !!(whispering && getFeature('whisperItalic')));
+    ic.classList.toggle(WHISPER_CLASS, !!(whispering && shouldLceHandle('whisperItalic', 'whisperInput')));
 }
 
 // ───────────────────────── 安裝 ─────────────────────────

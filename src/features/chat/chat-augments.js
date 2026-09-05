@@ -251,6 +251,6 @@ export function installChatAugments() {
         selector: '.ChatMessage',
         enabled: () => typeof CurrentScreen !== 'undefined' && CurrentScreen === 'ChatRoom' && shouldLceHandle('augmentChat'),
         process: processChatMessage,
-        sync: () => document.body?.classList.toggle('lce-colors', !!getFeature('chatColors')),
+        sync: () => document.body?.classList.toggle('lce-colors', shouldLceHandle('chatColors')),
     });
 }
