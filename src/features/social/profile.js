@@ -66,7 +66,7 @@ function setEditingClass(on) {
 
 // ───────────────────────── 唯讀輸入框（保護） ─────────────────────────
 // 只切換 readOnly，不再改 opacity —— 外觀由主題 CSS 依 :read-only 決定：
-// 檢視（唯讀）維持 BC 原色、編輯（可輸入）才染色 + 背景 #6A89A1（見 styles/inputs.scss）。
+// 檢視（唯讀）使用主題色，編輯（可輸入）背景為 #6A89A1（見 styles/inputs.scss）。
 function setReadOnly(on) {
     const ta = document.getElementById(TA_ID);
     if (!ta) return;
