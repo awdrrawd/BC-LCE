@@ -826,3 +826,37 @@ test('BIO edit button and hit area are available only for self', async () => {
     rt.hooks.get('OnlineProfileClick')([], () => clicks++);
     assert.equal(draws, 1); assert.equal(clicks, 1); assert.equal(ta.readOnly, true);
 });
+
+
+test('login video reveals on playback, hides on buffering, and releases resources on rejection', async () => {
+    const rt = runtime({ append: { 'src/loginpage/background.js': 'export { applyVideo };' }, mocks: {
+        'src/loginpage/state.js': { S: { settings: {} } },
+        'src/storage/wallpaper.js': { loadWallpaper: async () => null },
+    } });
+    const stage = rt.document.createElement('div'); stage.id = 'lce-stage';
+    const video = rt.document.createElement('video'); video.id = 'lce-bg-video';
+    let rejectPlay = false, pauses = 0;
+    video.play = () => rejectPlay ? Promise.reject(new Error('blocked')) : Promise.resolve();
+    video.pause = () => pauses++;
+    video.load = () => {};
+    rt.document.body.append(stage, video);
+    const background = await rt.load('src/loginpage/background.js');
+    background.applyVideo('test.mp4');
+    video.oncanplaythrough();
+    assert.equal(video.style.opacity, '0');
+    video.onplaying();
+    assert.equal(video.style.opacity, '1');
+    assert.equal(stage.classList.contains('lce-video-playing'), true);
+    video.onwaiting();
+    assert.equal(video.style.opacity, '0');
+    const stalePlaying = video.onplaying;
+    rejectPlay = true;
+    video.oncanplaythrough();
+    await Promise.resolve();
+    assert.equal(video.style.display, 'none');
+    assert.equal(stage.classList.contains('lce-video-playing'), false);
+    stalePlaying();
+    assert.equal(video.style.opacity, '0');
+    assert.ok(pauses > 0);
+    background.disposeBackground();
+});

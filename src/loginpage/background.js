@@ -72,17 +72,23 @@ function releaseUploadedUrl() {
 
 // ── 背景影片（漸進式增強）────────────────────────────────────────────────
 // 圖片一律先鋪上（applyBackground 做的），影片在背景默默下載，載到能流暢播放
-// （canplaythrough）才淡入蓋住圖片；下載失敗或太慢就維持圖片，不拖累整體體驗。
+// （canplaythrough）後嘗試播放，實際 playing 才淡入蓋住圖片；下載失敗或太慢就維持圖片，不拖累整體體驗。
 // 每次切背景都換一個 token：上一支影片若在切換後才下載完，它的 canplaythrough
 // 會因 token 不符而被忽略，不會誤蓋到新背景上。
 let videoToken = 0;
+let videoVisibilityHandler = null;
 
 /** 停播並清空背景影片（切成純圖片 / 自訂桌布 / 退回內建圖時呼叫）。load() 才會真的中止下載。 */
 function clearVideo() {
     videoToken++;
     const v = document.getElementById('lce-bg-video');
     if (!v) return;
+    if (videoVisibilityHandler) document.removeEventListener('visibilitychange', videoVisibilityHandler);
+    videoVisibilityHandler = null;
+    document.getElementById('lce-stage')?.classList.remove('lce-video-playing');
     v.oncanplaythrough = null;
+    v.onplaying = null;
+    v.onwaiting = null;
     v.onerror = null;
     try { v.pause(); } catch { /* ignore */ }
     v.removeAttribute('src');
@@ -95,23 +101,31 @@ function clearVideo() {
 function applyVideo(url) {
     const v = document.getElementById('lce-bg-video');
     if (!v || !url) return;
-    const token = ++videoToken;
+    clearVideo();
+    const token = videoToken;
     v.style.display = '';
-    v.style.opacity = '0';
-
-    v.oncanplaythrough = () => {
-        if (token !== videoToken) return;                 // 已被下一次切背景取代
-        if (!document.getElementById('lce-bg-video')) return;
-        v.style.opacity = '1';                            // 淡入蓋住圖片（CSS transition）
-        // 靜音影片本就允許自動播放；被瀏覽器擋下也只是留在圖片，不需處理。
-        v.play?.().catch(() => {});
+    const current = () => token === videoToken && document.getElementById('lce-bg-video') === v;
+    const hide = () => { if (current()) v.style.opacity = '0'; };
+    const play = () => {
+        if (!current() || document.hidden) return;
+        v.play()?.catch(() => { if (current()) clearVideo(); });
     };
-    v.onerror = () => {
-        if (token !== videoToken) return;                 // 圖床砍檔/防盜連 → 靜靜退回圖片
-        v.removeAttribute('src');
-        v.style.opacity = '0';
-        v.style.display = 'none';
+    // canplaythrough is a buffer estimate, not a download/decode guarantee.
+    // Reveal only once playback actually starts; keep the still image on buffering.
+    v.oncanplaythrough = play;
+    v.onplaying = () => {
+        if (!current()) return;
+        v.style.opacity = '1';
+        document.getElementById('lce-stage')?.classList.add('lce-video-playing');
     };
+    v.onwaiting = hide;
+    v.onerror = () => { if (current()) clearVideo(); };
+    videoVisibilityHandler = () => {
+        if (!current()) return;
+        if (document.hidden) { v.pause(); hide(); }
+        else play();
+    };
+    document.addEventListener('visibilitychange', videoVisibilityHandler);
 
     v.src = url;
     try { v.load(); } catch { /* ignore */ }

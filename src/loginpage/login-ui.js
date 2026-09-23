@@ -1,3 +1,4 @@
+import { bindLoginLanguageSelect, closeLoginLanguageMenu } from './language-picker.js';
 import { gameLanguages, currentGameLanguage, switchGameLanguage } from '../game/language.js';
 // ════════════════════════════════════════════════════════════════════════════
 // 登入 UI 主流程：建構、事件、狀態同步、定位、啟用/停用、場景偵測
@@ -33,7 +34,7 @@ export function buildUI() {
     document.body.appendChild(bgBase);
 
     // ── 滿版背景圖 + 遮罩（stage 內、蓋住 canvas 上的角色/感謝名單/WCE 按鈕） ──
-    const bgImg = mk('img', '', { id: 'lce-bg-img', alt: '' });
+    const bgImg = mk('img', '', { id: 'lce-bg-img', alt: '', decoding: 'async', fetchPriority: 'high' });
     // 自訂網址載不出來時退回內建背景，而不是直接把背景藏掉開天窗
     bgImg.onerror = () => handleBackgroundError();
     // 背景影片：疊在圖片上方，僅在有對應 BGV-XX 且載入完成時由 background.js 淡入。
@@ -304,7 +305,7 @@ function buildLanguageSelect() {
             opt.selected = bcOpt.value === currentLang;
             sel.appendChild(opt);
         });
-        window.Liko?.__Sys_Flags__?.bindSelect(sel);
+        bindLoginLanguageSelect(sel);
         return;
     }
     const { codes, labels } = gameLanguages();
@@ -312,7 +313,7 @@ function buildLanguageSelect() {
         const option = mk('option', '', { value: code, textContent: labels[i], selected: code === currentLang });
         sel.appendChild(option);
     });
-    window.Liko?.__Sys_Flags__?.bindSelect(sel);
+    bindLoginLanguageSelect(sel);
 }
 
 // ── 登入 ──────────────────────────────────────────────────────────────────
@@ -437,6 +438,7 @@ export function lceApply() {
 }
 
 export function lceRemove() {
+    closeLoginLanguageMenu();
     if (!S.active) return;
     S.active = false;
     showBC();
