@@ -190,17 +190,24 @@ export function injectLoginStyles() {
     scrollbar-color:var(--lce-login-accent,#7214ff) #12101c;
     overscroll-behavior:contain;
 }
-.lce-login-language-menu > button { border-radius:8px; }
+.lce-login-language-menu > button { border-radius:8px; white-space:nowrap; }
+.lce-login-language-menu img { margin-right:0.35em; }
 .lce-login-language-menu > button:hover,
 .lce-login-language-menu > button:focus-visible,
 .lce-login-language-menu > button[aria-selected="true"] {
-    background:#352050 !important;
+    background:rgba(var(--lce-login-accent-rgb,114,20,255),0.25) !important;
     outline:1px solid var(--lce-login-accent,#7214ff); outline-offset:-1px;
 }
 .lce-login-language-menu::-webkit-scrollbar { width:10px; }
 .lce-login-language-menu::-webkit-scrollbar-track { background:#12101c; }
 .lce-login-language-menu::-webkit-scrollbar-thumb {
     background:var(--lce-login-accent,#7214ff); border:2px solid #12101c; border-radius:5px;
+}
+
+/* Avoid re-blurring moving full-screen video behind every translucent card. */
+#lce-stage.lce-video-playing .lce-box,
+#lce-stage.lce-video-playing .lce-acct-card {
+    backdrop-filter:none; -webkit-backdrop-filter:none;
 }
 
 /* ── 帳號區：垂直摩天輪（無外框、無卷軸，按壓拖曳 / 滾輪轉動） ── */
@@ -435,7 +442,7 @@ export function injectLoginStyles() {
     width:min(92vw,560px);
 }
 #lce-stage[data-orient="portrait"] #lce-lang-select {
-    font-size:16px !important; padding:7px 20px 7px 10px !important;
+    font-size:16px !important; padding:7px 20px 7px 1.9em !important;
 }
 #lce-stage[data-orient="portrait"] #lce-btn-settings {
     padding:0 18px !important; height:38px !important; font-size:16px !important;
