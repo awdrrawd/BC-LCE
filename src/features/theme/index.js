@@ -63,7 +63,9 @@ function drawButtonImageFit(image, x, y, w, h) {
     const buttonRect = RectMakeRect(boxX, boxY, boxW, boxH);
     const baseImageRect = RectMakeRect(boxX, boxY, img.width, img.height);
     const [, imageRect] = RectFitIntoRect(baseImageRect, buttonRect, DrawingResizeMode.ShowFullOriginalRatio);
-    DrawImageResize(image, imageRect[0], imageRect[1], imageRect[2], imageRect[3]);
+    // RectFitIntoRect 也會置中；按鈕圖示原本固定在左上角 +2，BCX 等擴充
+    // 會依此安排文字。只取縮放後的尺寸，避免主題改變圖示座標而蓋住文字。
+    DrawImageResize(image, boxX, boxY, imageRect[2], imageRect[3]);
 }
 
 // 除錯用臨時覆蓋（/lceThemetest 浮球）：null = 依實際設定；true/false = 強制開/關。
