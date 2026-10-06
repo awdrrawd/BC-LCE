@@ -1,10 +1,11 @@
 import { createSocketBinding } from '../../core/lifecycle.js';
 import { createHook } from '../../core/hooks.js';
 // ════════════════════════════════════════════════════════════════════════════
-// 斷線重連（relogin）—— 邏輯移植自 WCE automaticReconnect.js
+// 斷線重連（relogin）—— 參考 WCE automaticReconnect.js 的 hook / socket 邏輯，
+// 但登入憑證採 LCE 自己的加密帳號庫，並在斷線 hot path 使用 session cache，避免 async race。
 //
 // 刻意的差異：WCE 自帶一整套 AES-GCM 加密密碼庫（wce-saved-accounts）。
-// LCE 早就有同樣的東西（core/storage.js，與 MPL 共用帳號/密碼），所以**不重複造一份**，
+// LCE 早已有獨立的帳號／憑證儲存層（與 MPL 共用），所以**不重複造一份**，
 // 直接用登入頁保存的帳號。也就是說：要能自動重連，就得先在登入頁保存過該帳號。
 //
 // 斷路器（breakCircuit）：避免重連失敗時無限重試；
@@ -14,62 +15,184 @@ import { createHook } from '../../core/hooks.js';
 import modApi from '../../modsdk.js';
 import { getFeature } from '../../core/feature-settings.js';
 import { shouldLceHandle } from '../../core/wce-compat.js';
-import { loadAccounts, decryptPassword } from '../../storage/accounts.js';
+import {
+    cacheReconnectPassword, getReconnectPassword, warmReconnectPassword,
+} from '../../storage/reconnect-credentials.js';
 import { T } from '../../core/i18n.js';
 
 const LOG = '🐈‍⬛ [LCE]';
 
 let breakCircuit = false;       // 單次重連進行中
 let breakCircuitFull = false;   // 永久停止（重整前不再嘗試）
+let relogInFlight = false;      // 已送出 LoginDoLogin，等待本次 Relog 結束
 let loginError = null;
 
 // ── 重連時保住聊天紀錄 ──
-// BC 的聊天紀錄「只存在 DOM」（#TextAreaChatLog 的子節點），沒有可重播的陣列。重連走完整
-// 重登（LoginDoLogin）時，BC 會短暫離開房間 → ElementRemove 掉聊天區 → 回房時 ChatRoomSync
-// 只給你一個全新的空 div，歷史就永久消失（BC 自己也補不回來）。這就是「重連後聊天有機率被
-// 清空」的根因。對策：斷線當下（DOM 還完整）先快照,回房後若發現聊天區被重建成空的就補回去。
-// 刻意不動下面那套調校過的重連/限流邏輯（全是「根因」註解），改用零侵入的旁路。
+// BC 的聊天紀錄主要存在 DOM。完整重登時 ChatRoom 會被重新建立，舊的 #TextAreaChatLog
+// 可能因此消失。LCE 在斷線當下先記下「訊息本身」，回房後不再猜 400ms 的固定時序，
+// 而是在 BC 通知重連／回房或新 ChatLog 建立時嘗試，只補回缺失的訊息；不對伺服器重連設定時間上限。
 const CHATLOG_ID = 'TextAreaChatLog';
 let chatSnapshot = null;   // { html, stamp, count }
 let snapshotSeq = 0;
+let chatRestoreBodyObserver = null;
+let chatRestoreLogObserver = null;
 
-/** 斷線當下把聊天紀錄與其所在元素的識別戳記存下來。 */
+function disconnectChatRestoreObservers() {
+    chatRestoreBodyObserver?.disconnect();
+    chatRestoreLogObserver?.disconnect();
+    chatRestoreBodyObserver = null;
+    chatRestoreLogObserver = null;
+}
+
+function cancelChatRestore() {
+    disconnectChatRestoreObservers();
+}
+
+function chatMessageKey(el) {
+    if (!el) return '';
+    const attrs = ['data-time', 'data-sender', 'data-target', 'data-msgid', 'data-type']
+        .map(name => el.getAttribute?.(name) ?? '').join('|');
+    return `${el.className}|${attrs}|${el.textContent ?? ''}`;
+}
+
+/** 斷線當下只保存 ChatMessage，避免把 separator / 其他插件 UI 一起重播。 */
 function snapshotChatLog() {
     try {
+        cancelChatRestore();
         const log = document.getElementById(CHATLOG_ID);
         if (!log) return;
-        const count = log.querySelectorAll('.ChatMessage').length;
-        if (count === 0) return;   // 沒東西可救
+        const messages = [...log.querySelectorAll('.ChatMessage')];
+        if (messages.length === 0) return;
         const stamp = `lce-${++snapshotSeq}-${Date.now()}`;
-        log.dataset.lceChatStamp = stamp;   // 蓋在「這個」元素上；重建後的新元素不會有
-        chatSnapshot = { html: log.innerHTML, stamp, count };
+        log.dataset.lceChatStamp = stamp;
+        chatSnapshot = {
+            html: messages.map(message => message.outerHTML).join(''),
+            stamp,
+            count: messages.length,
+        };
     } catch (e) { console.warn(LOG, '快照聊天紀錄失敗:', e?.message ?? e); }
 }
 
 /**
- * 回房後檢查：聊天區若是被重建成空的（元素換了新的、戳記對不上），就把快照補回最上方。
- * 靠「元素識別戳記」而非單純數訊息數 —— 這樣 performance 的容量修剪（同一元素、砍掉舊訊息）
- * 不會被誤判成「被清空」而重塞造成重複。
+ * 把快照裡目前 ChatLog 沒有的訊息補到最前面。
+ * 只用 data-* + class + text 做輕量 dedupe，避免 BC 已經恢復一部分歷史時產生大量重複。
  */
+function mergeChatSnapshot(log, snap) {
+    if (!log || !snap?.html) return 0;
+    const currentCounts = new Map();
+    for (const message of log.querySelectorAll('.ChatMessage')) {
+        const key = chatMessageKey(message);
+        currentCounts.set(key, (currentCounts.get(key) ?? 0) + 1);
+    }
+
+    const template = document.createElement('template');
+    template.innerHTML = snap.html;
+    const missing = [];
+    for (const node of [...template.content.children]) {
+        const key = chatMessageKey(node);
+        const count = currentCounts.get(key) ?? 0;
+        if (count > 0) currentCounts.set(key, count - 1);
+        else missing.push(node);
+    }
+    if (missing.length === 0) return 0;
+
+    const fragment = document.createDocumentFragment();
+    for (const node of missing) {
+        node.dataset.lceRelogRestored = snap.stamp;
+        fragment.appendChild(node);
+    }
+    log.insertBefore(fragment, log.firstChild);
+    return missing.length;
+}
+
 function restoreChatLogIfWiped() {
-    if (!chatSnapshot) return;
+    if (!chatSnapshot) return false;
     const log = document.getElementById(CHATLOG_ID);
-    if (!log) return;   // 房間還沒建好 → 保留快照，讓下一次 ChatRoomSync 再試
+    if (!log) return false;
     const snap = chatSnapshot;
-    const preserved = log.dataset.lceChatStamp === snap.stamp;   // 同一個元素還在
     const currentCount = log.querySelectorAll('.ChatMessage').length;
-    // 原元素還在且仍有內容 → 沒被清，跳過。
-    // （只認戳記還不夠：萬一 BC 是就地 innerHTML 清空、元素沒換，戳記仍在但內容沒了 ——
-    //   所以還要求「仍有內容」，讓那種情況掉進下面的還原。快照本就要求 count>0，故空房不會誤觸。）
-    if (preserved && currentCount > 0) { chatSnapshot = null; return; }
-    // 新元素已含同等以上內容 → 避免重複塞
-    if (currentCount >= snap.count) { chatSnapshot = null; return; }
+    const preserved = log.dataset.lceChatStamp === snap.stamp;
+
+    // 同一元素仍有內容：沒有被清空。
+    if (preserved && currentCount > 0) {
+        chatSnapshot = null;
+        cancelChatRestore();
+        return true;
+    }
+    // BC 已經恢復至少同等數量的訊息，不再重播。
+    if (currentCount >= snap.count) {
+        chatSnapshot = null;
+        cancelChatRestore();
+        return true;
+    }
+
     try {
-        const sep = `<div class="lce-relog-restored" style="text-align:center;opacity:.55;font-size:.85em;margin:.35em 0;">— ${T('relogin_restored')} —</div>`;
-        log.insertAdjacentHTML('afterbegin', snap.html + sep);   // 歷史補回最上方，新訊息仍在其下
-        console.info(LOG, `已還原重連前的 ${snap.count} 則聊天紀錄`);
-    } catch (e) { console.warn(LOG, '還原聊天紀錄失敗:', e?.message ?? e); }
-    chatSnapshot = null;
+        const restored = mergeChatSnapshot(log, snap);
+        if (restored > 0) {
+            const sep = document.createElement('div');
+            sep.className = 'lce-relog-restored';
+            sep.style.cssText = 'text-align:center;opacity:.55;font-size:.85em;margin:.35em 0;';
+            sep.textContent = `— ${T('relogin_restored')} —`;
+            log.insertBefore(sep, log.querySelector('.ChatMessage') ?? log.firstChild);
+            console.info(LOG, `已還原重連前的 ${restored} 則聊天紀錄`);
+        }
+        chatSnapshot = null;
+        cancelChatRestore();
+        return true;
+    } catch (e) {
+        console.warn(LOG, '還原聊天紀錄失敗:', e?.message ?? e);
+        return false;
+    }
+}
+
+function nodeContainsChatLog(node) {
+    if (!(node instanceof Element)) return false;
+    return node.id === CHATLOG_ID || !!node.querySelector?.(`#${CHATLOG_ID}`);
+}
+
+/**
+ * 等的是 DOM 事件，不是伺服器時間：斷線多久都不影響自動重連。
+ * 若 ChatLog 尚不存在，Observer 只等待 ChatLog 本身出現；一旦出現就立即嘗試恢復。
+ */
+function ensureChatRestoreObservers() {
+    if (!chatSnapshot || typeof document === 'undefined') return;
+
+    const log = document.getElementById(CHATLOG_ID);
+    if (log && !chatRestoreLogObserver) {
+        chatRestoreLogObserver = new MutationObserver(() => {
+            if (!chatSnapshot) return;
+            restoreChatLogIfWiped();
+        });
+        chatRestoreLogObserver.observe(log, { childList: true, subtree: true });
+    }
+
+    if (chatRestoreBodyObserver || !document.body) return;
+    chatRestoreBodyObserver = new MutationObserver(mutations => {
+        if (!chatSnapshot) return;
+        const hasChatLogChange = mutations.some(mutation =>
+            [...mutation.addedNodes].some(nodeContainsChatLog));
+        if (!hasChatLogChange) return;
+        if (restoreChatLogIfWiped()) return;
+        const newLog = document.getElementById(CHATLOG_ID);
+        if (newLog && !chatRestoreLogObserver) {
+            chatRestoreLogObserver = new MutationObserver(() => {
+                if (!chatSnapshot) return;
+                restoreChatLogIfWiped();
+            });
+            chatRestoreLogObserver.observe(newLog, { childList: true, subtree: true });
+        }
+    });
+    chatRestoreBodyObserver.observe(document.body, { childList: true, subtree: true });
+}
+
+/**
+ * 只在 BC 已經通知「重新登入／回房／socket 重建」等生命週期事件時嘗試一次。
+ * 不使用固定 10 秒 timeout，也不阻塞或停止伺服器重連。
+ */
+function scheduleChatLogRestore() {
+    if (!chatSnapshot) return;
+    if (restoreChatLogIfWiped()) return;
+    ensureChatRestoreObservers();
 }
 
 // ── 重試節流 ──
@@ -96,64 +219,91 @@ function notify(title, message) {
     } catch { /* ignore */ }
 }
 
-/** 從 LCE 的帳號庫取出目前帳號的密碼。 */
-async function savedPassword(accountName) {
-    try {
-        const acc = loadAccounts().find(a => a.accountName === accountName);
-        if (!acc) return null;
-        return await decryptPassword(acc.password);
-    } catch (e) { console.warn(LOG, '讀取保存密碼失敗:', e); return null; }
+/** 背景預熱目前帳號的重連密碼；真正重連時只讀 session cache，不在斷線 hot path 等 WebCrypto。 */
+function warmCurrentPassword() {
+    if (!getFeature('relogin') || typeof Player === 'undefined' || !Player?.AccountName) return;
+    void warmReconnectPassword(Player.AccountName);
 }
 
-async function relog() {
-    if (!shouldLceHandle('relogin')) return;
-    if (!Player?.AccountName || LoginSubmitted || breakCircuit || breakCircuitFull) return;
-    if (typeof ServerSocket === 'undefined' || !ServerSocket?.connected) return;
+function waitRelogResult() {
+    (async () => {
+        let n = 120;
+        while (relogInFlight) {
+            if (typeof CurrentScreen !== 'undefined' && CurrentScreen !== 'Relog') {
+                relogInFlight = false;
+                backoff = RELOG_MIN_INTERVAL;
+                setTimeout(() => notify(T('relogin_title'), T('relogin_done')), 500);
+                return;
+            }
+            if (n-- <= 0) {
+                relogInFlight = false;
+                backoff = Math.min(backoff * 2, RELOG_MAX_INTERVAL);
+                console.warn(LOG, `自動重連失敗，下次至少間隔 ${backoff / 1000}s`);
+                breakCircuit = false;
+                return;
+            }
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+    })();
+}
 
-    // 節流：距上次送出登入還不到 backoff 就先不試（不設 breakCircuit，讓下一幀再來檢查）。
-    // 這一步擋住了「socket 一 connect 就立刻再登一次」的連環轟炸。
+function submitRelogin(accountName, pass) {
+    if (!accountName || !pass) return false;
+    breakCircuit = true;
+    relogInFlight = true;
+    lastAttempt = Date.now();
+    cacheReconnectPassword(accountName, pass);
+    console.info(LOG, '嘗試自動重新登入:', accountName);
+    try {
+        LoginDoLogin(accountName, pass);
+        waitRelogResult();
+        return true;
+    } catch (e) {
+        console.warn(LOG, '送出自動重連失敗:', e?.message ?? e);
+        breakCircuit = false;
+        relogInFlight = false;
+        return false;
+    }
+}
+
+function relog() {
+    if (!shouldLceHandle('relogin')) return;
+    if (!Player?.AccountName || LoginSubmitted || breakCircuit || relogInFlight || breakCircuitFull) return;
+    if (typeof ServerSocket === 'undefined' || !ServerSocket?.connected) return;
     if (Date.now() - lastAttempt < backoff) return;
 
+    const accountName = Player.AccountName;
+    const pass = getReconnectPassword(accountName);
+    if (pass) {
+        submitRelogin(accountName, pass);
+        return;
+    }
+
+    // 冷啟動極少數情況：密碼快取尚未預熱。不要在 RelogRun hook 裡 await WebCrypto；
+    // 背景解密完成後再直接提交登入，避免讓 BC 的 RelogRun 生命週期被 async hook 卡住。
     breakCircuit = true;
-    lastAttempt = Date.now();
-    const pass = await savedPassword(Player.AccountName);
-    if (!pass) {
-        console.warn(LOG, '沒有保存的密碼，無法自動重連:', Player.AccountName, '（請先在登入頁保存此帳號）');
-        breakCircuitFull = true;   // 沒密碼就別再試了，否則每幀都白跑
-        return;
-    }
-
-    console.info(LOG, '嘗試自動重新登入:', Player.AccountName);
-    LoginDoLogin(Player.AccountName, pass);
-
-    // 等離開 Relog 畫面（成功）或斷路器被重置
-    const ok = await new Promise((resolve) => {
-        let n = 120;
-        (function wait() {
-            if (typeof CurrentScreen !== 'undefined' && CurrentScreen !== 'Relog') return resolve(true);
-            if (!breakCircuit || n-- <= 0) return resolve(false);
-            setTimeout(wait, 500);
-        })();
-    });
-    if (!ok) {
-        // 失敗 → 拉長下次間隔，避免持續失敗時愈試愈密
-        backoff = Math.min(backoff * 2, RELOG_MAX_INTERVAL);
-        console.warn(LOG, `自動重連失敗，下次至少間隔 ${backoff / 1000}s`);
-        // 失敗也要放開斷路器，否則 breakCircuit 卡在 true，之後每次 relog() 都在開頭直接 return，
-        // 斷路器永遠關不掉、再也不會重連（過去要靠 connect 監聽來放開，但那個監聽在 ServerInit
-        // 換掉 socket 後就失效了 —— 見下方 bindConnect）。節流仍由 lastAttempt/backoff 把關，不會狂送。
+    void warmReconnectPassword(accountName).then(plain => {
+        if (!plain) {
+            console.warn(LOG, '沒有可用的保存密碼，無法自動重連:', accountName, '（請先在登入頁保存此帳號）');
+            breakCircuit = false;
+            breakCircuitFull = true;
+            relogInFlight = false;
+            return;
+        }
+        if (breakCircuitFull || typeof CurrentScreen !== 'undefined' && CurrentScreen !== 'Relog' || typeof ServerSocket === 'undefined' || !ServerSocket?.connected || LoginSubmitted) {
+            breakCircuit = false;
+            return;
+        }
         breakCircuit = false;
-        return;
-    }
-
-    backoff = RELOG_MIN_INTERVAL;   // 成功 → 退避歸零
-    setTimeout(() => notify(T('relogin_title'), T('relogin_done')), 500);
+        submitRelogin(accountName, plain);
+    });
 }
 
 /**
  * 診斷用：在 console 執行 `Liko.LCE.debugRelogSnapshot()`，看斷線快照有沒有拍到。
  * 判讀：斷線後（回房前）pendingSnapshot 應為 true、snapshotCount 是斷線前的則數；
  * 若一直是 false，代表斷線沒經過 ServerDisconnect、快照沒觸發（那要換更早的抓法）。
+ * ChatLog 恢復沒有時間上限；快照會留到 BC 下一次建立 ChatLog 並成功合併為止。
  */
 export function debugRelogSnapshot() {
     const log = document.getElementById(CHATLOG_ID);
@@ -172,6 +322,7 @@ let installed = false;
 export function installRelogin() {
     if (installed) return;
     installed = true;
+    warmCurrentPassword();
 
     hook('RelogRun', 100, (args, next) => {
         if (loginError !== 'ErrorDuplicatedLogin') {
@@ -188,26 +339,45 @@ export function installRelogin() {
     hook('RelogExit', 100, (args, next) => {
         breakCircuit = false;
         breakCircuitFull = false;
+        relogInFlight = false;
         loginError = null;   // 離開重連畫面 → 清掉上一次的斷線原因（同 WCE）
+        scheduleChatLogRestore();
         return next(args);
     });
 
     // 記錄登入錯誤原因，供上面判斷是否為「在別處登入」
-    hook('LoginResponse', 100, (args, next) => {
+    hook('LoginClick', 100, (args, next) => {
         try {
-            const r = args[0];
-            loginError = typeof r === 'string' ? r : null;
-            if (r && typeof r === 'object') { breakCircuit = false; backoff = RELOG_MIN_INTERVAL; }   // 登入成功 → 重置斷路器與退避
+            if (getFeature('relogin')) {
+                const name = typeof ElementValue === 'function' ? ElementValue('InputName') : document.getElementById('InputName')?.value;
+                const pass = typeof ElementValue === 'function' ? ElementValue('InputPassword') : document.getElementById('InputPassword')?.value;
+                if (name && pass) cacheReconnectPassword(name, pass);
+            }
         } catch { /* ignore */ }
         return next(args);
     });
 
-    // 重連回房 → 若聊天區被重建成空的，把斷線前的快照補回去。
-    // ChatRoomSync 是重連後回到房間的同步點；延遲一下等 BC 把聊天區元素重建好再檢查。
-    // 沒有待還原的快照時（一般進房 / 換房）restoreChatLogIfWiped 直接 no-op。
+    hook('LoginResponse', 100, (args, next) => {
+        try {
+            const r = args[0];
+            loginError = typeof r === 'string' ? r : null;
+            warmCurrentPassword();
+            if (r && typeof r === 'object') { backoff = RELOG_MIN_INTERVAL; }   // 登入成功資料到達；由 RelogExit / connect 結束本次斷路器
+        } catch { /* ignore */ }
+        return next(args);
+    });
+
+    // 重連回房 → 嘗試恢復斷線前的聊天訊息。除了 ChatRoomSync，也看 LoginStatusReset / socket connect，
+    // 不假設固定 400ms；等新 ChatLog 真正出現後再做一次安全合併。
     hook('ChatRoomSync', 3, (args, next) => {
         const ret = next(args);
-        setTimeout(restoreChatLogIfWiped, 400);
+        scheduleChatLogRestore();
+        return ret;
+    });
+
+    hook('LoginStatusReset', 3, (args, next) => {
+        const ret = next(args);
+        scheduleChatLogRestore();
         return ret;
     });
 
@@ -230,7 +400,8 @@ export function installRelogin() {
                 if (error === 'ErrorDuplicatedLogin') {
                     if (!breakCircuitFull) notify(T('relogin_error'), T('relogin_duplicate'));
                     breakCircuit = true;
-                    breakCircuitFull = true;   // 不再自動重連，避免互踢；使用者重整頁面即可恢復
+                    breakCircuitFull = true;
+                    relogInFlight = false;   // 不再自動重連，避免互踢；使用者重整頁面即可恢復
                 } else {
                     console.warn(LOG, '被限流，數秒後重新連線…');
                     setTimeout(() => { try { if (typeof ServerInit === 'function') ServerInit(); } catch { /* ignore */ } },
@@ -251,7 +422,7 @@ export function installRelogin() {
     //
     // 對策與其他模組一致（expressions / hello / misc / friend-presence 都這樣做，也就是 WCE
     // appendSocketListenersToInit 的做法）：每次 ServerInit 後把監聽重新掛到新的 socket 上。
-    const socketBinding = createSocketBinding({ connect: () => { breakCircuit = false; loginError = null; } });
+    const socketBinding = createSocketBinding({ connect: () => { if (!relogInFlight) breakCircuit = false; loginError = null; warmCurrentPassword(); scheduleChatLogRestore(); } });
     const bindConnect = () => socketBinding.bind(typeof ServerSocket === 'undefined' ? null : ServerSocket);
     (function wait(n = 240) {
         if (typeof ServerSocket === 'undefined' || !ServerSocket) {

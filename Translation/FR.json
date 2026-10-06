@@ -6,7 +6,7 @@
   "s_richerActivitySounds": "Effets sonores plus variés",
   "sd_richerActivitySounds": "Ajoute des sons aux activités ECHO prises en charge, en respectant le volume et la sourdine du jeu. Les sons existants restent prioritaires.",
   "s_petsuitAnimation": "Actions de la tenue d’animal",
-  "sd_petsuitAnimation": "Affiche un bouton de démarrage et d’arrêt avec une tenue d’animal permettant de changer la position des bras. Lève les bras en alternance avec une expression >.< temporaire, puis rétablit la pose initiale. Nécessite le moteur d’animation. Un seul message caché (intervalle et nombre) est envoyé ; les joueurs avec LCE voient les bras bouger séparément, les autres voient un simple changement de pose.",
+  "sd_petsuitAnimation": "Lorsque vous portez une tenue d’animal et pouvez changer la position des bras, affiche un mouvement de balancement des bras et applique temporairement l’expression >.< (nécessite le moteur d’expressions), puis restaure la pose d’origine.",
   "s_petsuitAnimationCycles": "Nombre de répétitions",
   "sd_petsuitAnimationCycles": "Nombre de répétitions. Chaque répétition lève une fois chaque bras.",
   "s_petsuitAnimationDelay": "Intervalle des actions",
@@ -159,11 +159,11 @@
   "s_chatColors": "Améliorer les couleurs pour la lisibilité",
   "sd_chatColors": "Améliore le contraste des couleurs du chat pour respecter les normes d'accessibilité.",
   "s_friendOnlineNotify": "Notifications de connexion d'un ami",
-  "sd_friendOnlineNotify": "Avertit quand un ami se connecte ; choisissez le style bulle ou message de chat.",
+  "sd_friendOnlineNotify": "Avertit quand un ami se connecte ; choisissez le style bulle ou message de chat. La durée d’affichage du message est configurable ; 0 signifie ne pas supprimer, tandis que les bulles sont toujours supprimées après 5 secondes.",
   "s_friendOnlineNotifyStyle": "Style de notification en ligne",
   "sd_friendOnlineNotifyStyle": "Afficher les notifications de connexion en bulle ou en message de chat.",
   "s_friendOfflineNotify": "Notifications de déconnexion d'un ami",
-  "sd_friendOfflineNotify": "Avertit quand un ami se déconnecte ; choisissez le style bulle ou message de chat.",
+  "sd_friendOfflineNotify": "Avertit quand un ami se déconnecte ; choisissez le style bulle ou message de chat. La durée d’affichage du message est configurable ; 0 signifie ne pas supprimer, tandis que les bulles sont toujours supprimées après 5 secondes.",
   "s_friendOfflineNotifyStyle": "Style de notification hors ligne",
   "sd_friendOfflineNotifyStyle": "Afficher les notifications de déconnexion en bulle ou en message de chat.",
   "s_pastProfiles": "Enregistrer et parcourir les profils vus (rechargement requis)",
@@ -456,5 +456,8 @@
   "s_petsuitAnimationPosition": "Position du bouton d’action",
   "sd_petsuitAnimationPosition": "Place le bouton en haut à gauche, en bas à gauche, en haut à droite ou en bas à droite du salon.",
   "s_petsuitAlternate": "Balancement alterné des bras",
-  "sd_petsuitAlternate": "Définit si votre action de tenue d’animal balance les bras en alternance. Ce réglage est envoyé avec l’action : désactivé, les autres voient un balancement ordinaire ; activé, les joueurs avec LCE voient vos bras alterner."
+  "sd_petsuitAlternate": "Définit le mode de balancement des bras de votre tenue d’animal. Activé, les joueurs avec LCE voient vos bras balancer en alternance ; désactivé ou sans LCE, ils ne voient que le balancement normal.",
+  "s_friendNotifyDuration": "Durée d’affichage du message",
+  "sd_friendNotifyDuration": "La durée d’affichage du message est configurable ; 0 signifie ne pas supprimer, tandis que les bulles sont toujours supprimées après 5 secondes.",
+  "unit_seconds": "s"
 }

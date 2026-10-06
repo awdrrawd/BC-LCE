@@ -35,6 +35,9 @@ const PANEL_H = 650;
 const PANEL_ROWS = 6;
 const HEADER_RECTS = { reset: [1615, 75, 90, 90], language: [1715, 75, 90, 90], exit: [1815, 75, 90, 90] };
 const TOOLTIP_Y = 870;
+const NOTIFY_DURATION_X = 1400, NOTIFY_DURATION_W = 150, NOTIFY_DURATION_UNIT_X = 1560;
+let notifyDurationInput = null;
+let notifyDurationInputKey = null;
 
 // Share option rectangles between drawing and hit testing. Labels are drawn
 // separately because BC's checkbox renderer assumes a 100px label offset.
@@ -44,8 +47,8 @@ function slotOptions(layout, options) {
 }
 
 // 說明框：左緣 200、右緣維持在 1900（跟頁面其他內容的右界一致）
-const TOOLTIP_X = 200;
-const TOOLTIP_W = 1700;
+const TOOLTIP_X = 100;
+const TOOLTIP_W = 1800;
 
 // bar：軌道與右側數值欄
 const BAR_H = 20;         // 軌道高度
@@ -67,7 +70,7 @@ let dragDef = null;
 let dragLayout = null;
 
 function settingsInCategory(category) {
-    return Object.entries(DEFAULT_FEATURE_SETTINGS).filter(([key, def]) => def.category === category && key !== 'resetTheme');
+    return Object.entries(DEFAULT_FEATURE_SETTINGS).filter(([key, def]) => def.category === category && key !== 'resetTheme' && !def.hidden);
 }
 
 function computeSections(category) {
@@ -216,7 +219,8 @@ function run() {
     // 拖曳中：每幀依最新滑鼠位置更新值（放開滑鼠由全域 mouseup 監聽器處理，見 installSettingsPage）。
     if (dragKey) applyDraggedBarValue();
 
-    const title = currentCategory ? `${T('lce_settings_title')} — ${T('cat_' + currentCategory)}` : T('lce_settings_title');
+    const panelTitle = currentCategory ? T('cat_' + currentCategory) : isStorageManagerOpen() ? T('storage_title') : isTrustedDomainManagerOpen() ? T('trusted_domains_title') : null;
+    const title = panelTitle ? `${T('lce_settings_title')} — ${panelTitle}` : T('lce_settings_title');
     DrawText(title, 300, 125, 'Black', 'Gray');
     DrawButton(...HEADER_RECTS.exit, '', 'White', 'Icons/Exit.png');
     if (PANEL_CATEGORIES.has(currentCategory)) {
@@ -300,6 +304,7 @@ function run() {
                 drawInputControl(key, def, layout, ctrlDisabled);
             }
             if (def.withSound) drawSoundToggle(key, layout, ctrlDisabled);
+            if ((key === 'friendOnlineNotify' || key === 'friendOfflineNotify') && !ctrlDisabled && (fSettings[key] === 'message' || fSettings[key] === 'both')) drawNotifyDuration(key, y);
         } else if (def.type === 'select') {
             DrawTextFit(T(def.label), x + 70, y + ITEM_H / 2, Math.max(80, controlX - x - 85), highlight, 'Gray');
             drawSelectControl(key, def, layout, disabled);
@@ -403,7 +408,9 @@ function click() {
             if (MouseIn(x, y, ITEM_H, ITEM_H) && !disabled) {
                 setFeature(`${key}Enabled`, !enabled);
             } else if (enabled && !disabled) {
-                if (def.withSound && MouseIn(...soundRect(layout))) {
+                const durationKey = key === 'friendOnlineNotify' ? 'friendOnlineNotifyDuration' : key === 'friendOfflineNotify' ? 'friendOfflineNotifyDuration' : null;
+                if (durationKey && (fSettings[key] === 'message' || fSettings[key] === 'both') && MouseIn(NOTIFY_DURATION_X, layout.y, NOTIFY_DURATION_W, ITEM_H)) { editNotifyDuration(key, layout.y);
+                } else if (def.withSound && MouseIn(...soundRect(layout))) {
                     setFeature(`${key}Sound`, !fSettings[`${key}Sound`]);
                 } else {
                     adjustControl(key, def, layout);
@@ -468,6 +475,92 @@ function centered(fn) {
 
 /** 音效開關的座標（接在右側控制項之後）。 */
 const soundRect = ({ controlX, controlW, y }) => [controlX + controlW + SOUND_GAP, y, SOUND_W, ITEM_H];
+function durationKeyForNotify(key) {
+    return key === 'friendOnlineNotify' ? 'friendOnlineNotifyDuration' : 'friendOfflineNotifyDuration';
+}
+function removeNotifyDurationInput(save = true) {
+    if (!notifyDurationInput) return;
+    if (save && notifyDurationInputKey) commitNotifyDurationInput();
+    notifyDurationInput.remove();
+    notifyDurationInput = null;
+    notifyDurationInputKey = null;
+}
+function positionNotifyDurationInput() {
+    if (!notifyDurationInput) return;
+    const canvas = window.MainCanvas;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const sx = rect.width / (canvas.width || 2000);
+    const sy = rect.height / (canvas.height || 1000);
+    const y = notifyDurationInput.dataset.y ? Number(notifyDurationInput.dataset.y) : 0;
+    Object.assign(notifyDurationInput.style, {
+        left: `${rect.left + NOTIFY_DURATION_X * sx}px`,
+        top: `${rect.top + y * sy}px`,
+        width: `${NOTIFY_DURATION_W * sx}px`,
+        height: `${ITEM_H * sy}px`,
+        fontSize: `${Math.max(12, 22 * sy)}px`,
+    });
+}
+function commitNotifyDurationInput() {
+    if (!notifyDurationInput || !notifyDurationInputKey) return;
+    const raw = String(notifyDurationInput.value ?? '').trim();
+    if (!/^\d{1,3}$/.test(raw)) {
+        notifyDurationInput.value = String(Math.max(0, Math.min(999, Number(fSettings[notifyDurationInputKey]) || 5)));
+        return;
+    }
+    const n = Math.max(0, Math.min(999, Number(raw)));
+    setFeature(notifyDurationInputKey, String(n));
+    notifyDurationInput.value = String(n);
+}
+function editNotifyDuration(key, y) {
+    const dk = durationKeyForNotify(key);
+    if (notifyDurationInput && notifyDurationInputKey === dk) {
+        notifyDurationInput.focus();
+        notifyDurationInput.select();
+        return;
+    }
+    removeNotifyDurationInput();
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.inputMode = 'numeric';
+    input.maxLength = 3;
+    input.value = String(Math.max(0, Math.min(999, Number(fSettings[dk]) || 5)));
+    input.dataset.y = String(y);
+    input.setAttribute('aria-label', T('s_friendNotifyDuration'));
+    Object.assign(input.style, {
+        position: 'fixed', zIndex: '10001', boxSizing: 'border-box',
+        textAlign: 'center', border: '2px solid #7214ff', borderRadius: '4px',
+        background: '#fff', color: '#000', padding: '2px 4px', outline: 'none',
+        fontFamily: 'Arial, sans-serif', fontWeight: '700',
+    });
+    input.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); commitNotifyDurationInput(); input.blur(); }
+        else if (e.key === 'Escape') { e.preventDefault(); removeNotifyDurationInput(false); }
+        else if (!/[0-9]/.test(e.key) && !['Backspace','Delete','ArrowLeft','ArrowRight','Tab'].includes(e.key) && !(e.ctrlKey || e.metaKey)) e.preventDefault();
+    });
+    input.addEventListener('input', () => {
+        const clean = input.value.replace(/\D/g, '').slice(0, 3);
+        input.value = clean;
+    });
+    input.addEventListener('blur', () => { commitNotifyDurationInput(); setTimeout(() => removeNotifyDurationInput(false), 0); });
+    document.body.appendChild(input);
+    notifyDurationInput = input;
+    notifyDurationInputKey = dk;
+    positionNotifyDurationInput();
+    input.focus();
+    input.select();
+}
+function drawNotifyDuration(key, y) {
+    const dk = durationKeyForNotify(key);
+    const v = Math.max(0, Math.min(999, Number(fSettings[dk]) || 0));
+    if (!notifyDurationInput || notifyDurationInputKey !== dk) {
+        DrawButton(NOTIFY_DURATION_X, y, NOTIFY_DURATION_W, ITEM_H, String(v), 'White');
+    } else {
+        notifyDurationInput.dataset.y = String(y);
+        positionNotifyDurationInput();
+    }
+    DrawText(T('unit_seconds'), NOTIFY_DURATION_UNIT_X, y + 33, 'Black', 'Gray');
+}
 
 /** 音效開關：Icons/Audio2=有聲、Icons/Audio0=靜音。 */
 function drawSoundToggle(key, layout, disabled) {

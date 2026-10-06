@@ -98,6 +98,7 @@ const TALK_MODE     = ['remove', 'ignore', 'preserve'];
 const TALK_MODE_LBL = ['so_t_remove', 'so_t_ignore', 'so_t_preserve'];
 const NOTIFY_STYLE     = ['bubble', 'message', 'both'];         // 已有啟用勾選箱，故不需「關閉」
 const NOTIFY_STYLE_LBL = ['so_n_bubble', 'so_n_message', 'so_n_both'];
+const NOTIFY_DURATION_MAX = 999;
 
 // 貼圖畫質：值即縮放比例的代號，實際比例見 features/performance.js 的 TEXTURE_SCALE
 const TEX_QUALITY     = ['normal', 'low', 'lowest'];
@@ -190,6 +191,8 @@ export const DEFAULT_FEATURE_SETTINGS = {
         withToggle: true, toggleDefault: false, withSound: true, soundDefault: true,
         disabled: () => false, sideEffects: logChange('friendOfflineNotify'),
     },
+    friendOnlineNotifyDuration: { label: 's_friendNotifyDuration', desc: 'sd_friendNotifyDuration', type: 'input', subtype: 'number', value: 5, min: 0, max: NOTIFY_DURATION_MAX, step: 1, category: 'chat', hidden: true, disabled: () => false, sideEffects: logChange('friendOnlineNotifyDuration') },
+    friendOfflineNotifyDuration: { label: 's_friendNotifyDuration', desc: 'sd_friendNotifyDuration', type: 'input', subtype: 'number', value: 5, min: 0, max: NOTIFY_DURATION_MAX, step: 1, category: 'chat', hidden: true, disabled: () => false, sideEffects: logChange('friendOfflineNotifyDuration') },
     pastProfiles: {
         label: 's_pastProfiles', desc: 'sd_pastProfiles',
         type: 'checkbox', value: false, category: 'chat', disabled: () => false, sideEffects: logChange('pastProfiles'),

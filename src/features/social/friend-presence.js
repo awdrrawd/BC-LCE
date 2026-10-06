@@ -64,7 +64,7 @@ function playSound() {
 }
 
 const BUBBLE_MS = 5000;
-const LOCAL_MS  = 10000;   // 聊天室訊息留久一點：氣泡會自己飄走，訊息是要讓人回頭看的
+const LOCAL_MS  = 10000;
 
 function showBubble(text) {
     if (typeof ToastManager !== 'undefined' && typeof ToastManager.info === 'function') {
@@ -88,9 +88,9 @@ function showBubble(text) {
  * 訊息 div 是 BC 建的，我們碰不到，所以把標記包在內容裡讓樣式認得出來
  * （見 features/local-messages.js 的 :has 選擇器）。
  */
-function showLocal(text) {
+function showLocal(text, durationMs = LOCAL_MS) {
     if (typeof ChatRoomSendLocal !== 'function') return false;
-    ChatRoomSendLocal(`<div class="${LOCAL_MARKER} lce-friend-notify">${esc(text)}</div>`, LOCAL_MS);
+    ChatRoomSendLocal(`<div class="${LOCAL_MARKER} lce-friend-notify">${esc(text)}</div>`, durationMs);
     return true;
 }
 
@@ -99,11 +99,12 @@ function showLocal(text) {
  * style: bubble = 只有氣泡／message = 只有聊天室訊息／both = 兩個都送。
  * 不在聊天室時 message 沒地方顯示，退回氣泡；both 則自然只剩氣泡。
  */
-function notify(text, style, sound) {
+function notify(text, style, sound, durationSec = 5) {
     if (sound) playSound();
     const inChatRoom = typeof CurrentScreen !== 'undefined' && CurrentScreen === 'ChatRoom';
     const wantLocal = (style === 'message' || style === 'both') && inChatRoom;
-    const sentLocal = wantLocal ? showLocal(text) : false;
+    const seconds = Math.max(0, Math.min(999, Number(durationSec) || 0));
+    const sentLocal = wantLocal ? showLocal(text, seconds === 0 ? 0 : seconds * 1000) : false;
     if (style === 'bubble' || style === 'both' || !sentLocal) showBubble(text);
 }
 
@@ -127,11 +128,11 @@ function handleQueryResult(data) {
 
     if (onlineOn()) {
         const came = data.Result.filter(f => !lastNumbers.includes(f.MemberNumber));
-        if (came.length) notify(T('friend_now_online').replace('{list}', fmt(came)), getFeature('friendOnlineNotify'), getFeature('friendOnlineNotifySound'));
+        if (came.length) notify(T('friend_now_online').replace('{list}', fmt(came)), getFeature('friendOnlineNotify'), getFeature('friendOnlineNotifySound'), getFeature('friendOnlineNotifyDuration'));
     }
     if (offlineOn()) {
         const went = lastFriends.filter(f => !nowNumbers.includes(f.MemberNumber));
-        if (went.length) notify(T('friend_now_offline').replace('{list}', fmt(went)), getFeature('friendOfflineNotify'), getFeature('friendOfflineNotifySound'));
+        if (went.length) notify(T('friend_now_offline').replace('{list}', fmt(went)), getFeature('friendOfflineNotify'), getFeature('friendOfflineNotifySound'), getFeature('friendOfflineNotifyDuration'));
     }
 
     lastFriends = data.Result;

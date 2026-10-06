@@ -171,8 +171,10 @@ function pruneOldest(targetRemoveCount) {
     let node = log.firstElementChild;
     while (node && node !== lastSep && removed < targetRemoveCount) {
         const next = node.nextElementSibling;
-        if (node.classList.contains('ChatMessage')) removed++;
-        node.remove();
+        if (node.classList.contains('ChatMessage')) {
+            node.remove();
+            removed++;
+        }
         node = next;
     }
 

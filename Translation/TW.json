@@ -4,7 +4,7 @@
   "s_richerActivitySounds": "更豐富的音效",
   "sd_richerActivitySounds": "為支援的 ECHO 活動補上音效，沿用遊戲音量與靜音設定，優先保留既有音效。",
   "s_petsuitAnimation": "寵物服動作",
-  "sd_petsuitAnimation": "穿著寵物服且能切換手臂姿勢時，顯示開始／停止按鈕。左右手交替擺動並暫時套用 >.< 表情，結束後恢復原姿勢。需要表情引擎；動作只會發送一次隱藏訊息（含間隔與組數），由同樣安裝 LCE 的玩家在本地渲染左右手分開擺動；未安裝 LCE 的玩家只會看到一般的姿勢切換。",
+  "sd_petsuitAnimation": "穿著寵物服且能切換手臂姿勢時，顯示擺動手臂動作並暫時套用 >.< 表情（需表情引擎），結束後恢復原",
   "s_petsuitAnimationCycles": "動畫次數",
   "sd_petsuitAnimationCycles": "動作重複的次數，每次包含左右手各舉起一次。",
   "s_petsuitAnimationDelay": "動作間隔",
@@ -159,11 +159,11 @@
   "s_chatColors": "改善顏色提高可讀性",
   "sd_chatColors": "調整聊天顏色對比以符合可讀性標準。",
   "s_friendOnlineNotify": "顯示好友在線通知",
-  "sd_friendOnlineNotify": "好友上線時通知；可選氣泡或聊天室信息樣式。",
+  "sd_friendOnlineNotify": "好友上線時通知；可選氣泡或聊天室信息樣式。信息可設置顯示時間，0代表不移除，氣泡固定5秒移除",
   "s_friendOnlineNotifyStyle": "在線通知樣式",
   "sd_friendOnlineNotifyStyle": "以氣泡或聊天室信息呈現在線通知。",
   "s_friendOfflineNotify": "顯示好友離線通知",
-  "sd_friendOfflineNotify": "好友離線時通知；可選氣泡或聊天室信息樣式。",
+  "sd_friendOfflineNotify": "好友離線時通知；可選氣泡或聊天室信息樣式。信息可設置顯示時間，0代表不移除，氣泡固定5秒移除",
   "s_friendOfflineNotifyStyle": "離線通知樣式",
   "sd_friendOfflineNotifyStyle": "以氣泡或聊天室信息呈現離線通知。",
   "s_pastProfiles": "保存並瀏覽已知的個人資料（需重整）",
@@ -456,5 +456,8 @@
   "s_petsuitAnimationPosition": "動作按鈕位置",
   "sd_petsuitAnimationPosition": "選擇按鈕在聊天室左上、左下、右上或右下的位置。",
   "s_petsuitAlternate": "雙手交互晃動",
-  "sd_petsuitAlternate": "設定自己的寵物服動作是否為左右手交互晃動。此設定會隨動作一併通知其他玩家：停用時，別人看你也是普通擺動；啟用時，有裝 LCE 的玩家會看到你左右交互晃動。"
+  "sd_petsuitAlternate": "設定自己的寵物服手臂擺動方式。啟用時，安裝了 LCE 的玩家會看到你手臂交替擺動，停用或沒安裝 LCE 只會看到普通擺動。",
+  "s_friendNotifyDuration": "信息顯示時間",
+  "sd_friendNotifyDuration": "信息可設置顯示時間，0代表不移除，氣泡固定5秒移除",
+  "unit_seconds": "秒"
 }

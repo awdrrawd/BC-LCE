@@ -27,6 +27,8 @@
 | **作弊 & 反作弊** | 反作弊（依關係設門檻）、UWALL、開鎖提示、綑綁時可分層、自動掙扎… |
 | **雜項** | 斷線自動重連（含異地登入判斷）、離開確認、分享插件清單、第三方內容網域確認… |
 
+自動重連與 ChatLog 保護的設計與時序見 [`docs/automatic-reconnect.md`](docs/automatic-reconnect.md)。
+
 指令：`/lce`（總覽）、`/lcesetting`（開設定頁）、`/profiles`、`/versions` 等。`ExtensionSettings` 的容量、備份與刪除已移至偏好設定中的「容量管理」。
 
 ### 沉浸設定與 ECHO 相容
@@ -38,6 +40,8 @@
 - **嘴部牽引**：預設開啟。雙手受限、嘴部可用且牽引方 Misc 格為空時，可使用 ECHO 的「拉到身邊」。雙方需要 ECHO，對方不需要 LCE；道具配對與權限檢查仍由 ECHO 處理。補充動作訊息透過共用 L10N 引擎提供七語翻譯。
 - **更豐富的音效**：預設關閉。為支援的 ECHO 活動補充音效，保留既有音效優先順序及遊戲音量、靜音設定。
 - **寵物服動作**：預設關閉，需要表情引擎、寵物服及切換手臂姿勢的權限。可設定動畫次數、動作間隔與四個按鈕位置；每次包含左右手各舉起一次，結束後恢復原姿勢。左右交替採用本機畫面合成，其他人仍看到 BC 原生的雙手姿勢。手動換姿勢會停止動作。
+- **聊天 QoL 的延遲與撤銷**：顏文字表情固定持續 5 秒；訊息觸發的嘴型可依訊息長度延遲，但新訊息到達時會取消舊的 pending mouth timer，避免過期表情回頭覆蓋新表情。寵物服與顏文字共用臨時表情快取，最後一個 hold 結束後才恢復原臉。
+- **Echo 活動安全邊界**：只有已辨識的自訂 Echo 活動或 Luzi 活動才進入 LCE 的表情／音效映射；普通 BC Activity 不會僅因名稱碰到 `Kiss`、`Hit` 等關鍵字而誤觸發。
 
 防混淆沿用既有 WCE 相容邏輯。「閉眼仍可見房間」暫不提供；從曾載入該功能的版本更新後，請重新整理遊戲以清除舊掛鉤。
 
@@ -52,23 +56,22 @@ src/
   core/
     constants.js     常數（座標、儲存 key、z-index、FUSAM 透傳清單…）
     state.js         登入頁共用可變狀態 S + 設定存取
-    storage.js       AES-GCM 加密 + IndexedDB 快照 + localStorage 帳號（與 MPL 共用 key）
+    i18n-registry.js 共用語言註冊橋接（內嵌 i18n-engine）
     util.js          DOM / 環境工具（injectStyle、place、getCanvas、byteSize…）
     feature-settings.js  功能設定儲存層（ui/theme 走全域 localStorage、其餘走 ExtensionSettings.LCE）
     settings-schema.js   所有設定的 schema（型別、預設、分類、sideEffects）
     theme-api.js     對外主題色 API（window.Liko.LCE.Theme）
     i18n.js          i18n 載入器（載入 7 個語系包 + 翻譯工具）
-    i18n-registry.js Liko 共用語言判斷註冊處（window.Liko.I18N）
-    i18n/            語系包：tw / cn / en / de / fr / ru / ua（每包完整字表）
+    Translation/     七語完整 JSON 字表（TW / CN / EN / DE / FR / RU / UA）
 
   features/          各功能模組（chat / theme / expressions / wardrobe / cheats / performance /
                      instant-messenger / relogin / layering-hide / misc … 各自 installXxx()）
-    styles/          染色引擎用的 CSS/SCSS（卷軸/輸入框/聊天/房間搜尋…）
     vertical/        直式版面（移植自 MPL）
 
   loginpage/         橫式登入頁（背景、帳號輪播、設定浮層、BC 原生隱藏 + FUSAM 透傳、主流程）
   settings/          遊戲內設定頁（PreferenceRegisterExtensionSetting 九宮格）
-  assets/            圖示
+  assets/            建置時由 assets lock 補齊的登入圖片／影片（選配）
+  Translation/       七語 JSON 字表
 
 loader.user.js       正式版載入器（讀 GitHub main 分支的 dist/assets/main.js）
 loader.local.user.js 本地開發載入器（讀 http://localhost:5174/assets/main.js）
@@ -123,19 +126,21 @@ LCE.ProfileShare.handlesReceive()           // LCE 是否為目前的 PROFILESHA
 
 語言跟隨 BC 的語言設定（`TranslationLanguage`），支援 **TW / CN / EN / DE / FR / RU / UA**；語言判斷透過 `window.Liko.I18N` 與其他 Liko 插件共用。
 
-## 本地測試（參考 BC-AEE 做法）
+## 本地測試與建置（參考 BC-AEE 做法）
 
 1. 安裝相依套件：
    ```
    npm install
    ```
-2. 啟動本地開發伺服器（會 build 一次並開始 watch + preview）：
+2. 從 Git clone 專案時，`npm install` 後即可自動驗證／補齊 `assets`；若使用 GitHub 的 Source ZIP，因 ZIP 不含 `.git`，建置會跳過素材 hash 驗證，且不會自動抓取登入圖片／影片。需要完整登入背景時請改用 Git clone，或另行提供 `assets/`。
+
+3. 啟動本地開發伺服器（會 build 一次並開始 watch + preview）：
    ```
    npm run dev
    ```
    或直接雙擊 `run_dev.bat`。
-3. 在 Tampermonkey 安裝 **`loader.local.user.js`**（只裝這一個，別同時裝正式版）。
-4. 開啟 / 重新整理 BC，即可看到 LCE。改動 `src/` 後 Vite 會自動重建，重新整理 BC 就會載入最新版。
+4. 在 Tampermonkey 安裝 **`loader.local.user.js`**（只裝這一個，別同時裝正式版）。
+5. 開啟 / 重新整理 BC，即可看到 LCE。改動 `src/` 後 Vite 會自動重建，重新整理 BC 就會載入最新版。
 
 > Vite 設定裡的 `Access-Control-Allow-Private-Network` header（PNA plugin）是必要的，
 > 否則 Chrome 會擋下 HTTPS 的 BC 頁面去 fetch localhost 的 bundle。

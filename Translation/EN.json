@@ -4,7 +4,7 @@
   "s_richerActivitySounds": "Richer sound effects",
   "sd_richerActivitySounds": "Add sounds for supported ECHO activities, respecting game volume and mute settings and giving existing sounds priority.",
   "s_petsuitAnimation": "Pet suit actions",
-  "sd_petsuitAnimation": "Show a start/stop button when wearing a pet suit and able to change arm poses. Alternates the arms with a temporary >.< expression, then restores the original pose. Requires the animation engine. Only one hidden message (interval and count) is sent; players who also have LCE render the arms swinging separately, while others see an ordinary pose swap.",
+  "sd_petsuitAnimation": "When wearing a pet suit and able to switch arm poses, shows a swinging-arm action and temporarily applies the >.< expression (requires the expression engine), then restores the original pose.",
   "s_petsuitAnimationCycles": "Animation count",
   "sd_petsuitAnimationCycles": "Number of repetitions. Each repetition raises each arm once.",
   "s_petsuitAnimationDelay": "Action interval",
@@ -159,11 +159,11 @@
   "s_chatColors": "Improve colors for readability",
   "sd_chatColors": "Improves chat color contrast to meet accessibility standards.",
   "s_friendOnlineNotify": "Friend online notifications",
-  "sd_friendOnlineNotify": "Notify when a friend logs in; choose bubble or chat message style.",
+  "sd_friendOnlineNotify": "Notify when a friend logs in; choose bubble or chat message style. Message display time can be configured; 0 means do not remove, while bubbles are always removed after 5 seconds.",
   "s_friendOnlineNotifyStyle": "Online notify style",
   "sd_friendOnlineNotifyStyle": "Show online notifications as a bubble or chat message.",
   "s_friendOfflineNotify": "Friend offline notifications",
-  "sd_friendOfflineNotify": "Notify when a friend logs out; choose bubble or chat message style.",
+  "sd_friendOfflineNotify": "Notify when a friend logs out; choose bubble or chat message style. Message display time can be configured; 0 means do not remove, while bubbles are always removed after 5 seconds.",
   "s_friendOfflineNotifyStyle": "Offline notify style",
   "sd_friendOfflineNotifyStyle": "Show offline notifications as a bubble or chat message.",
   "s_pastProfiles": "Save & browse seen profiles (requires refresh)",
@@ -456,5 +456,8 @@
   "s_petsuitAnimationPosition": "Action button position",
   "sd_petsuitAnimationPosition": "Place the button at the top left, bottom left, top right or bottom right of the chat room.",
   "s_petsuitAlternate": "Alternating arm swing",
-  "sd_petsuitAlternate": "Whether your own pet suit action swings the arms alternately. This is sent with the action: if disabled, others see an ordinary swing; if enabled, players with LCE see your arms alternate."
+  "sd_petsuitAlternate": "Sets how your own pet suit arms swing. When enabled, players with LCE will see your arms swing alternately; when disabled or when LCE is not installed, they will only see the normal swing.",
+  "s_friendNotifyDuration": "Message display time",
+  "sd_friendNotifyDuration": "Message display time can be configured; 0 means do not remove, while bubbles are always removed after 5 seconds.",
+  "unit_seconds": "sec"
 }

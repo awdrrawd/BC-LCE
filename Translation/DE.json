@@ -6,7 +6,7 @@
   "s_richerActivitySounds": "Vielfältigere Soundeffekte",
   "sd_richerActivitySounds": "Ergänzt Sounds für unterstützte ECHO-Aktivitäten. Lautstärke und Stummschaltung des Spiels werden beachtet; vorhandene Sounds haben Vorrang.",
   "s_petsuitAnimation": "Haustieranzug-Aktionen",
-  "sd_petsuitAnimation": "Zeigt eine Start/Stopp-Schaltfläche, wenn du einen Haustieranzug trägst und die Armhaltung wechseln kannst. Hebt die Arme abwechselnd mit vorübergehendem >.<-Gesichtsausdruck und stellt danach die ursprüngliche Pose wieder her. Benötigt die Animations-Engine. Es wird nur eine versteckte Nachricht (Intervall und Anzahl) gesendet; Spieler mit LCE sehen die Arme getrennt schwingen, alle anderen einen gewöhnlichen Posenwechsel.",
+  "sd_petsuitAnimation": "Wenn du einen Haustieranzug trägst und die Armhaltung wechseln kannst, zeigt dies eine Armschwingbewegung und wendet vorübergehend den >.<-Gesichtsausdruck an (benötigt die Ausdrucks-Engine); danach wird die ursprüngliche Pose wiederhergestellt.",
   "s_petsuitAnimationCycles": "Wiederholungen",
   "sd_petsuitAnimationCycles": "Anzahl der Wiederholungen. Pro Wiederholung wird jeder Arm einmal angehoben.",
   "s_petsuitAnimationDelay": "Aktionsintervall",
@@ -159,11 +159,11 @@
   "s_chatColors": "Farben für Lesbarkeit verbessern",
   "sd_chatColors": "Verbessert den Chat-Farbkontrast, um Barrierefreiheitsstandards zu erfüllen.",
   "s_friendOnlineNotify": "Benachrichtigung bei Freund online",
-  "sd_friendOnlineNotify": "Benachrichtigt, wenn ein Freund sich anmeldet; wähle Sprechblase oder Chatnachricht.",
+  "sd_friendOnlineNotify": "Benachrichtigt, wenn ein Freund sich anmeldet; wähle Sprechblase oder Chatnachricht. Die Anzeigedauer der Nachricht kann eingestellt werden; 0 bedeutet keine Entfernung, Sprechblasen werden immer nach 5 Sekunden entfernt.",
   "s_friendOnlineNotifyStyle": "Stil der Online-Benachrichtigung",
   "sd_friendOnlineNotifyStyle": "Online-Benachrichtigungen als Sprechblase oder Chatnachricht anzeigen.",
   "s_friendOfflineNotify": "Benachrichtigung bei Freund offline",
-  "sd_friendOfflineNotify": "Benachrichtigt, wenn ein Freund sich abmeldet; wähle Sprechblase oder Chatnachricht.",
+  "sd_friendOfflineNotify": "Benachrichtigt, wenn ein Freund sich abmeldet; wähle Sprechblase oder Chatnachricht. Die Anzeigedauer der Nachricht kann eingestellt werden; 0 bedeutet keine Entfernung, Sprechblasen werden immer nach 5 Sekunden entfernt.",
   "s_friendOfflineNotifyStyle": "Stil der Offline-Benachrichtigung",
   "sd_friendOfflineNotifyStyle": "Offline-Benachrichtigungen als Sprechblase oder Chatnachricht anzeigen.",
   "s_pastProfiles": "Gesehene Profile speichern & durchsuchen (Neuladen nötig)",
@@ -456,5 +456,8 @@
   "s_petsuitAnimationPosition": "Position der Aktionstaste",
   "sd_petsuitAnimationPosition": "Platziert die Schaltfläche im Chatraum oben links, unten links, oben rechts oder unten rechts.",
   "s_petsuitAlternate": "Abwechselndes Armschwingen",
-  "sd_petsuitAlternate": "Legt fest, ob deine Haustieranzug-Aktion die Arme abwechselnd schwingt. Die Einstellung wird mitgesendet: deaktiviert sehen andere ein gewöhnliches Schwingen, aktiviert sehen Spieler mit LCE deine Arme abwechselnd schwingen."
+  "sd_petsuitAlternate": "Legt fest, wie die Arme deines Haustieranzugs schwingen. Wenn aktiviert, sehen Spieler mit LCE deine Arme abwechselnd schwingen; bei Deaktivierung oder ohne LCE sehen sie nur das normale Schwingen.",
+  "s_friendNotifyDuration": "Anzeigedauer der Nachricht",
+  "sd_friendNotifyDuration": "Die Anzeigedauer der Nachricht kann eingestellt werden; 0 bedeutet keine Entfernung, Sprechblasen werden immer nach 5 Sekunden entfernt.",
+  "unit_seconds": "Sek."
 }

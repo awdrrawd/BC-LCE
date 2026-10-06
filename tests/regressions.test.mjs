@@ -860,3 +860,86 @@ test('login video reveals on playback, hides on buffering, and releases resource
     assert.ok(pauses > 0);
     background.disposeBackground();
 });
+
+test('chat capacity pruning removes only ChatMessage nodes before the current-room separator', async () => {
+    const rt = runtime({ append: {
+        'src/features/performance/chat-capacity.js': '\nexport { pruneOldest };',
+    } });
+    const log = rt.document.createElement('div');
+    log.id = 'TextAreaChatLog';
+    rt.document.body.append(log);
+    const marker = rt.document.createElement('div');
+    marker.className = 'lce-plugin-marker';
+    const oldest = rt.document.createElement('div');
+    oldest.className = 'ChatMessage';
+    const middle = rt.document.createElement('div');
+    middle.className = 'lce-plugin-marker';
+    const second = rt.document.createElement('div');
+    second.className = 'ChatMessage';
+    const separator = rt.document.createElement('div');
+    separator.className = 'chat-room-sep-last';
+    const current = rt.document.createElement('div');
+    current.className = 'ChatMessage';
+    log.append(marker, oldest, middle, second, separator, current);
+
+    const { pruneOldest } = await rt.load('src/features/performance/chat-capacity.js');
+    assert.equal(pruneOldest(1), 1);
+    assert.equal(log.contains(marker), true);
+    assert.equal(log.contains(middle), true);
+    assert.equal(log.contains(oldest), false);
+    assert.equal(log.contains(second), true);
+    assert.equal(log.contains(separator), true);
+    assert.equal(log.contains(current), true);
+});
+
+test('reconnect credential cache is session-only and shares concurrent warmups', async () => {
+    let decrypts = 0;
+    const rt = runtime({
+        mocks: {
+            'src/storage/accounts.js': {
+                loadAccounts: () => [{ accountName: 'Alice', password: 'enc' }],
+                decryptPassword: async value => { decrypts++; return value === 'enc' ? 'pw' : null; },
+            },
+        },
+    });
+    const creds = await rt.load('src/storage/reconnect-credentials.js');
+    assert.equal(creds.getReconnectPassword('Alice'), null);
+    const a = creds.warmReconnectPassword('Alice');
+    const b = creds.warmReconnectPassword('ALICE');
+    assert.equal(a, b);
+    assert.equal(await a, 'pw');
+    assert.equal(await b, 'pw');
+    assert.equal(decrypts, 1);
+    assert.equal(creds.getReconnectPassword('ALICE'), 'pw');
+});
+
+test('automatic reconnect submits cached credentials synchronously in RelogRun', async () => {
+    let loginCalls = 0;
+    let passedArgs;
+    const serverSocket = { connected: true, on() {}, off() {}, disconnect() {} };
+    const rt = runtime({
+        globals: {
+            Player: { AccountName: 'Alice', MemberNumber: 7 },
+            CurrentScreen: 'Relog',
+            LoginSubmitted: false,
+            ServerSocket: serverSocket,
+            LoginDoLogin: (...args) => { loginCalls++; passedArgs = args; },
+            Date: { now: () => 10000 },
+        },
+        mocks: {
+            'src/core/feature-settings.js': { getFeature: key => key === 'relogin' },
+            'src/core/wce-compat.js': { shouldLceHandle: () => true },
+            'src/storage/reconnect-credentials.js': {
+                cacheReconnectPassword() { return true; },
+                getReconnectPassword: account => account === 'Alice' ? 'secret' : null,
+                warmReconnectPassword: async () => 'secret',
+            },
+            'src/core/i18n.js': { T: key => key },
+        },
+    });
+    const relog = await rt.load('src/features/safety/relogin.js');
+    relog.installRelogin();
+    rt.hooks.get('RelogRun')([], args => args);
+    assert.equal(loginCalls, 1);
+    assert.deepEqual(passedArgs, ['Alice', 'secret']);
+});

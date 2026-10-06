@@ -20,6 +20,8 @@ export class Element {
     get children() { return this.childNodes.filter(n => n.nodeType === 1); }
     contains(node) { return node === this || this.childNodes.some(child => child.contains(node)); }
     get firstChild() { return this.childNodes[0]; }
+    get firstElementChild() { return this.children[0] ?? null; }
+    get nextElementSibling() { const siblings = this.parentElement?.children ?? []; return siblings[siblings.indexOf(this) + 1] ?? null; }
     get previousElementSibling() { const siblings = this.parentElement?.children ?? []; return siblings[siblings.indexOf(this) - 1] ?? null; }
     get textContent() { return this.nodeType === 3 ? this._text : this.childNodes.map(n => n.textContent).join(''); }
     set textContent(text) { this.childNodes = []; if (String(text)) this.append(new Element('#text', String(text))); }
