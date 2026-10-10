@@ -106,7 +106,14 @@ function startRender(char, type, state1, state2, delay, cycles) {
             r.lastFrameSent = pushFrame(char, slot);
 
             frame++;
-            r.timer = setTimeout(step, delay);
+            // 當本人有多個部位同時播放時，動態調配間隔以確保整體發送率不超過 10 封包/秒（BC 伺服器上限為 14 封包/1.2 秒）
+            let nextDelay = delay;
+            if (char === globalThis.Player) {
+                let activeCount = 0;
+                for (const item of renderers.values()) if (item.char === globalThis.Player) activeCount++;
+                if (activeCount > 1) nextDelay = Math.max(delay, activeCount * 100);
+            }
+            r.timer = setTimeout(step, nextDelay);
         } catch (e) {
             console.warn('[LCE] animal animation failed', e);
             finish();
@@ -161,7 +168,7 @@ export function syncAutoTimer() {
 }
 
 function checkTriggers() {
-    if (globalThis.CurrentScreen !== 'ChatRoom') return;
+    if (globalThis.CurrentScreen !== 'ChatRoom' || globalThis.CurrentCharacter !== null) return;
     
     const now = Date.now();
     for (const type of ANIMAL_TYPES) {
@@ -175,6 +182,41 @@ function checkTriggers() {
                 triggerAnimation(type, { auto: true });
             }
         }
+    }
+}
+
+/**
+ * 當遠端玩家變更本人外觀或部位時（例如在 Wardrobe 換衣服點 OK、或在 Dialog 穿脫/改色），
+ * 立即停止本人的所有動物動畫，不再送出後續 frame，避免覆蓋對方的變更或造成伺服器 diff 衝突。
+ */
+export function stopPlayerAnimations() {
+    for (const [key, r] of renderers.entries()) {
+        if (r.char === globalThis.Player) {
+            clearTimeout(r.timer);
+            renderers.delete(key);
+            try {
+                if (ownsSlot(r)) {
+                    applyState(r.char, r.slot, r.state1, r.managedKeys);
+                    refreshCharacter(r.char);
+                }
+            } catch (e) {
+                console.warn('[LCE] animal abort settle failed', e);
+            }
+        }
+    }
+}
+
+export function onSyncItem(data) {
+    if (data?.Item?.Target === globalThis.Player?.MemberNumber && data?.Source !== globalThis.Player?.MemberNumber) {
+        stopPlayerAnimations();
+    }
+}
+
+export function onSyncCharacter(data) {
+    const charId = data?.Character?.MemberNumber ?? data?.MemberNumber;
+    const source = data?.SourceMemberNumber ?? data?.Source;
+    if (charId === globalThis.Player?.MemberNumber && source !== globalThis.Player?.MemberNumber) {
+        stopPlayerAnimations();
     }
 }
 
@@ -222,8 +264,13 @@ export function installAnimalAnimations() {
     if (installed) return;
     installed = true;
     
-    // Receive network anims
-    const binding = createSocketBinding({ ChatRoomMessage: onAnimalMessage });
+    // Receive network anims & yield when others dress or modify the player
+    const binding = createSocketBinding({
+        ChatRoomMessage: onAnimalMessage,
+        ChatRoomSyncItem: onSyncItem,
+        ChatRoomSyncCharacter: onSyncCharacter,
+        ChatRoomSyncSingle: onSyncCharacter,
+    });
     const bind = () => binding.bind(typeof ServerSocket === 'undefined' ? null : ServerSocket);
     (function wait(n = 240) {
         if (typeof ServerSocket === 'undefined' || !ServerSocket) {

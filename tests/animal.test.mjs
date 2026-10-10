@@ -523,3 +523,68 @@ test('auto-trigger timer runs only while at least one part is enabled', async ()
     rt.settings.setFeature('animalEars', true);
     assert.equal(started, 2, 're-enabling starts it again');
 });
+
+// ───────────────────────── 讓位給遠端玩家的外觀變更 ─────────────────────────
+test('external item sync on Player immediately aborts ongoing animation without sending further updates', async () => {
+    const sent = [], updates = [];
+    const player = { MemberNumber: 1, Appearance: [makeItem('Other')] };
+    const { rt, mod, timers } = await animalRuntime({ player, sent, updates });
+    rt.settings.updateSettings({ animalEarsState1: { Name: 'A' }, animalEarsState2: { Name: 'B' } });
+    mod.triggerAnimation('Ears');
+    assert.equal(updates.length, 1, 'first frame is sent');
+    assert.equal(timers.length, 1, 'timer is pending for next frame');
+
+    // Remote player (7) changes an item on Player (1)
+    mod.onSyncItem({ Source: 7, Item: { Target: 1, Group: 'Cloth' } });
+    assert.equal(timers.length, 0, 'animation timer was cancelled');
+    assert.equal(updates.length, 1, 'no further frames sent after abort');
+});
+
+test('external character sync on Player immediately aborts ongoing animation', async () => {
+    const sent = [], updates = [];
+    const player = { MemberNumber: 1, Appearance: [makeItem('Other')] };
+    const { rt, mod, timers } = await animalRuntime({ player, sent, updates });
+    rt.settings.updateSettings({ animalEarsState1: { Name: 'A' }, animalEarsState2: { Name: 'B' } });
+    mod.triggerAnimation('Ears');
+    assert.equal(updates.length, 1);
+    assert.equal(timers.length, 1);
+
+    // Remote player (7) exits wardrobe on Player (1)
+    mod.onSyncCharacter({ SourceMemberNumber: 7, Character: { MemberNumber: 1 } });
+    assert.equal(timers.length, 0, 'timer cancelled');
+    assert.equal(updates.length, 1, 'no further updates sent');
+});
+
+test('external sync on a different character does not interrupt Player animation', async () => {
+    const sent = [], updates = [];
+    const player = { MemberNumber: 1, Appearance: [makeItem('Other')] };
+    const { rt, mod, timers } = await animalRuntime({ player, sent, updates });
+    rt.settings.updateSettings({ animalEarsState1: { Name: 'A' }, animalEarsState2: { Name: 'B' } });
+    mod.triggerAnimation('Ears');
+    assert.equal(timers.length, 1);
+
+    // Remote player (7) changes an item on someone else (99)
+    mod.onSyncItem({ Source: 7, Item: { Target: 99, Group: 'Cloth' } });
+    assert.equal(timers.length, 1, 'Player animation continues');
+});
+
+test('concurrent animations on Player dynamically scale frame delay to stay within 10 packets/s', async () => {
+    const scheduledDelays = [];
+    const player = { MemberNumber: 1, Appearance: [makeItem('Other'), { Asset: { Name: 'TailOrig', Group: { Name: 'TailStraps' } } }] };
+    const { rt, mod, timers } = await animalRuntime({
+        player,
+        globals: {
+            setTimeout: (fn, delay) => { scheduledDelays.push(delay); timers.push(fn); return fn; }
+        }
+    });
+    rt.settings.setFeature('animalTails', true);
+    rt.settings.updateSettings({
+        animalEarsState1: { Name: 'A' }, animalEarsState2: { Name: 'B' }, animalEarsDelay: 100,
+        animalTailsState1: { Name: 'A' }, animalTailsState2: { Name: 'B' }, animalTailsDelay: 100,
+    });
+    mod.triggerAnimation('Ears');
+    mod.triggerAnimation('Tails');
+    assert.ok(scheduledDelays.some(d => d >= 200), 'delay scaled to protect rate limit when multiple parts run');
+});
+
+
