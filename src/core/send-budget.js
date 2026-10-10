@@ -46,7 +46,7 @@ export function createSendBudget({ now = () => Date.now(), readBc = readBcState,
     let demandTimes = [];   // 其他功能呼叫 ServerSend 的時間（呼叫，不是送出）
     let nextAt = 0;         // 全域最小間隔：最早何時可再提交
     let ownDepth = 0;       // >0 表示目前的 ServerSend 呼叫是動畫自己發的
-    const stats = { submitted: 0, deferrals: 0, timeouts: 0, maxWaitMs: 0, maxQueue: 0 };
+    const stats = { mode: 'fallback', submitted: 0, deferrals: 0, timeouts: 0, finalFailed: 0, maxWaitMs: 0, maxQueue: 0 };   // mode: 最近一次判斷用的訊號來源 'bc' | 'fallback'
 
     const prune = (list, t, interval) => list.filter(x => t - x < interval).slice(-MAX_TRACKED);
 
@@ -67,12 +67,16 @@ export function createSendBudget({ now = () => Date.now(), readBc = readBcState,
         const lastDemand = demandTimes[demandTimes.length - 1];
         if (lastDemand !== undefined && t - lastDemand < cfg.minGap) return { ok: false, at: lastDemand + cfg.minGap };
 
+        stats.mode = bc ? 'bc' : 'fallback';
         let used;
         if (bc) {
             stats.maxQueue = Math.max(stats.maxQueue, bc.queueLength);
             if (bc.queueLength > 0) return { ok: false, at: t + cfg.queueRetry };
             used = bc.times.filter(x => t - x < interval);
         } else {
+            // 退回模式：BC 的實際發送紀錄讀不到，這裡的數字是「估算」，不是實際送出數。
+            // demandTimes 是 ServerSend「呼叫」，排隊中的訊息會在呼叫時就被計入，可能高估；
+            // 繞過 ServerSend 直接 emit 的流量則看不到。刻意偏保守：寧可讓動畫慢一點，也不佔用其他訊息的額度。
             used = ownTimes.concat(demandTimes);
         }
         if (used.length >= budget) {
@@ -107,7 +111,8 @@ export function createSendBudget({ now = () => Date.now(), readBc = readBcState,
         noteWait(ms) { stats.maxWaitMs = Math.max(stats.maxWaitMs, ms); },
         noteDeferral() { stats.deferrals++; },
         noteTimeout() { stats.timeouts++; },
-        reset() { ownTimes = []; demandTimes = []; nextAt = 0; ownDepth = 0; Object.assign(stats, { submitted: 0, deferrals: 0, timeouts: 0, maxWaitMs: 0, maxQueue: 0 }); },
+        noteFinalFailed() { stats.finalFailed++; },
+        reset() { ownTimes = []; demandTimes = []; nextAt = 0; ownDepth = 0; Object.assign(stats, { mode: 'fallback', submitted: 0, deferrals: 0, timeouts: 0, finalFailed: 0, maxWaitMs: 0, maxQueue: 0 }); },
     };
 }
 

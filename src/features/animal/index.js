@@ -30,10 +30,15 @@ function refreshCharacter(char) {
  * BC 在不在房間時會直接 return 而不送任何東西，這種情況回傳 false。
  * 注意這只代表進了 BC 的發送佇列，不代表伺服器已收到或套用；BC 沒有送達確認。
  */
-function pushFrame(char, slot) {
+function canPush(char) {
     if (char !== globalThis.Player) return false;
     if (typeof ChatRoomCharacterItemUpdate !== 'function' || !globalThis.ChatRoomData) return false;
     if (typeof ServerPlayerIsInChatRoom === 'function' && !ServerPlayerIsInChatRoom()) return false;
+    return true;
+}
+
+function pushFrame(char, slot) {
+    if (!canPush(char)) return false;
     try {
         sendBudget.withOwnSend(() => ChatRoomCharacterItemUpdate(char, slot));
         sendBudget.markSubmitted();
@@ -48,16 +53,47 @@ function submitFrame(r) {
     return true;
 }
 
+// 最終 A 提交失敗時的受控重試：key -> { r, timer, attempt }。
+// 「待同步」只代表 LCE 還沒把最終姿勢提交給 BC，不代表伺服器已確認收到。
+const pendingFinals = new Map();
+const FINAL_RETRY_DELAYS = [200, 600, 1500];
+
+function clearPendingFinal(key) {
+    const p = pendingFinals.get(key);
+    if (!p) return;
+    clearTimeout(p.timer);
+    pendingFinals.delete(key);
+}
+
+function clearAllPendingFinals() { for (const key of [...pendingFinals.keys()]) clearPendingFinal(key); }
+
+function schedulePendingFinal(r, attempt = 0) {
+    if (attempt >= FINAL_RETRY_DELAYS.length) { pendingFinals.delete(r.key); sendBudget.noteFinalFailed(); return; }
+    const entry = { r, attempt, timer: null };
+    entry.timer = setTimeout(() => {
+        pendingFinals.delete(r.key);
+        // 新的動畫已接手、離開房間、或部位被脫下／換掉：不再補送，不覆蓋別人的變更
+        if (renderers.has(r.key) || globalThis.CurrentScreen !== 'ChatRoom' || !ownsSlot(r)) return;
+        if (animalItemSignature(findSlotItem(r.char, r.slot)) === r.serverSig) return;
+        if (!submitFrame(r)) schedulePendingFinal(r, attempt + 1);
+    }, FINAL_RETRY_DELAYS[attempt]);
+    pendingFinals.set(r.key, entry);
+}
+
 /**
  * 最終狀態同步：本人部位目前的姿勢與最後提交的不同才補送。
  * 繞過動畫自己的閘門（最終 A 優先），但仍走 BC 的發送佇列，所以可能在佇列中等待。
+ * 提交失敗時不會直接丟棄：進入有限次數的重試（見 pendingFinals）。
  * 同步完成後 renderer 已從登記表移除、計時器已清除，所以不會有舊動畫的計時器再覆寫；
- * 重新觸發時新 renderer 會沿用 serverSig，不會誤判伺服器狀態。
+ * 重新觸發時新 renderer 會沿用 serverSig，不會誤判伺服器狀態，並取消尚未完成的補送。
  */
 function finalSync(r) {
-    if (r.char !== globalThis.Player) return;
-    if (animalItemSignature(findSlotItem(r.char, r.slot)) === r.serverSig) return;
-    submitFrame(r);
+    if (r.char !== globalThis.Player) return true;
+    clearPendingFinal(r.key);
+    if (animalItemSignature(findSlotItem(r.char, r.slot)) === r.serverSig) return true;
+    if (submitFrame(r)) return true;
+    schedulePendingFinal(r);
+    return false;
 }
 
 /** 該部位目前仍是這次動畫的物件（沒有被脫下、也沒有換成別的）。 */
@@ -90,10 +126,11 @@ function startRender(char, type, state1, state2, delay, cycles) {
     const key = id + type;
     const previous = renderers.get(key);
     if (previous) clearTimeout(previous.timer);
+    clearPendingFinal(key);
 
     const startItem = findSlotItem(char, slot);
     const r = {
-        char, slot, state1, timer: null,
+        char, slot, state1, key, timer: null,
         names: previous?.names ?? new Set(),
         managedKeys: previous?.managedKeys ?? new Set(),
         // 伺服器端最後已知（提交過）的姿勢簽章；還沒提交過時就是播放前的狀態。
@@ -143,11 +180,15 @@ function startRender(char, type, state1, state2, delay, cycles) {
                     return;
                 }
                 r.waitStart = null;
+                // 提交的環境條件（不在房間等）不成立：BC 會直接忽略，繼續播只會讓本機與伺服器各走各的。
+                // 還沒動過部位就靜靜結束；已經播到一半就定格 A（補送由 finalSync 處理）。
+                if (!canPush(char)) { if (frame > 0) settleOnA(r); finish(); return; }
             }
 
             applyState(char, slot, poseAt(frame, total, state1, state2), r.managedKeys);
             refreshCharacter(char);
-            submitFrame(r);
+            // 提交失敗不能默默算成已播放的一格：受控中止，定格 A 並進入補送
+            if (char === globalThis.Player && !submitFrame(r)) { settleOnA(r); finish(); return; }
 
             frame++;
             r.timer = setTimeout(step, delay);
@@ -227,6 +268,7 @@ function checkTriggers() {
  * 立即停止本人的所有動物動畫，不再送出後續 frame，避免覆蓋對方的變更或造成伺服器 diff 衝突。
  */
 export function stopPlayerAnimations() {
+    clearAllPendingFinals();   // 別人改了外觀：不再補送，避免覆蓋對方的變更
     for (const [key, r] of renderers.entries()) {
         if (r.char === globalThis.Player) {
             clearTimeout(r.timer);
@@ -328,6 +370,7 @@ export function installAnimalAnimations() {
             catch (e) { console.warn('[LCE] animal finalize failed', e); }
         }
         renderers.clear();
+        clearAllPendingFinals();   // 離房後補送沒有意義
         return next(args);
     });
 
