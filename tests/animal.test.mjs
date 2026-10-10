@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { runtime } from './helpers/runtime.mjs';
+import { fakeClock } from './helpers/clock.mjs';
 
 function makeItem(name, extra = {}) {
     return { Asset: { Name: name, Group: { Name: 'HairAccessory2' } }, Color: 'Default', ...extra };
@@ -475,7 +476,8 @@ async function chatTriggerRuntime({ enabled = true, poses = true, extra = {} } =
     const updates = [];
     let input = '';
     const player = { MemberNumber: 1, Appearance: [] };
-    const ctx = await animalRuntime({ player, updates, globals: { ElementValue: (_id, v) => (v === undefined ? input : (input = v)), ...extra } });
+    const clock = fakeClock();
+    const ctx = await animalRuntime({ player, updates, globals: { ...clock.globals, ElementValue: (_id, v) => (v === undefined ? input : (input = v)), ...extra } });
     ctx.rt.settings.setFeature('animalEars', enabled);
     if (poses) {
         ctx.rt.settings.setFeature('animalEarsState1', { Name: 'A' });
@@ -484,8 +486,10 @@ async function chatTriggerRuntime({ enabled = true, poses = true, extra = {} } =
     ctx.mod.installAnimalAnimations();
     let sentOriginal = 0;
     const send = msg => {
+        clock.advance(500);   // 動畫提交之間有全域最小間隔；連續觸發之間要隔開
         input = msg; updates.length = 0; sentOriginal = 0;
         ctx.rt.hooks.get('ChatRoomSendChat')([], () => { sentOriginal++; input = ''; });
+        clock.advance(150);   // 重新觸發的第一格可能被最小間隔延後一下
         return { played: updates.length > 0, sentOriginal };
     };
     return { ...ctx, send };
@@ -568,23 +572,350 @@ test('external sync on a different character does not interrupt Player animation
     assert.equal(timers.length, 1, 'Player animation continues');
 });
 
-test('concurrent animations on Player dynamically scale frame delay to stay within 10 packets/s', async () => {
-    const scheduledDelays = [];
-    const player = { MemberNumber: 1, Appearance: [makeItem('Other'), { Asset: { Name: 'TailOrig', Group: { Name: 'TailStraps' } } }] };
-    const { rt, mod, timers } = await animalRuntime({
-        player,
-        globals: {
-            setTimeout: (fn, delay) => { scheduledDelays.push(delay); timers.push(fn); return fn; }
-        }
-    });
-    rt.settings.setFeature('animalTails', true);
-    rt.settings.updateSettings({
-        animalEarsState1: { Name: 'A' }, animalEarsState2: { Name: 'B' }, animalEarsDelay: 100,
-        animalTailsState1: { Name: 'A' }, animalTailsState2: { Name: 'B' }, animalTailsDelay: 100,
-    });
-    mod.triggerAnimation('Ears');
-    mod.triggerAnimation('Tails');
-    assert.ok(scheduledDelays.some(d => d >= 200), 'delay scaled to protect rate limit when multiple parts run');
+// ───────────────────────── 發送預算閘門（core/send-budget.js） ─────────────────────────
+
+/** 以假時鐘與可控的 BC 發送紀錄建立閘門；bc = null 表示讀不到 BC 內部變數。 */
+async function budgetFixture({ bc = null, ...options } = {}) {
+    const clock = fakeClock();
+    const rt = runtime({ globals: clock.globals });
+    const { createSendBudget } = await rt.load('src/core/send-budget.js');
+    const state = bc ? { times: [], queueLength: 0, ...bc } : null;
+    const budget = createSendBudget({ now: () => clock.globals.performance.now(), readBc: () => state, ...options });
+    return { clock, budget, bc: state };
+}
+
+test('send budget: waits at least minGap between submissions and recovers after it', async () => {
+    const { clock, budget } = await budgetFixture();
+    assert.equal(budget.requestSlot(), true);
+    budget.markSubmitted();
+    assert.equal(budget.requestSlot(), false, 'minGap not elapsed');
+    assert.equal(budget.nextAllowedAt(), 100);
+    clock.advance(100);
+    assert.equal(budget.requestSlot(), true);
 });
 
+test('send budget: fallback mode never exceeds limit - reserve per window', async () => {
+    const { clock, budget } = await budgetFixture();
+    let sent = 0;
+    for (let t = 0; t < 12000; t += 10) {
+        clock.advance(10);
+        if (budget.requestSlot()) { budget.markSubmitted(); sent++; }
+    }
+    // 任一個 1200ms 視窗內最多 10 則（14 - 4）；12 秒內不會超過 10 * 10 + 邊界
+    assert.ok(sent <= 10 * 10 + 1, `sent ${sent}`);
+    assert.ok(sent >= 80, `still makes progress: ${sent}`);
+});
 
+test('send budget: a non-empty BC queue blocks submissions; actual window usage is respected', async () => {
+    const { clock, budget, bc } = await budgetFixture({ bc: {} });
+    bc.queueLength = 3;
+    assert.equal(budget.requestSlot(), false);
+    assert.equal(budget.nextAllowedAt(), 50, 'retry soon while the queue drains');
+    assert.equal(budget.stats.maxQueue, 3);
+    bc.queueLength = 0;
+    clock.advance(1000);
+    bc.times = Array.from({ length: 10 }, (_, i) => 900 + i);   // 視窗內已有 10 則（chat 等）
+    assert.equal(budget.requestSlot(), false, 'window already at limit - reserve');
+    const at = budget.nextAllowedAt();
+    assert.ok(at >= 900 + 1200 && at <= 900 + 1200 + 5, `waits for the oldest to expire, got ${at}`);
+    clock.advance(at - 1000);
+    bc.times = bc.times.filter(x => 1000 + (at - 1000) - x < 1200);
+    assert.equal(budget.requestSlot(), true);
+});
+
+test('send budget: external ServerSend requests make animation yield; own sends do not', async () => {
+    const { clock, budget } = await budgetFixture();
+    budget.withOwnSend(() => budget.noteServerSend());
+    assert.equal(budget.requestSlot(), true, 'own call is not external demand');
+    budget.noteServerSend();
+    assert.equal(budget.requestSlot(), false, 'someone else just asked to send');
+    clock.advance(100);
+    assert.equal(budget.requestSlot(), true);
+});
+
+test('send budget: unreadable BC state falls back to the static budget instead of throwing', async () => {
+    const rt = runtime({ globals: {} });
+    const { createSendBudget } = await rt.load('src/core/send-budget.js');
+    const budget = createSendBudget();               // 預設 readBc：BC 全域不存在
+    assert.equal(budget.requestSlot(), true);
+});
+
+// ───────────────────────── 動物動畫 × 閘門 ─────────────────────────
+async function gatedRuntime({ items = [makeItem('Orig')], bc } = {}) {
+    const clock = fakeClock();
+    const updates = [];
+    const ctl = { fail: false, inRoom: true };   // 測試中可切換：提交丟例外／不在房間
+    const player = { MemberNumber: 1, Appearance: items };
+    const globals = {
+        ...clock.globals,
+        ServerPlayerIsInChatRoom: () => ctl.inRoom,
+        ChatRoomCharacterItemUpdate: (c, g) => {
+            if (ctl.fail) throw new Error('boom');
+            updates.push({ g, name: findName(c, g), t: clock.globals.performance.now() });
+        },
+        // 與 animalRuntime 的版本相同，但物件放進「要求的部位」，多部位測試才不會互相覆蓋
+        InventoryWear: (char, name, slot, color) => {
+            const item = { Asset: { Name: name, Group: { Name: slot } }, Color: color };
+            char.Appearance = char.Appearance.filter(i => i.Asset.Group.Name !== slot).concat(item);
+            return item;
+        },
+    };
+    if (bc) {
+        // 讓 BC 的 const / let 以全域詞法變數的樣子出現
+        globals.ServerSendRateLimitQueue = bc.queue; globals.ServerSendRateLimitTimes = bc.times;
+    }
+    const ctx = await animalRuntime({ player, globals });
+    ctx.rt.settings.updateSettings({
+        animalEarsState1: { Name: 'A' }, animalEarsState2: { Name: 'B' }, animalEarsDelay: 100, animalEarsCycles: 3,
+        animalTailsState1: { Name: 'A' }, animalTailsState2: { Name: 'B' }, animalTailsDelay: 100, animalTailsCycles: 3,
+    });
+    return { ...ctx, clock, updates, player, ctl };
+}
+function findName(c, g) { return c.Appearance.find(i => i.Asset.Group.Name === g)?.Asset.Name; }
+
+test('animation frames are spaced by the global minimum gap, even for several parts at once', async () => {
+    const tail = { Asset: { Name: 'TailOrig', Group: { Name: 'TailStraps' } } };
+    const { mod, clock, updates } = await gatedRuntime({ items: [makeItem('Orig'), tail] });
+    mod.triggerAnimation('Ears');
+    mod.triggerAnimation('Tails');
+    clock.advance(10000);
+    assert.ok(updates.some(u => u.g === 'TailStraps') && updates.some(u => u.g === 'HairAccessory2'), 'both parts eventually play');
+    for (let i = 1; i < updates.length; i++) assert.ok(updates[i].t - updates[i - 1].t >= 100, `gap at ${i}`);
+});
+
+test('a deferred frame does not change the local pose and A/B keep alternating', async () => {
+    const { mod, clock, updates, player } = await gatedRuntime();
+    mod.triggerAnimation('Ears');
+    const names = [];
+    names.push(updates.at(-1).name);
+    for (let i = 0; i < 40 && updates.length < 6; i++) {
+        clock.advance(25);
+        if (updates.length > names.length) names.push(updates.at(-1).name);
+        // 每次延後期間本機姿勢必須等於最後一次提交的姿勢
+        assert.equal(findName(player, 'HairAccessory2'), updates.at(-1).name);
+    }
+    clock.advance(5000);
+    const seq = updates.map(u => u.name);
+    for (let i = 1; i < seq.length; i++) assert.notEqual(seq[i], seq[i - 1], 'strict A/B alternation');
+    assert.equal(seq.at(-1), 'A', 'ends on A');
+});
+
+test('a backed-up BC queue defers frames, then a timeout settles on A and syncs it once', async () => {
+    const queue = [1, 2, 3], times = [];
+    const { mod, clock, updates, player } = await gatedRuntime({ bc: { queue, times } });
+    // 第一格就被擋住：從頭到尾佇列都滿
+    mod.triggerAnimation('Ears');
+    assert.equal(updates.length, 0, 'nothing is applied or sent while blocked');
+    assert.equal(findName(player, 'HairAccessory2'), 'Orig', 'local pose untouched while waiting');
+    clock.advance(2900);
+    assert.equal(updates.length, 0);
+    clock.advance(400);
+    // 超時：定格 A；本機 A 與起始姿勢不同，補送一次最終狀態
+    assert.equal(findName(player, 'HairAccessory2'), 'A');
+    assert.equal(updates.length, 1, 'final A is submitted exactly once, bypassing the gate');
+    assert.equal(updates[0].name, 'A');
+    clock.advance(5000);
+    assert.equal(updates.length, 1, 'the expired animation does not keep playing');
+});
+
+test('final sync follows the last submitted pose, not the starting pose', async () => {
+    // 起始就是 A：舊邏輯 (sig === startSig) 會在動畫中途被取代時略過補送，伺服器卡在 B
+    const { mod, clock, updates, player, rt } = await gatedRuntime({ items: [makeItem('A')] });
+    mod.triggerAnimation('Ears');                     // 第一格 = B，已提交
+    assert.equal(updates.at(-1).name, 'B');
+    mod.installAnimalAnimations();
+    rt.context.CurrentScreen = 'Online';              // 離開畫面 → 定格 A
+    clock.advance(200);
+    assert.equal(findName(player, 'HairAccessory2'), 'A');
+    assert.equal(updates.at(-1).name, 'A', 'server is told about A even though the start pose was A');
+});
+
+test('retriggering supersedes the old animation: no stale timer touches the slot, no extra final sync', async () => {
+    const { mod, clock, updates } = await gatedRuntime();
+    mod.triggerAnimation('Ears');
+    clock.advance(150);
+    mod.triggerAnimation('Ears');                     // 取代舊的
+    clock.advance(10000);
+    const seq = updates.map(u => u.name);
+    for (let i = 1; i < seq.length; i++) assert.notEqual(seq[i], seq[i - 1], 'no duplicate or out-of-order frames');
+    assert.equal(seq.at(-1), 'A');
+});
+
+test('pushFrame reports not-submitted when BC would silently ignore it (not in a chat room)', async () => {
+    const { rt, mod, clock, updates } = await gatedRuntime({});
+    // 不在房間：BC 的 ChatRoomCharacterItemUpdate 會直接 return；LCE 不能把它當成已提交
+    rt.context.ServerPlayerIsInChatRoom = () => false;
+    mod.triggerAnimation('Ears');
+    clock.advance(3000);
+    assert.equal(updates.length, 0, 'nothing is submitted, so no budget is consumed and no packet is claimed');
+    assert.equal((await rt.load('src/core/send-budget.js')).sendBudget.stats.submitted, 0);
+});
+
+// ───────────────────────── PR #33 審查後補強 ─────────────────────────
+const slotName = (player, group) => findName(player, group);
+
+test('not in a room at the start: nothing is applied, nothing is claimed as submitted, and the next trigger works', async () => {
+    const { rt, mod, clock, updates, player, ctl } = await gatedRuntime();
+    ctl.inRoom = false;
+    mod.triggerAnimation('Ears');
+    clock.advance(2000);
+    assert.equal(updates.length, 0);
+    assert.equal(slotName(player, 'HairAccessory2'), 'Orig', 'the slot is untouched');
+    ctl.inRoom = true;
+    mod.triggerAnimation('Ears');                       // 登記表沒有被卡住
+    clock.advance(3000);
+    assert.ok(updates.length >= 4 && updates.at(-1).name === 'A');
+    assert.equal((await rt.load('src/core/send-budget.js')).sendBudget.stats.submitted, updates.length);
+});
+
+test('losing the room mid-animation freezes on A without playing on, and the final A is delivered once the room is back', async () => {
+    const { mod, clock, updates, player, ctl } = await gatedRuntime();
+    mod.triggerAnimation('Ears');
+    assert.equal(updates.length, 1);
+    ctl.inRoom = false;
+    clock.advance(130);
+    assert.equal(slotName(player, 'HairAccessory2'), 'A', 'local rest pose');
+    assert.equal(updates.length, 1, 'no packet while out of the room');
+    ctl.inRoom = true;
+    clock.advance(400);
+    assert.equal(updates.at(-1).name, 'A', 'pending final A is submitted after recovery');
+    const n = updates.length;
+    clock.advance(10000);
+    assert.equal(updates.length, n, 'and nothing else is sent afterwards');
+});
+
+test('a failed frame submission aborts in a controlled way instead of advancing the animation', async () => {
+    const { mod, clock, updates, player, ctl } = await gatedRuntime();
+    mod.triggerAnimation('Ears');                       // B submitted
+    ctl.fail = true;
+    clock.advance(130);                                 // next frame: applies, submit throws
+    assert.equal(slotName(player, 'HairAccessory2'), 'A', 'frozen on A, not left mid-animation');
+    assert.equal(updates.length, 1, 'the failed frame was never counted as submitted');
+    ctl.fail = false;
+    clock.advance(300);
+    assert.equal(updates.length, 2);
+    assert.equal(updates.at(-1).name, 'A', 'final A is retried and delivered');
+    clock.advance(10000);
+    assert.equal(updates.length, 2, 'the aborted animation does not come back to life');
+});
+
+test('final sync gives up after a bounded number of retries and leaves no timers behind', async () => {
+    const { rt, mod, clock, updates, ctl } = await gatedRuntime();
+    mod.triggerAnimation('Ears');
+    ctl.fail = true;
+    clock.advance(20000);
+    ctl.fail = false;
+    clock.advance(20000);
+    assert.equal(updates.length, 1, 'no zombie retries after giving up');
+    assert.equal((await rt.load('src/core/send-budget.js')).sendBudget.stats.finalFailed, 1);
+});
+
+test('a pending final sync never overwrites what the user or a remote player changed meanwhile', async () => {
+    const { mod, clock, updates, player, ctl } = await gatedRuntime();
+    mod.triggerAnimation('Ears');
+    ctl.fail = true;
+    clock.advance(130);                                 // abort → final A pending
+    player.Appearance = [makeItem('UserPick')];         // 使用者換了物件
+    ctl.fail = false;
+    clock.advance(5000);
+    assert.equal(updates.length, 1, 'nothing is sent for a slot we no longer own');
+    // 遠端改外觀時也取消補送
+    const second = await gatedRuntime();
+    second.mod.triggerAnimation('Ears');
+    second.ctl.fail = true;
+    second.clock.advance(130);
+    second.mod.onSyncItem({ Source: 7, Item: { Target: 1, Group: 'HairAccessory2' } });
+    second.ctl.fail = false;
+    second.clock.advance(5000);
+    assert.equal(second.updates.length, 1);
+});
+
+test('retriggering cancels a pending final sync; the new animation is the only sender', async () => {
+    const { mod, clock, updates, ctl } = await gatedRuntime();
+    mod.triggerAnimation('Ears');
+    ctl.fail = true;
+    clock.advance(130);                                 // 中止，補送待處理
+    ctl.fail = false;
+    mod.triggerAnimation('Ears');                       // 取代
+    clock.advance(10000);
+    const seq = updates.map(u => u.name).slice(1);      // 第一筆是舊動畫的 B
+    for (let i = 1; i < seq.length; i++) assert.notEqual(seq[i], seq[i - 1], 'strict alternation, no stray A');
+    assert.equal(seq[0], 'B');
+    assert.equal(seq.at(-1), 'A');
+});
+
+test('per-frame wait timeout: frozen on A, renderer cleaned up, the next trigger plays normally', async () => {
+    const queue = [1], times = [];
+    const { mod, clock, updates, player } = await gatedRuntime({ bc: { queue, times } });
+    mod.triggerAnimation('Ears');
+    clock.advance(3500);
+    assert.equal(slotName(player, 'HairAccessory2'), 'A');
+    const sent = updates.length;
+    queue.length = 0;
+    clock.advance(10000);
+    assert.equal(updates.length, sent, 'expired animation stays dead');
+    mod.triggerAnimation('Ears');
+    clock.advance(3000);
+    assert.ok(updates.length > sent + 2, 'a fresh trigger is not blocked by the expired renderer');
+});
+
+test('whole-animation lifetime: repeated short waits that each stay under the per-frame limit still end in A', async () => {
+    const queue = [], times = [];
+    const { rt, mod, clock, updates, player } = await gatedRuntime({ bc: { queue, times } });
+    // 循環數有 ±1 的隨機抖動；取 3 保證至少 4 格，動畫不會因為只有兩格而在放行的那一格正常結束
+    rt.settings.updateSettings({ animalEarsCycles: 3, animalEarsDelay: 100 });
+    mod.triggerAnimation('Ears');                       // 第一格 B 立即送出
+    assert.equal(updates.length, 1);
+    queue.push(1);
+    clock.advance(2500);                                // 單格等待 < 3 秒
+    queue.length = 0;
+    for (let i = 0; i < 60 && updates.length < 2; i++) clock.advance(10);   // 放行一格
+    assert.ok(updates.length >= 2, 'one more frame got through');
+    queue.push(1);
+    clock.advance(2900);                                // 又等 2.9 秒（仍 < 3 秒）：累計 > 5 秒，超過 maxLife（最多約 4.9 秒）
+    queue.length = 0;
+    clock.advance(3000);
+    assert.equal(slotName(player, 'HairAccessory2'), 'A');
+    assert.equal(updates.at(-1).name, 'A', 'final A delivered');
+    const n = updates.length;
+    clock.advance(20000);
+    assert.equal(updates.length, n, 'nothing is sent after the lifetime expired');
+    assert.ok((await rt.load('src/core/send-budget.js')).sendBudget.stats.timeouts >= 1);
+});
+
+test('three parts competing for a long time: none starves, none times out, rate stays within the window budget', async () => {
+    const tail = { Asset: { Name: 'TailOrig', Group: { Name: 'TailStraps' } } };
+    const wings = { Asset: { Name: 'WingOrig', Group: { Name: 'Wings' } } };
+    const { rt, mod, clock, updates } = await gatedRuntime({ items: [makeItem('Orig'), tail, wings] });
+    rt.settings.updateSettings({
+        animalEarsDelay: 150, animalEarsCycles: 9, animalTailsDelay: 200, animalTailsCycles: 9,
+        animalWingsState1: { Name: 'A' }, animalWingsState2: { Name: 'B' }, animalWingsDelay: 500, animalWingsCycles: 3,
+    });
+    mod.triggerAnimation('Ears'); mod.triggerAnimation('Tails'); mod.triggerAnimation('Wings');
+    clock.advance(90000);
+    const stats = (await rt.load('src/core/send-budget.js')).sendBudget.stats;
+    for (const g of ['HairAccessory2', 'TailStraps', 'Wings']) {
+        const mine = updates.filter(u => u.g === g);
+        assert.ok(mine.length >= 4, `${g} played`);
+        assert.equal(mine.at(-1).name, 'A', `${g} ends on A`);
+    }
+    assert.equal(stats.timeouts, 0, 'nobody gave up');
+    for (const u of updates) {
+        const inWindow = updates.filter(v => v.t >= u.t && v.t < u.t + 1200).length;
+        assert.ok(inWindow <= 10, `at most limit - reserve per 1200ms, got ${inWindow}`);
+    }
+});
+
+test('send budget reports which signal it used, and the fallback estimate is deliberately conservative', async () => {
+    const fb = await budgetFixture();
+    fb.budget.requestSlot();
+    assert.equal(fb.budget.stats.mode, 'fallback');
+    for (let i = 0; i < 10; i++) { fb.budget.noteServerSend(); fb.clock.advance(5); }   // 10 個外部「呼叫」（可能還在排隊）
+    fb.clock.advance(100);
+    assert.equal(fb.budget.requestSlot(), false, 'calls are counted as demand even though they may not have been sent yet');
+    fb.clock.advance(1200);
+    assert.equal(fb.budget.requestSlot(), true, 'and the estimate recovers once they leave the window');
+    const bc = await budgetFixture({ bc: {} });
+    bc.budget.requestSlot();
+    assert.equal(bc.budget.stats.mode, 'bc');
+});

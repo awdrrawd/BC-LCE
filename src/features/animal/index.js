@@ -3,6 +3,7 @@ import { SETTING_CHANGED_EVENT } from '../../core/constants.js';
 import { createSocketBinding } from '../../core/lifecycle.js';
 import { createHook } from '../../core/hooks.js';
 import modApi from '../../modsdk.js';
+import { sendBudget, installSendBudgetHook } from '../../core/send-budget.js';
 import { getAnimTypeFromMsg } from './triggers.js';
 import { SLOTS, ANIMAL_TYPES, fallbackCycles, clampCycles, clampDelay, sanitizeAnimalState, findSlotItem, applyAnimalState as applyState, animalItemSignature, collectManagedKeys, poseAt } from './actions.js';
 
@@ -10,7 +11,12 @@ const hook = createHook('animal-animations');
 
 const HIDDEN_MSG_PREFIX = 'LCEAnimalAnim_';
 
-const renderers = new Map(); // id+type -> { timer, char, slot, names, managedKeys, state1, startSig }
+const renderers = new Map(); // id+type -> { timer, char, slot, names, managedKeys, state1, serverSig, startedAt, waitStart, maxLife }
+
+const MAX_FRAME_WAIT = 3000;   // 單格等不到發送額度的上限；超過就視為過期，定格 A
+const LIFE_SLACK = 3000;       // 整段動畫的存活上限 = total × delay × 2 + 這個緩衝
+const RETRY_MIN = 40;          // 閘門不通過時的最短重試間隔
+const RETRY_JITTER = 40;       // 重試加上隨機抖動，避免多個部位同時醒來
 let autoTriggerInterval = null;
 
 function refreshCharacter(char) {
@@ -18,27 +24,76 @@ function refreshCharacter(char) {
 }
 
 /**
- * 本人播放時每一格都送一個物件更新封包（同 BCAR 的 ChatRoomCharacterItemUpdate）。
+ * 提交一格物件更新（同 BCAR 的 ChatRoomCharacterItemUpdate）。
  * 這樣房間裡所有人（包含沒安裝 LCE、沒開啟對應設定的人）都會透過伺服器看到搖晃，
- * 不需要對方做任何事。回傳是否成功送出。
+ * 不需要對方做任何事。回傳「是否真的提交給 BC 的發送 API」：
+ * BC 在不在房間時會直接 return 而不送任何東西，這種情況回傳 false。
+ * 注意這只代表進了 BC 的發送佇列，不代表伺服器已收到或套用；BC 沒有送達確認。
  */
-function pushFrame(char, slot) {
+function canPush(char) {
     if (char !== globalThis.Player) return false;
     if (typeof ChatRoomCharacterItemUpdate !== 'function' || !globalThis.ChatRoomData) return false;
-    try { ChatRoomCharacterItemUpdate(char, slot); return true; }
-    catch (e) { console.warn('[LCE] animal frame sync failed', e); return false; }
+    if (typeof ServerPlayerIsInChatRoom === 'function' && !ServerPlayerIsInChatRoom()) return false;
+    return true;
+}
+
+function pushFrame(char, slot) {
+    if (!canPush(char)) return false;
+    try {
+        sendBudget.withOwnSend(() => ChatRoomCharacterItemUpdate(char, slot));
+        sendBudget.markSubmitted();
+        return true;
+    } catch (e) { console.warn('[LCE] animal frame sync failed', e); return false; }
+}
+
+/** 提交並記下「最後提交給 BC 的姿勢簽章」，最終同步以它為準，而不是播放前的起始簽章。 */
+function submitFrame(r) {
+    if (!pushFrame(r.char, r.slot)) return false;
+    r.serverSig = animalItemSignature(findSlotItem(r.char, r.slot));
+    return true;
+}
+
+// 最終 A 提交失敗時的受控重試：key -> { r, timer, attempt }。
+// 「待同步」只代表 LCE 還沒把最終姿勢提交給 BC，不代表伺服器已確認收到。
+const pendingFinals = new Map();
+const FINAL_RETRY_DELAYS = [200, 600, 1500];
+
+function clearPendingFinal(key) {
+    const p = pendingFinals.get(key);
+    if (!p) return;
+    clearTimeout(p.timer);
+    pendingFinals.delete(key);
+}
+
+function clearAllPendingFinals() { for (const key of [...pendingFinals.keys()]) clearPendingFinal(key); }
+
+function schedulePendingFinal(r, attempt = 0) {
+    if (attempt >= FINAL_RETRY_DELAYS.length) { pendingFinals.delete(r.key); sendBudget.noteFinalFailed(); return; }
+    const entry = { r, attempt, timer: null };
+    entry.timer = setTimeout(() => {
+        pendingFinals.delete(r.key);
+        // 新的動畫已接手、離開房間、或部位被脫下／換掉：不再補送，不覆蓋別人的變更
+        if (renderers.has(r.key) || globalThis.CurrentScreen !== 'ChatRoom' || !ownsSlot(r)) return;
+        if (animalItemSignature(findSlotItem(r.char, r.slot)) === r.serverSig) return;
+        if (!submitFrame(r)) schedulePendingFinal(r, attempt + 1);
+    }, FINAL_RETRY_DELAYS[attempt]);
+    pendingFinals.set(r.key, entry);
 }
 
 /**
- * 最後一格沒有成功送出時（離開畫面、離開房間、送出失敗）的補送：
- * 本人部位的最終狀態與播放前不同才送，讓伺服器上的狀態停在 A。
+ * 最終狀態同步：本人部位目前的姿勢與最後提交的不同才補送。
+ * 繞過動畫自己的閘門（最終 A 優先），但仍走 BC 的發送佇列，所以可能在佇列中等待。
+ * 提交失敗時不會直接丟棄：進入有限次數的重試（見 pendingFinals）。
+ * 同步完成後 renderer 已從登記表移除、計時器已清除，所以不會有舊動畫的計時器再覆寫；
+ * 重新觸發時新 renderer 會沿用 serverSig，不會誤判伺服器狀態，並取消尚未完成的補送。
  */
-function syncToServer(char, slot, startSig) {
-    if (char !== globalThis.Player) return;
-    if (typeof ChatRoomCharacterItemUpdate !== 'function' || !globalThis.ChatRoomData) return;
-    if (animalItemSignature(findSlotItem(char, slot)) === startSig) return;
-    try { ChatRoomCharacterItemUpdate(char, slot); }
-    catch (e) { console.warn('[LCE] animal sync failed', e); }
+function finalSync(r) {
+    if (r.char !== globalThis.Player) return true;
+    clearPendingFinal(r.key);
+    if (animalItemSignature(findSlotItem(r.char, r.slot)) === r.serverSig) return true;
+    if (submitFrame(r)) return true;
+    schedulePendingFinal(r);
+    return false;
 }
 
 /** 該部位目前仍是這次動畫的物件（沒有被脫下、也沒有換成別的）。 */
@@ -51,7 +106,7 @@ function ownsSlot(r) {
 function settleOnA(r, { refresh = true } = {}) {
     applyState(r.char, r.slot, r.state1, r.managedKeys);
     if (refresh) refreshCharacter(r.char);
-    syncToServer(r.char, r.slot, r.startSig);
+    finalSync(r);
 }
 
 /**
@@ -59,7 +114,7 @@ function settleOnA(r, { refresh = true } = {}) {
  * 發送者與所有接收者都會停在同一個狀態，不會出現「對方看到 X、本人其實是 A」的落差。
  * 播放中若耳朵／尾巴／翅膀被脫下或換成別的物件，立即停止，不覆蓋對方的變更。
  * 同一個角色、同一個部位再次觸發時，永遠以最新一筆為準：清掉舊計時器後從頭重播，
- * 但沿用最初的起始簽章與管理欄位。
+ * 但沿用最近一次提交的姿勢簽章（serverSig）與管理欄位。
  * 本人播放時每格都送物件更新（見 pushFrame），所以別人不需要安裝 LCE 也看得到；
  * 遠端角色的播放只來自舊版 LCE 送出的 Hidden 觸發封包（見 onAnimalMessage），且從不送封包。
  */
@@ -71,14 +126,17 @@ function startRender(char, type, state1, state2, delay, cycles) {
     const key = id + type;
     const previous = renderers.get(key);
     if (previous) clearTimeout(previous.timer);
+    clearPendingFinal(key);
 
     const startItem = findSlotItem(char, slot);
     const r = {
-        char, slot, state1, timer: null,
+        char, slot, state1, key, timer: null,
         names: previous?.names ?? new Set(),
         managedKeys: previous?.managedKeys ?? new Set(),
-        startSig: previous ? previous.startSig : animalItemSignature(startItem),   // 重新觸發時仍以最初狀態為準
-        lastFrameSent: false,
+        // 伺服器端最後已知（提交過）的姿勢簽章；還沒提交過時就是播放前的狀態。
+        // 重新觸發時沿用上一次的值，不會因為舊動畫被取代而誤判。
+        serverSig: previous ? previous.serverSig : animalItemSignature(startItem),
+        startedAt: Date.now(), waitStart: null, maxLife: 0,
     };
     for (const name of [state1.Name, state2.Name, startItem?.Asset.Name]) if (name) r.names.add(name);
     collectManagedKeys(r.managedKeys, startItem, state1, state2);
@@ -86,12 +144,16 @@ function startRender(char, type, state1, state2, delay, cycles) {
 
     const total = cycles * 2;
     let frame = 0;
+    r.maxLife = total * delay * 2 + LIFE_SLACK;
 
     // 例外或結束時一定要清掉登記，否則該角色之後的動畫會永遠卡住
     const finish = () => { if (renderers.get(key) === r) renderers.delete(key); };
 
     function step() {
         try {
+            // 已被重新觸發或中止取代的舊動畫，絕不再動該部位（也不送封包）
+            if (renderers.get(key) !== r) return;
+
             // 角色已離開房間：物件已被丟棄，不需要任何處理
             if (char !== globalThis.Player && !(globalThis.ChatRoomCharacter || []).includes(char)) { finish(); return; }
 
@@ -99,21 +161,37 @@ function startRender(char, type, state1, state2, delay, cycles) {
             if ((frame > 0 || startItem) && !ownsSlot(r)) { finish(); return; }
 
             if (globalThis.CurrentScreen !== 'ChatRoom') { settleOnA(r); finish(); return; }
-            if (frame >= total) { finish(); if (!r.lastFrameSent) syncToServer(char, slot, r.startSig); return; }
+            if (frame >= total) { finish(); finalSync(r); return; }
+
+            // 本人的每一格都要先取得發送額度，才可以套用姿勢並提交；套用之後再擋就太晚了
+            // （本機姿勢先換、伺服器沒收到，兩邊會各走各的）。不通過就整格延後、不推進 frame，
+            // 保持 A/B 交替，動畫自然變慢而不是丟幀。
+            if (char === globalThis.Player) {
+                const now = Date.now();
+                if (now - r.startedAt > r.maxLife) { sendBudget.noteTimeout(); settleOnA(r); finish(); return; }
+                if (!sendBudget.requestSlot()) {
+                    r.waitStart ??= now;
+                    const waited = now - r.waitStart;
+                    sendBudget.noteWait(waited);
+                    if (waited > MAX_FRAME_WAIT) { sendBudget.noteTimeout(); settleOnA(r); finish(); return; }   // 過期的動畫不要繼續播
+                    sendBudget.noteDeferral();
+                    const wait = Math.max(RETRY_MIN, sendBudget.nextAllowedAt() - now);
+                    r.timer = setTimeout(step, wait + Math.floor(Math.random() * RETRY_JITTER));
+                    return;
+                }
+                r.waitStart = null;
+                // 提交的環境條件（不在房間等）不成立：BC 會直接忽略，繼續播只會讓本機與伺服器各走各的。
+                // 還沒動過部位就靜靜結束；已經播到一半就定格 A（補送由 finalSync 處理）。
+                if (!canPush(char)) { if (frame > 0) settleOnA(r); finish(); return; }
+            }
 
             applyState(char, slot, poseAt(frame, total, state1, state2), r.managedKeys);
             refreshCharacter(char);
-            r.lastFrameSent = pushFrame(char, slot);
+            // 提交失敗不能默默算成已播放的一格：受控中止，定格 A 並進入補送
+            if (char === globalThis.Player && !submitFrame(r)) { settleOnA(r); finish(); return; }
 
             frame++;
-            // 當本人有多個部位同時播放時，動態調配間隔以確保整體發送率不超過 10 封包/秒（BC 伺服器上限為 14 封包/1.2 秒）
-            let nextDelay = delay;
-            if (char === globalThis.Player) {
-                let activeCount = 0;
-                for (const item of renderers.values()) if (item.char === globalThis.Player) activeCount++;
-                if (activeCount > 1) nextDelay = Math.max(delay, activeCount * 100);
-            }
-            r.timer = setTimeout(step, nextDelay);
+            r.timer = setTimeout(step, delay);
         } catch (e) {
             console.warn('[LCE] animal animation failed', e);
             finish();
@@ -190,6 +268,7 @@ function checkTriggers() {
  * 立即停止本人的所有動物動畫，不再送出後續 frame，避免覆蓋對方的變更或造成伺服器 diff 衝突。
  */
 export function stopPlayerAnimations() {
+    clearAllPendingFinals();   // 別人改了外觀：不再補送，避免覆蓋對方的變更
     for (const [key, r] of renderers.entries()) {
         if (r.char === globalThis.Player) {
             clearTimeout(r.timer);
@@ -263,6 +342,7 @@ let installed = false;
 export function installAnimalAnimations() {
     if (installed) return;
     installed = true;
+    installSendBudgetHook();
     
     // Receive network anims & yield when others dress or modify the player
     const binding = createSocketBinding({
@@ -290,6 +370,7 @@ export function installAnimalAnimations() {
             catch (e) { console.warn('[LCE] animal finalize failed', e); }
         }
         renderers.clear();
+        clearAllPendingFinals();   // 離房後補送沒有意義
         return next(args);
     });
 
