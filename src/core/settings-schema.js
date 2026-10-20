@@ -172,6 +172,10 @@ export const DEFAULT_FEATURE_SETTINGS = {
         label: 's_whisperTargetReset', desc: 'sd_whisperTargetReset',
         type: 'checkbox', value: true, category: 'chat', disabled: () => false, sideEffects: logChange('whisperTargetReset'),
     },
+    persistentWhisper: {
+        label: 's_persistentWhisper', desc: 'sd_persistentWhisper',
+        type: 'checkbox', value: false, category: 'chat', disabled: () => false, sideEffects: logChange('persistentWhisper'),
+    },
     chatColors: {
         label: 's_chatColors', desc: 'sd_chatColors',
         type: 'checkbox', value: true, category: 'chat', disabled: () => false, sideEffects: logChange('chatColors'),

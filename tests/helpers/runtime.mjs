@@ -117,10 +117,10 @@ export function runtime({ globals = {}, mocks = {}, append = {} } = {}) {
             const chain = chains.get(name) || [];
             const entry = {priority, fn};
             chain.push(entry); chain.sort((a, b) => b.priority - a.priority); chains.set(name, chain);
-            hooks.set(name, (args, original) => {
+            hooks.set(name, function (args, original) {
                 const snapshot = [...chain];
                 const invoke = (i, values) => i < snapshot.length
-                    ? snapshot[i].fn(values, next => invoke(i + 1, next)) : original(values);
+                    ? snapshot[i].fn.call(this, values, next => invoke(i + 1, next)) : original.call(this, values);
                 return invoke(0, args);
             });
             return () => { const index = chain.indexOf(entry); if (index >= 0) chain.splice(index, 1); if (!chain.length) hooks.delete(name); };

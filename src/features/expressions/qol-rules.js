@@ -1,4 +1,4 @@
-import { faces, knownEchoNames, mappings, targetOnly } from './qol-data.js';
+import { faces, knownEchoNames, mappings, targetOnly, senderOnly } from './qol-data.js';
 
 const DEFAULT_EMOTICON_DURATION = 5000;
 const SLASH_DURATION_STEP = 1000;
@@ -166,12 +166,17 @@ export function echoExpressionEvent(data, memberNumber) {
     if (data?.Type !== 'Activity') return null;
     const activity = echoActivity(data);
     if (!activity) return null;
-    const event = mappings.find(([, pattern]) => pattern.test(activity.name))?.[0];
+    const testName = activity.name.replace(/([a-z])([A-Z])/g, '$1 $2');
+    const event = mappings.find(([, pattern]) => pattern.test(testName))?.[0];
     if (!event) return null;
     if (['LongKiss', 'KissOnLips'].includes(event) && activity.group !== 'ItemMouth') return null;
-    const target = data.Dictionary?.some(d => d.TargetCharacter === memberNumber
+    const isTarget = data.Dictionary?.some(d => d.TargetCharacter === memberNumber
         || (d.Tag === 'TargetCharacter' && d.MemberNumber === memberNumber));
-    if (!target && (targetOnly.has(event) || data.Sender !== memberNumber)) return null;
+    const isSender = data.Sender === memberNumber;
+
+    if (targetOnly.has(event)) return isTarget ? event : null;
+    if (senderOnly.has(event)) return isSender ? event : null;
+    if (!isTarget && !isSender) return null;
     return event;
 }
 

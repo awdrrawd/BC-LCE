@@ -15,7 +15,7 @@ export function createHook(label, enabled) {
     const register = (name, priority, callback) => {
         try {
             const cleanup = modApi.hookFunction(name, priority, enabled
-                ? (args, next) => enabled() ? callback(args, next) : next(args)
+                ? function (args, next) { return enabled() ? callback.apply(this, arguments) : next(args); }
                 : callback);
             failures.delete(name);
             allFailures.delete(`${label}:${name}`);
