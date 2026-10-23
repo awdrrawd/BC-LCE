@@ -23,3 +23,32 @@
 
 - `loadScript`（`core/i18n-engine.js`）只允許 `https://awdrrawd.github.io` 與 `https://cdn.jsdelivr.net/gh/awdrrawd/`、`/npm/`。
 - 信息凍結插件仍由 jsDelivr `@main` 載入（使用者明示開啟才載）。建議改釘 commit 並加 SRI，見待辦。
+
+## 2026-10-23 安全檢查
+
+範圍：`src/` 全部 JS、`package-lock.json`、載入器與 CI。LCE 是瀏覽器端 userscript（JavaScript / Vite），專案內沒有 PHP 或 Java，因此近期的 PHP / Java 漏洞不適用；檢查改以此類專案實際的風險面為主。
+
+- 相依套件：`npm audit` 為 0 個已知漏洞（vite、sass、idb、concurrently、acorn）。
+- 危險 API：`src/` 沒有 `eval`、`document.write`、`insertAdjacentHTML`；`innerHTML` 只用來清空或寫入內建的靜態圖示常數；`new Function` 只出現在 `loadScript`（已有來源白名單與測試）。
+- 已修正：`pending-messages.js` 把聊天訊息 `Dictionary` 裡的 `lce_nonce` 直接插進 `querySelector`。Dictionary 由房內任何玩家送出、伺服器原樣轉發，惡意內容（例如 `'],#TextAreaChatLog,[x='`）可讓 LCE 移除頁面上任意元素。現在只接受純數字 nonce，並有回歸測試。
+- 已修正：聊天室連結 `target="_blank"` 補上 `rel="noopener noreferrer"`，避免把 BC 網址當 Referer 洩漏給外部網站。
+- 刻意不處理（維持現狀）：載入器與外掛每次都下載最新版（`import(...?v=<時間>)`、jsDelivr `@main`）。這是專案的更新機制，不列為待修項目。
+- 低風險備註：`i18n-engine.js` 的 `_loadJsonLang` 只拿純資料 JSON，沒有套用 `loadScript` 的來源白名單；它不會執行程式碼，但公開的 `Liko.__Sys_i18n__` 若被其他插件呼叫，可讓頁面對任意網址發出 GET。需要時可比照 `_isAllowedScriptUrl` 收斂。
+
+## BC 掛鉤檢查（`npm run check:bc`）
+
+移植自 AEE 的 `check-bc-compat.mjs`，用來提早發現 Bondage Club 改版造成的掛鉤失效。
+
+```sh
+# 與已提交的基準（scripts/bc-compat-baseline.json）比對
+npm run check:bc -- --bc-dir <BC 原始碼資料夾>
+# 確認過 BC 的變動後更新基準
+npm run check:bc -- --bc-dir <BC 原始碼資料夾> --update
+```
+
+- 以 AST 找出 LCE 所有掛鉤名稱：`hook` / `registerHook` / `patch`、ModSDK 原生 API、`createHook('x')('Name')` 行內形式；`for (const fn of [...]) hook(fn)` 視為「擇一」（例如 `CharacterSetActivePose` / `PoseSetActive`，BC 只會有其中一個）。
+- 三項檢查：函式是否還在、函式本體雜湊（與 ModSDK `originalHash` 相同的 CRC32）是否變動、`patchFunction` 的取代字串是否仍在函式本體（不在時 ModSDK 只會警告，功能卻靜默失效）。
+- 支援 `var X = new class {…}` 這類單例（例如 `ToastManager._process`）。
+- 結束碼：0 = 一致、1 = 有差異、2 = 用法或解析錯誤。
+- `.github/workflows/bc-compat.yml` 每週一檢查 BC 程式碼鏡像，有差異時開（或更新）一個 `bc-compat` issue，不會擋 PR 或部署。
+- 新增或移除 hook 後請重新 `--update` 基準；`tests/bc-compat.test.mjs` 會檢查基準是否涵蓋目前所有 hook。目前基準：BC R133，106 個函式，無缺漏、無失效的 patch。

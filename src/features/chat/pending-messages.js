@@ -56,7 +56,11 @@ export function installPendingMessages() {
         try {
             if (shouldLceHandle('pendingMessages') && args?.length && isChatMessage(args[0]) && Array.isArray(args[0].Dictionary)) {
                 const tag = args[0].Dictionary.find?.(d => d.Tag === 'lce_nonce');
-                if (tag) document.querySelector(`[data-nonce='${tag.Text}']`)?.remove();
+                // Dictionary 由房內任何玩家送出、伺服器原樣轉發，tag.Text 不可信。
+                // 不能直接插進 CSS 選擇器（可用 `'],#id,[x='` 之類內容移除任意 DOM 元素），
+                // 所以只接受我們自己產生的純數字 nonce。
+                const nonceText = String(tag?.Text ?? '');
+                if (/^\d{1,16}$/u.test(nonceText)) document.querySelector(`[data-nonce='${nonceText}']`)?.remove();
             }
         } catch { /* ignore */ }
         return ret;

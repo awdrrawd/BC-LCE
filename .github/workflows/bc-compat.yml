@@ -1,0 +1,82 @@
+name: BC compatibility
+
+# 每週檢查 LCE 掛鉤 / patch 的 Bondage Club 函式，是否仍與已記錄的基準一致。
+# 有差異時只會開（或更新）一個 issue，不會擋 PR，也不會擋部署。
+# 來源預設為下方的程式碼鏡像；可用 repository variables BC_REPO_URL / BC_REF 改用其他來源，
+# 手動執行時也能指定分支或 tag。
+on:
+  schedule:
+    - cron: '0 1 * * 1' # 週一 09:00 Asia/Taipei
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 要檢查的 BC 分支或 tag（空白 = BC_REF 變數，否則用鏡像的 bondageclub 分支）
+        required: false
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: bc-compat
+  cancel-in-progress: false
+
+env:
+  BC_REPO_URL: ${{ vars.BC_REPO_URL || 'https://github.com/awdrrawd/Bondage-College-Mirror.git' }}
+  BC_REF: ${{ inputs.ref || vars.BC_REF || 'bondageclub' }}
+
+jobs:
+  watch:
+    name: Compare hooks with the BC mirror
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Fetch the Bondage Club code mirror
+        run: |
+          git clone --depth 1 --filter=blob:none --sparse --branch "$BC_REF" "$BC_REPO_URL" "$RUNNER_TEMP/bc"
+          git -C "$RUNNER_TEMP/bc" sparse-checkout set --no-cone '/Scripts/' '/Screens/**/*.js'
+      - name: Compare hooked functions with the baseline
+        id: compare
+        run: |
+          set +e
+          node scripts/check-bc-compat.mjs --bc-dir "$RUNNER_TEMP/bc" --report "$RUNNER_TEMP/report.md"
+          code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          if [ -f "$RUNNER_TEMP/report.md" ]; then cat "$RUNNER_TEMP/report.md" >> "$GITHUB_STEP_SUMMARY"; fi
+          # 0 = 一致、1 = 有差異（下一步回報）；其他代碼代表檢查本身壞了，讓 job 失敗。
+          if [ "$code" -gt 1 ]; then exit "$code"; fi
+      - name: Open or refresh the tracking issue
+        if: steps.compare.outputs.code == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          label=bc-compat
+          gh label create "$label" --color BFD4F2 --description "Bondage Club functions hooked by LCE changed or disappeared" --force || true
+          {
+            echo '每週檢查發現 LCE 掛鉤的 Bondage Club 函式與基準不同，或 patchFunction 的取代字串已不在函式本體（該 patch 會靜默失效）。請對照 BC 原始碼確認掛鉤行為，必要時調整程式；確認後在本機執行下列指令更新基準並提交：'
+            echo
+            echo '```sh'
+            echo 'node scripts/check-bc-compat.mjs --bc-dir <BC 原始碼資料夾> --update'
+            echo '```'
+            echo
+            echo '```text'
+            cat "$RUNNER_TEMP/report.md"
+            echo '```'
+            echo
+            echo "此議題每週自動更新：$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          } > "$RUNNER_TEMP/issue.md"
+          number=$(gh issue list --label "$label" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$number" ]; then
+            gh issue edit "$number" --body-file "$RUNNER_TEMP/issue.md"
+          else
+            gh issue create --title "BC 函式掛鉤與基準不同" --label "$label" --body-file "$RUNNER_TEMP/issue.md"
+          fi
