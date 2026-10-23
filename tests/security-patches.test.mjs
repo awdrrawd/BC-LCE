@@ -92,3 +92,38 @@ test('vite config hashes JS chunk file names while keeping the entry name stable
     assert.match(cfg, /entryFileNames:\s*'assets\/\[name\]\.js'/);
     assert.match(cfg, /chunkFileNames:\s*'assets\/\[name\]-\[hash\]\.js'/);
 });
+
+// ───────── pending-messages：房內其他玩家控制的 Dictionary 不能進 CSS 選擇器 ─────────
+test('pending messages only look up purely numeric nonces, never attacker-supplied selector text', async () => {
+    const rt = runtime({ mocks: { 'src/core/wce-compat.js': { shouldLceHandle: () => true } } });
+    const selectors = [];
+    rt.document.querySelector = selector => { selectors.push(selector); return null; };
+    const { installPendingMessages } = await rt.load('src/features/chat/pending-messages.js');
+    installPendingMessages();
+    const chatRoomMessage = rt.hooks.get('ChatRoomMessage');
+    assert.ok(chatRoomMessage, 'ChatRoomMessage hook installed');
+    const message = text => ({ Content: 'hi', Type: 'Chat', Dictionary: [{ Tag: 'lce_nonce', Text: text }] });
+    for (const hostile of [
+        "']", "'],#TextAreaChatLog,[x='", "1'] , body > * , [a='", '1\n2', '', 'abc', '12345678901234567', -1, { toString: () => "'],*,['" },
+    ]) chatRoomMessage.call(null, [message(hostile)], () => undefined);
+    assert.deepEqual(selectors.filter(s => s.includes('data-nonce')), [], 'hostile nonce text must never reach querySelector');
+    chatRoomMessage.call(null, [message('42')], () => undefined);
+    assert.deepEqual(selectors.filter(s => s.includes('data-nonce')), ["[data-nonce='42']"], 'our own numeric nonce still works');
+});
+
+// ───────── chat-augments：聊天室裡的外部連結不可洩漏 Referer ─────────
+test('chat links to external sites open with rel=noopener noreferrer', async () => {
+    const rt = runtime({ mocks: {
+        'src/core/wce-compat.js': { shouldLceHandle: () => true },
+        'src/features/trusted-domains.js': { isTrustedOrigin: () => false, requestOriginTrust: async () => 'cancel', sessionCustomOrigins: new Map() },
+        'src/ui/chat/pipeline.js': { registerChatProcessor() {} },
+    } });
+    const { processChatAugmentsForLine } = await rt.load('src/features/chat/chat-augments.js');
+    const line = rt.document.createElement('div');
+    line.append(rt.document.createTextNode('see https://example.org/page now'));
+    processChatAugmentsForLine(line, () => {}, false);
+    const link = line.querySelector('a');
+    assert.ok(link, 'URL was turned into a link');
+    assert.equal(link.target, '_blank');
+    assert.equal(link.rel, 'noopener noreferrer');
+});

@@ -178,6 +178,7 @@ export function processChatAugmentsForLine(el, scrollToEnd, isChat) {
                 linkNode.href = url.href;
                 linkNode.title = url.href;
                 linkNode.target = '_blank';
+                linkNode.rel = 'noopener noreferrer';   // 不把 BC 網址當 Referer 洩漏給聊天室裡的外部連結
                 linkNode.appendChild(domNode);
             } else if (/^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/u.test(words[i])) {
                 const color = document.createElement('span');

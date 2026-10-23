@@ -1,0 +1,430 @@
+{
+  "gameVersion": "R133",
+  "commit": "0444daadce251b9529e1eaff1ccdde4f3bfea710",
+  "functions": {
+    "ActivityCheckPrerequisites": {
+      "hash": "2E8F2D62",
+      "file": "Scripts/Activity.js"
+    },
+    "ActivityTimerProgress": {
+      "hash": "6CD388A7",
+      "file": "Scripts/Activity.js"
+    },
+    "AppearanceGetPreviewImageColor": {
+      "hash": "504D658B",
+      "file": "Screens/Character/Appearance/Appearance.js"
+    },
+    "AppearanceRun": {
+      "hash": "30EF156C",
+      "file": "Screens/Character/Appearance/Appearance.js"
+    },
+    "AudioPlaySoundForChatMessage": {
+      "hash": "E3C3A9B3",
+      "file": "Scripts/Audio.js"
+    },
+    "CharacterAppearanceBuildCanvas": {
+      "hash": "E555376E",
+      "file": "Screens/Character/Appearance/Appearance.js"
+    },
+    "CharacterAppearanceVisible": {
+      "hash": "AFFE9F3A",
+      "file": "Screens/Character/Appearance/Appearance.js"
+    },
+    "CharacterCompressWardrobe": {
+      "hash": "AD648C41",
+      "file": "Scripts/Character.js"
+    },
+    "CharacterLoadCanvas": {
+      "hash": "72830852",
+      "file": "Scripts/Character.js"
+    },
+    "CharacterLoadOnline": {
+      "hash": "9A8EAE82",
+      "file": "Scripts/Character.js"
+    },
+    "CharacterSetActivePose": {
+      "hash": "566A14D7",
+      "file": "Scripts/Character.js"
+    },
+    "CharacterSetFacialExpression": {
+      "hash": "F0749860",
+      "file": "Scripts/Character.js"
+    },
+    "ChatAdminRoomCustomizationClick": {
+      "hash": "3F2C19FA",
+      "file": "Screens/Online/ChatAdminRoomCustomization/ChatAdminRoomCustomization.js"
+    },
+    "ChatAdminRoomCustomizationProcess": {
+      "hash": "16B92DC3",
+      "file": "Screens/Online/ChatAdminRoomCustomization/ChatAdminRoomCustomization.js"
+    },
+    "ChatAdminRun": {
+      "hash": "FDE001C7",
+      "file": "Screens/Online/ChatAdmin/ChatAdmin.js"
+    },
+    "ChatRoomAppendChat": {
+      "hash": "58B6464F",
+      "file": "Screens/Online/ChatRoom/ChatRoom.js"
+    },
+    "ChatRoomCharacterViewDrawOverlay": {
+      "hash": "3C5AE882",
+      "file": "Screens/Online/ChatRoom/ChatRoomCharacterView.js"
+    },
+    "ChatRoomClick": {
+      "hash": "938A8D24",
+      "file": "Screens/Online/ChatRoom/ChatRoom.js"
+    },
+    "ChatRoomDrawCharacterStatusIcons": {
+      "hash": "07773F61",
+      "file": "Screens/Online/ChatRoom/ChatRoom.js"
+    },
+    "ChatRoomGenerateChatRoomChatMessage": {
+      "hash": "DBFC6D08",
+      "file": "Screens/Online/ChatRoom/ChatRoom.js"
+    },
+    "ChatRoomHideElements": {
+      "hash": "6BA24585",
+      "file": "Screens/Online/ChatRoom/ChatRoom.js"
+    },
+    "ChatRoomInputResize": {
+      "hash": "08B806FD",
+      "file": "Screens/Online/ChatRoom/ChatRoom.js"
+    },
+    "ChatRoomKeyDown": {
+      "hash": "708CB0BE",
+      "file": "Screens/Online/ChatRoom/ChatRoom.js"
+    },
+    "ChatRoomLeave": {
+      "hash": "D43FC635",
+      "file": "Screens/Online/ChatRoom/ChatRoom.js"
+    },
+    "ChatRoomMenuBuild": {
+      "hash": "AE29F6E0",
+      "file": "Screens/Online/ChatRoom/ChatRoom.js"
+    },
+    "ChatRoomMenuButtonVisualState": {
+      "hash": "A4E7DF1B",
+      "file": "Screens/Online/ChatRoom/ChatRoom.js"
+    },
+    "ChatRoomMenuPerformAction": {
+      "hash": "3A2BF26F",
+      "file": "Screens/Online/ChatRoom/ChatRoom.js"
+    },
+    "ChatRoomMessage": {
+      "hash": "42605304",
+      "file": "Screens/Online/ChatRoom/ChatRoom.js"
+    },
+    "ChatRoomMessageDisplay": {
+      "hash": "98AEE505",
+      "file": "Screens/Online/ChatRoom/ChatRoom.js"
+    },
+    "ChatRoomMessageNameClick": {
+      "hash": "29AEF18F",
+      "file": "Screens/Online/ChatRoom/ChatRoom.js"
+    },
+    "ChatRoomMessageSetReply": {
+      "hash": "F380B10E",
+      "file": "Screens/Online/ChatRoom/ChatRoom.js"
+    },
+    "ChatRoomResize": {
+      "hash": "ADF365CE",
+      "file": "Screens/Online/ChatRoom/ChatRoom.js"
+    },
+    "ChatRoomRun": {
+      "hash": "3D4B25E7",
+      "file": "Screens/Online/ChatRoom/ChatRoom.js"
+    },
+    "ChatRoomSafewordRevert": {
+      "hash": "B1A92B72",
+      "file": "Screens/Online/ChatRoom/ChatRoom.js"
+    },
+    "ChatRoomSendChat": {
+      "hash": "B35AD170",
+      "file": "Screens/Online/ChatRoom/ChatRoom.js"
+    },
+    "ChatRoomSendWhisper": {
+      "hash": "94CC5955",
+      "file": "Screens/Online/ChatRoom/ChatRoom.js"
+    },
+    "ChatRoomSync": {
+      "hash": "DAEBD74D",
+      "file": "Screens/Online/ChatRoom/ChatRoom.js"
+    },
+    "ChatRoomSyncItem": {
+      "hash": "AAE07A27",
+      "file": "Screens/Online/ChatRoom/ChatRoom.js"
+    },
+    "ChatRoomSyncMemberJoin": {
+      "hash": "2A9CB40B",
+      "file": "Screens/Online/ChatRoom/ChatRoom.js"
+    },
+    "ChatRoomSyncSingle": {
+      "hash": "E5456B3F",
+      "file": "Screens/Online/ChatRoom/ChatRoom.js"
+    },
+    "ChatSearchLoad": {
+      "hash": "E21D9FE8",
+      "file": "Screens/Online/ChatSearch/ChatSearch.js"
+    },
+    "ChatSearchResultResponse": {
+      "hash": "17CF4DF8",
+      "file": "Screens/Online/ChatSearch/ChatSearch.js"
+    },
+    "ChatSearchRun": {
+      "hash": "16598987",
+      "file": "Screens/Online/ChatSearch/ChatSearch.js"
+    },
+    "ChatSelectLoad": {
+      "hash": "A723DDB1",
+      "file": "Screens/Online/ChatSelect/ChatSelect.js"
+    },
+    "CommandParse": {
+      "hash": "7924A312",
+      "file": "Screens/Online/ChatRoom/Commands.js"
+    },
+    "CommonClick": {
+      "hash": "9B2730D1",
+      "file": "Scripts/Common.js"
+    },
+    "CommonDrawAppearanceBuild": {
+      "hash": "A87EF679",
+      "file": "Scripts/CommonDraw.js"
+    },
+    "DialogClick": {
+      "hash": "8CA79D41",
+      "file": "Scripts/Dialog.js"
+    },
+    "DialogDraw": {
+      "hash": "9CDAC5F2",
+      "file": "Scripts/Dialog.js"
+    },
+    "DialogGetMenuButtonColor": {
+      "hash": "CC35FBBE",
+      "file": "Scripts/Dialog.js"
+    },
+    "DialogLeave": {
+      "hash": "3AB3FCF3",
+      "file": "Scripts/Dialog.js"
+    },
+    "DialogLoad": {
+      "hash": "19C876C7",
+      "file": "Scripts/Dialog.js"
+    },
+    "DrawArousalMeter": {
+      "hash": "BB0755AF",
+      "file": "Scripts/Drawing.js"
+    },
+    "DrawBackNextButton": {
+      "hash": "0A746990",
+      "file": "Scripts/Drawing.js"
+    },
+    "DrawButton": {
+      "hash": "2EB14CB8",
+      "file": "Scripts/Drawing.js"
+    },
+    "DrawButtonHover": {
+      "hash": "4C101215",
+      "file": "Scripts/Drawing.js"
+    },
+    "DrawCharacter": {
+      "hash": "2CD2CA5F",
+      "file": "Scripts/Drawing.js"
+    },
+    "DrawCheckbox": {
+      "hash": "00FD87EB",
+      "file": "Scripts/Drawing.js"
+    },
+    "DrawEmptyRect": {
+      "hash": "307C89AB",
+      "file": "Scripts/Drawing.js"
+    },
+    "DrawImageEx": {
+      "hash": "2D635329",
+      "file": "Scripts/Drawing.js"
+    },
+    "DrawPreviewBox": {
+      "hash": "E1E7A487",
+      "file": "Scripts/Drawing.js"
+    },
+    "DrawProcess": {
+      "hash": "91C96D27",
+      "file": "Scripts/Drawing.js"
+    },
+    "DrawProcessScreenFlash": {
+      "hash": "BD92919C",
+      "file": "Scripts/Drawing.js"
+    },
+    "DrawRect": {
+      "hash": "181E00BC",
+      "file": "Scripts/Drawing.js"
+    },
+    "DrawRoomBackground": {
+      "hash": "C71BA215",
+      "file": "Scripts/Drawing.js"
+    },
+    "DrawText": {
+      "hash": "C1BF0F50",
+      "file": "Scripts/Drawing.js"
+    },
+    "DrawTextFit": {
+      "hash": "F9A1B11E",
+      "file": "Scripts/Drawing.js"
+    },
+    "DrawTextWrap": {
+      "hash": "EEA1D08E",
+      "file": "Scripts/Drawing.js"
+    },
+    "ElementButton.Create": {
+      "hash": "1FBAC224",
+      "file": "Scripts/Element.js"
+    },
+    "ExtendedItemGetButtonColor": {
+      "hash": "DF70E3AA",
+      "file": "Scripts/ExtendedItem.js"
+    },
+    "GLDrawLoad": {
+      "hash": "F1E9D893",
+      "file": "Scripts/GLDraw.js"
+    },
+    "GameRun": {
+      "hash": "BA72C165",
+      "file": "Scripts/Game.js"
+    },
+    "InformationSheetRun": {
+      "hash": "F33DBCA5",
+      "file": "Screens/Character/InformationSheet/InformationSheet.js"
+    },
+    "Layering.Load": {
+      "hash": "AB38BAA6",
+      "file": "Scripts/Layering.js"
+    },
+    "Layering._ResetClickListener": {
+      "hash": "CBE28EA4",
+      "file": "Scripts/Layering.js"
+    },
+    "LoginClick": {
+      "hash": "D4027577",
+      "file": "Screens/Character/Login/Login.js"
+    },
+    "LoginLoad": {
+      "hash": "F8A527CB",
+      "file": "Screens/Character/Login/Login.js"
+    },
+    "LoginResponse": {
+      "hash": "58671CE3",
+      "file": "Screens/Character/Login/Login.js"
+    },
+    "LoginStatusReset": {
+      "hash": "43C3FCD2",
+      "file": "Screens/Character/Login/Login.js"
+    },
+    "LoginUnload": {
+      "hash": "2DB4E11C",
+      "file": "Screens/Character/Login/Login.js"
+    },
+    "NotificationRaise": {
+      "hash": "E8F29646",
+      "file": "Scripts/Notification.js"
+    },
+    "OnlineProfileClick": {
+      "hash": "6ED6EEC6",
+      "file": "Screens/Character/OnlineProfile/OnlineProfile.js"
+    },
+    "OnlineProfileExit": {
+      "hash": "D09E1D3F",
+      "file": "Screens/Character/OnlineProfile/OnlineProfile.js"
+    },
+    "OnlineProfileLoad": {
+      "hash": "3A702CAD",
+      "file": "Screens/Character/OnlineProfile/OnlineProfile.js"
+    },
+    "OnlineProfileRun": {
+      "hash": "8333DDD1",
+      "file": "Screens/Character/OnlineProfile/OnlineProfile.js"
+    },
+    "OnlineProfileUnload": {
+      "hash": "024E7746",
+      "file": "Screens/Character/OnlineProfile/OnlineProfile.js"
+    },
+    "PoseSetActive": {
+      "hash": "D39792FA",
+      "file": "Scripts/Pose.js"
+    },
+    "PreferenceExit": {
+      "hash": "E0D0A274",
+      "file": "Screens/Character/Preference/Preference.js"
+    },
+    "RelogExit": {
+      "hash": "D09A815B",
+      "file": "Screens/Character/Relog/Relog.js"
+    },
+    "RelogRun": {
+      "hash": "0CE4D5D8",
+      "file": "Screens/Character/Relog/Relog.js"
+    },
+    "ServerAccountBeep": {
+      "hash": "D1B35DC1",
+      "file": "Scripts/Server.js"
+    },
+    "ServerAppearanceLoadFromBundle": {
+      "hash": "84F1258E",
+      "file": "Scripts/Server.js"
+    },
+    "ServerDisconnect": {
+      "hash": "9F66A68B",
+      "file": "Scripts/Server.js"
+    },
+    "ServerInit": {
+      "hash": "BFEB94D1",
+      "file": "Scripts/Server.js"
+    },
+    "ServerPlayerAppearanceSync": {
+      "hash": "A014E0B7",
+      "file": "Scripts/Server.js"
+    },
+    "ServerPlayerSync": {
+      "hash": "B0382DFE",
+      "file": "Scripts/Server.js"
+    },
+    "ServerSend": {
+      "hash": "A9337991",
+      "file": "Scripts/Server.js"
+    },
+    "Shop2._AssetElementDraw": {
+      "hash": "4A2D5497",
+      "file": "Screens/Room/Shop2/Shop2.js"
+    },
+    "SpeechTransformProcess": {
+      "hash": "666DDA2F",
+      "file": "Scripts/Speech.js"
+    },
+    "StruggleFlexibilityCheck": {
+      "hash": "727CE05B",
+      "file": "Scripts/Struggle.js"
+    },
+    "StruggleLockPickDraw": {
+      "hash": "C52B06CE",
+      "file": "Scripts/Struggle.js"
+    },
+    "StruggleMinigameHandleExpression": {
+      "hash": "CA21D859",
+      "file": "Scripts/Struggle.js"
+    },
+    "StruggleMinigameStop": {
+      "hash": "F25321CB",
+      "file": "Scripts/Struggle.js"
+    },
+    "TimerInventoryRemove": {
+      "hash": "7A6DB2BF",
+      "file": "Scripts/Timer.js"
+    },
+    "ToastManager._process": {
+      "hash": "428E1B2F",
+      "file": "Scripts/Toasts.js"
+    },
+    "ValidationSanitizeProperties": {
+      "hash": "B40B87BD",
+      "file": "Scripts/Validation.js"
+    }
+  }
+}
