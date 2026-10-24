@@ -56,7 +56,7 @@ test('canvas panels share the unified frame: X200 Y180 W1600, 7 rows per column 
     for (const [category, count] of Object.entries(sections)) for (let section = 0; section < count; section++) {
         const rows = t.layouts(category, section);
         const specialRows = category === 'theme' && section === 0 ? 5 : 7;
-        // Map.groupBy 需要 Node 21+，CI 使用 Node 20，所以手動分欄
+        // Map.groupBy 需要 Node 21+；不依賴這個較新的內建，所以手動分欄
         const byColumn = new Map();
         for (const row of rows) byColumn.set(row.x, [...(byColumn.get(row.x) ?? []), row]);
         for (const [x, column] of byColumn) {

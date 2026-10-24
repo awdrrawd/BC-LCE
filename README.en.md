@@ -214,7 +214,7 @@ LCE.WCECompatibility                // WCE coexistence checks (isLoaded / isFeat
 
 ## Local testing and building
 
-Requires Node.js (CI uses Node 20).
+Requires Node.js 22.12 or newer (CI uses Node 22).
 
 1. Install dependencies:
    ```

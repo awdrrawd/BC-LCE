@@ -204,7 +204,7 @@ LCE.WCECompatibility                // WCE 共存判斷（isLoaded / isFeatureEn
 
 ## 本地測試與建置
 
-需要 Node.js（CI 使用 Node 20）。
+需要 Node.js 22.12 以上（CI 使用 Node 22）。
 
 1. 安裝相依套件：
    ```
