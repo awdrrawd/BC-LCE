@@ -1,0 +1,73 @@
+name: Security checks
+
+# 依賴漏洞、PR 帶進來的新相依、原始碼靜態分析。
+# 與 checks.yml 分開，才不會讓一個外部服務的暫時故障擋住一般 PR 的測試與建置。
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '30 1 * * 1' # 週一 09:30 Asia/Taipei，排在 Dependabot 與 bc-compat 之後
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  audit:
+    name: npm audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+      # --ignore-scripts：安裝時不執行相依套件的 lifecycle script。LCE 的 build/test 不需要它們。
+      - run: npm ci --ignore-scripts
+      # 會隨 bundle 發布的相依（目前只有 idb）有 high 以上漏洞就失敗。
+      - run: npm audit --omit=dev --audit-level=high
+      # 開發工具（vite、sass…）的漏洞只提醒，不擋發布；修補交給 Dependabot。
+      - run: npm audit --audit-level=high
+        continue-on-error: true
+
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # 比對 PR 前後的 lockfile，擋下帶有 high 以上已知漏洞的新增或升級相依。
+      - uses: actions/dependency-review-action@v5
+        with:
+          fail-on-severity: high
+
+  codeql:
+    name: CodeQL (JavaScript)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: javascript-typescript
+          build-mode: none
+      - uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:javascript-typescript

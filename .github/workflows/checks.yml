@@ -12,13 +12,17 @@ jobs:
   test-build:
     name: Test and build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: '22'
           cache: npm
-      - run: npm ci
+      # --ignore-scripts：安裝時不執行相依套件的 lifecycle script（build/test 不需要它們）。
+      - run: npm ci --ignore-scripts
       - run: npm test
       - run: npm run build
       - name: Checkout PR base
@@ -27,10 +31,11 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.base.sha }}
           path: .ci-base
+          persist-credentials: false
       - name: Build PR base
         if: github.event_name == 'pull_request'
         working-directory: .ci-base
-        run: npm ci && npm run build
+        run: npm ci --ignore-scripts && npm run build
       - name: Compare PR bundle size
         if: github.event_name == 'pull_request'
         run: node scripts/bundle-size.mjs dist/assets .ci-base/dist/assets | tee "$RUNNER_TEMP/bundle-size.md"

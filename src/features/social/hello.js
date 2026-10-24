@@ -42,6 +42,24 @@ const BCE_MSG = 'BCEMsg';   // WCE 的頻道 —— 收送都做（送的訊息�
 const LCE_MSG = 'LCEMsg';   // 舊版 LCE 的獨立頻道 —— 只保留「收」以相容尚未更新的使用者
 const MSG_HELLO = 'Hello';
 
+// 招呼訊息的內容來自房裡任何一位玩家，進來的欄位一律先驗證型別與長度再存。
+// 不驗的話，對方送 version: 123 或 capabilities: 5 會讓 character.FBC / BCECapabilities
+// 變成非預期型別，之後所有用 .split / .includes 的地方都得各自防範。
+const MAX_VERSION_LENGTH = 32;
+const MAX_CAPABILITIES = 32;
+const MAX_CAPABILITY_LENGTH = 64;
+
+/** 只接受長度合理的非空字串，其餘一律當作 '0.0'。 */
+export function sanitizeVersion(value, fallback = '0.0') {
+    return typeof value === 'string' && value.length > 0 && value.length <= MAX_VERSION_LENGTH ? value : fallback;
+}
+
+/** 只留長度合理的字串、最多 MAX_CAPABILITIES 個；不是陣列就當作沒有。 */
+export function sanitizeCapabilities(value) {
+    if (!Array.isArray(value)) return [];
+    return value.slice(0, MAX_CAPABILITIES).filter(item => typeof item === 'string' && item.length > 0 && item.length <= MAX_CAPABILITY_LENGTH);
+}
+
 const inChatRoom = () =>
     typeof ServerIsConnected !== 'undefined' && ServerIsConnected
     && typeof ServerPlayerIsInChatRoom === 'function' && ServerPlayerIsInChatRoom();
@@ -100,15 +118,15 @@ function parseMessage(data) {
  * LCE 之間的定向回覆由 processLceHello 處理。
  */
 function processWceHello(sender, msg) {
-    sender.FBC = msg.version ?? '0.0';
-    sender.BCECapabilities = msg.capabilities ?? [];
+    sender.FBC = sanitizeVersion(msg.version);
+    sender.BCECapabilities = sanitizeCapabilities(msg.capabilities);
 }
 
 /** LCE 的人報到。版本優先取 lce 標記（新版），退回 version（相容舊 LCEMsg）。 */
 function processLceHello(sender, msg) {
-    sender.LCE = (typeof msg.lce === 'string' ? msg.lce : null) ?? msg.version ?? '0.0';
+    sender.LCE = sanitizeVersion((typeof msg.lce === 'string' ? msg.lce : null) ?? msg.version);
     // 能力清單放進 BCECapabilities（與 WCE 同欄位）：圖層隱藏的設定框靠它判斷該不該顯示。
-    sender.BCECapabilities = Array.isArray(msg.capabilities) ? msg.capabilities : [];
+    sender.BCECapabilities = sanitizeCapabilities(msg.capabilities);
     // 對方要求回報時只回他一個人，且不再要求回覆 —— 否則兩邊會無限互相打招呼。
     // 排除自己：伺服器會把自己送出的 ChatRoomChat 原封不動回傳一份，
     // 不擋的話每次廣播都會多送一則「回覆給自己」的訊息。

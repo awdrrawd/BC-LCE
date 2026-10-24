@@ -52,3 +52,10 @@ npm run check:bc -- --bc-dir <BC 原始碼資料夾> --update
 - 結束碼：0 = 一致、1 = 有差異、2 = 用法或解析錯誤。
 - `.github/workflows/bc-compat.yml` 每週一檢查 BC 程式碼鏡像，有差異時開（或更新）一個 `bc-compat` issue，不會擋 PR 或部署。
 - 新增或移除 hook 後請重新 `--update` 基準；`tests/bc-compat.test.mjs` 會檢查基準是否涵蓋目前所有 hook。目前基準：BC R133，106 個函式，無缺漏、無失效的 patch。
+
+## 2026-10-23 追加
+
+- **打招呼欄位驗證**（`src/features/social/hello.js`）：房裡任何玩家都能送 Hidden 的 BCEMsg / LCEMsg。`version` 與 `lce` 現在只接受長度 ≤ 32 的非空字串（否則視為 `0.0`），`capabilities` 只接受字串陣列（最多 32 項、每項 ≤ 64 字）。以前 WCE 分支直接存原值，對方送 `version: 123` 會讓 `character.FBC` 變成數字。測試：`tests/hello-validation.test.mjs`。
+- **Node 22**：CI 全面改用 Node 22，`package.json` 的 `engines` 為 `>=22.12.0`（Vite 8 本身要求 `^20.19 || >=22.12`）。Node 20 官方維護已結束。
+- **workflow 加固**：所有 workflow 的 checkout 都不保留 token（`persist-credentials: false`），`npm ci` 改為 `--ignore-scripts`，並加上 `timeout-minutes`；Pages 部署改為 `cancel-in-progress: false`，避免新推送中途取消部署。
+- **刻意沒改**：`i18n-engine.js` 的 `_loadJsonLang` 仍沒有來源白名單。它只抓純資料 JSON、不執行程式碼；而這個 API 由其他 Liko 外掛共用，收緊白名單可能讓它們放在其他網域的翻譯檔讀不到，需要先確認各外掛的用法。信息凍結插件仍由 jsDelivr `@main` 載入（使用者主動開啟才載入），要釘 commit 並加 SRI 時需連同上游倉庫的發版流程一起改。
