@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import {existsSync, readFileSync} from 'node:fs';
 
 const html = readFileSync(new URL('../docs/lce-architecture.html', import.meta.url), 'utf8');
-const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+const scriptMatch = html.match(/<script\b[^>]*>([\s\S]*?)<\/script\b[^>]*>/i);
+assert.ok(scriptMatch, 'architecture page should contain an inline <script> block');
+const script = scriptMatch[1];
 
 // 互動式架構圖會被 vite.config.js 輸出到 dist/ 並經 Pages 發布，
 // 這幾項檢查避免它悄悄過時、失效或重新引入 DOM XSS（CodeQL js/xss-through-dom）。
