@@ -61,7 +61,7 @@ LCE 本體以 **AGPL-3.0** 授權（見 [LICENSE](./LICENSE)）。
 ## BC_ChatScrollFreeze（信息凍結）
 - 作者：awdrrawd（`liko-Plugin-Repository`）。
 - **並非內嵌**：這支不打包進 LCE，而是在使用者於設定開啟「信息凍結」時，才從 jsDelivr
-  動態載入其 standalone 版（`src/features/chat-scroll-freeze.js`）。維持單一正本、避免兩邊維護。
+  動態載入其 standalone 版（`src/features/chat/chat-scroll-freeze.js`）。維持單一正本、避免兩邊維護。
 - **待辦**：上游檔案目前無授權標頭，應請作者補上明確授權；本專案僅在執行期載入、未再散布其原始碼。
 
 ## bcModSdk

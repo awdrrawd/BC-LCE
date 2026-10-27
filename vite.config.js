@@ -35,9 +35,25 @@ function emitLoaderPlugin() {
   };
 }
 
+// 互動式架構圖放在 docs/（GitHub 上只會顯示原始碼，無法直接開啟），建置時原樣輸出到
+// dist/lce-architecture.html，經 Pages 提供：https://awdrrawd.github.io/BC-LCE/lce-architecture.html
+// 頁面是自給自足的單一檔案（不引用其他資源），所以不需要處理相對路徑。
+function emitArchitecturePagePlugin() {
+  return {
+    name: 'emit-architecture-page',
+    generateBundle() {
+      this.emitFile({
+        type: 'asset',
+        fileName: 'lce-architecture.html',
+        source: readFileSync(new URL('./docs/lce-architecture.html', import.meta.url)),
+      });
+    },
+  };
+}
+
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [privateNetworkAccessPlugin(), emitLoaderPlugin()],
+  plugins: [privateNetworkAccessPlugin(), emitLoaderPlugin(), emitArchitecturePagePlugin()],
   base: './',
   // JS chunk 維持相對路徑：localhost/main.js 載 localhost/app.js，
   // jsDelivr/main.js 載 jsDelivr/app.js。只有大型圖片／影片改由 Pages 提供。

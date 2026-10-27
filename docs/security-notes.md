@@ -59,3 +59,9 @@ npm run check:bc -- --bc-dir <BC 原始碼資料夾> --update
 - **Node 22**：CI 全面改用 Node 22，`package.json` 的 `engines` 為 `>=22.12.0`（Vite 8 本身要求 `^20.19 || >=22.12`）。Node 20 官方維護已結束。
 - **workflow 加固**：所有 workflow 的 checkout 都不保留 token（`persist-credentials: false`），`npm ci` 改為 `--ignore-scripts`，並加上 `timeout-minutes`；Pages 部署改為 `cancel-in-progress: false`，避免新推送中途取消部署。
 - **刻意沒改**：`i18n-engine.js` 的 `_loadJsonLang` 仍沒有來源白名單。它只抓純資料 JSON、不執行程式碼；而這個 API 由其他 Liko 外掛共用，收緊白名單可能讓它們放在其他網域的翻譯檔讀不到，需要先確認各外掛的用法。信息凍結插件仍由 jsDelivr `@main` 載入（使用者主動開啟才載入），要釘 commit 並加 SRI 時需連同上游倉庫的發版流程一起改。
+
+## 2026-10-27 追加
+
+- **CodeQL `js/xss-through-dom`（`docs/lce-architecture.html`）**：互動架構圖的 `show()` 以 `innerHTML` 寫入從按鈕 `textContent`／`dataset` 讀回的文字，等於把 DOM 文字當 HTML 重新解析。資料是頁面內寫死的 `D`，實際上沒有外部輸入，但仍違反安全寫法。現在 `list()`／`draw()`／`show()` 全部改用 `createElement`、`textContent`、`dataset` 與 `replaceChildren()`，頁面內已沒有 `innerHTML`。`tests/architecture-page.test.mjs` 檢查這點，避免日後退回。
+- 這個頁面現在隨 Pages 一起發布（`vite.config.js` 的 `emit-architecture-page`），所以也順手把頁尾指向 `.md` 的相對連結改成 GitHub 絕對網址。
+- `src/` 的結論不變：`innerHTML` 仍只用來清空或寫入內建的靜態圖示常數。

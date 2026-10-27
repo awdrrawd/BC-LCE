@@ -1,15 +1,19 @@
 # 自動檢查
 
 - PR：`LCE checks` → `Test and build`，執行測試、建置及 JS／gzip 大小報告，不部署、不需額外 secrets。
-- main：保留既有 GitHub Pages 測試、建置與部署流程。
+- main：`Deploy GitHub Pages`（`static.yml`）先測試、建置，再把 `dist/` 部署到 GitHub Pages。`dist/` 包含 `loader.user.js`、`assets/` 與互動式架構圖 [`lce-architecture.html`](https://awdrrawd.github.io/BC-LCE/lce-architecture.html)。
 - 手動：Actions 頁可執行 `LCE checks`。
+- 每週（週一，台北時間）：
+  - `Dependabot`（09:00）：npm 與 GitHub Actions 相依更新，小版本與修補版合併成一個 PR。
+  - `BC compatibility`（09:00，`bc-compat.yml`）：比對 BC 程式碼鏡像與 `scripts/bc-compat-baseline.json`，有差異只開（或更新）一個 `bc-compat` issue，不擋 PR 或部署；說明見 [安全說明](security-notes.md)。
+  - `Security checks`（09:30，`security.yml`）：`npm audit`、CodeQL，PR 另有 dependency review；PR 與 push 到 `main` 時也會執行。CodeQL 警報在 Security 分頁查看。
 
 ## 管理者設定
 
 1. 提交並推送 workflow；本地建立檔案不會啟用遠端檢查。
-2. 確认 repository 允許 GitHub Actions，且 `assets` 分支可讀。
+2. 確認 repository 允許 GitHub Actions，且 `assets` 分支可讀。
 3. 執行一次檢查後，將 `Test and build` 加入 main 的 required status checks，要求 PR 合併前通過。
-4. 保留現有 Pages 的 GitHub Actions 部署來源與 environment 權限。
+4. 保留現有 Pages 的 GitHub Actions 部署來源（Settings → Pages → Source 選 GitHub Actions）與 environment 權限。
 
 PR 會另行建置 base SHA，比較全部 JS 的原始與 gzip 大小，顯示增減 bytes 與百分比；手動執行只有絕對值。大小變化僅報告，不阻擋合併。base 建置失敗仍會讓檢查失敗，避免顯示不完整比較。
 
