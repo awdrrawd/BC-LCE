@@ -94,7 +94,7 @@
 
 ### 衣櫃
 
-BC R132 的原生衣櫃已內建角色預覽與覆蓋確認，LCE 不再另外接管這兩項（原有的「角色預覽衣櫃」與「覆蓋確認」已移除）。目前保留的是拓展衣櫃 96 格、圖層隱藏（BETA）與直接獲得衣櫃。額外的衣櫃格存在 WCE 相同的 `FBCWardrobe` 鍵，裝過 WCE 的帳號可直接讀取。
+BC R132 起的原生衣櫃已內建角色預覽與覆蓋確認，LCE 不再另外接管這兩項（原有的「角色預覽衣櫃」與「覆蓋確認」已移除）。目前保留的是拓展衣櫃 96 格、圖層隱藏（BETA）與直接獲得衣櫃。額外的衣櫃格存在 WCE 相同的 `FBCWardrobe` 鍵，裝過 WCE 的帳號可直接讀取。
 
 ## 語言
 
@@ -102,15 +102,19 @@ BC R132 的原生衣櫃已內建角色預覽與覆蓋確認，LCE 不再另外�
 
 ## 文件
 
-- [LCE 架構與擴充指南](docs/architecture.md) 與 [互動式功能分支圖](docs/lce-architecture.html)
+- [LCE 架構與擴充指南](docs/architecture.md) 與 [互動式功能分支圖](https://awdrrawd.github.io/BC-LCE/lce-architecture.html)（GitHub Pages 線上版；原始檔 [`docs/lce-architecture.html`](docs/lce-architecture.html)）
 - [ExtensionSettings 與 AccountUpdate 處理說明](docs/extension-settings-account-update.md)
 - [自動重連與 ChatLog 保護](docs/automatic-reconnect.md)
 - [共用個資資料庫](docs/profile-database.md)
 - [直式版面 API](docs/vertical-api.md)
 - [動物動畫文字觸發詞（七種語言）](docs/animal-trigger-words.md)
 - [WCE／LCE 共存檢查](docs/wce-compatibility.md)
-- [R132Beta3 相容性修補](docs/r132-compatibility.md)
+- [R132Beta3 相容性修補](docs/r132-compatibility.md)（歷史紀錄）
 - [自動檢查（CI）](docs/automation.md)
+- [安全說明](docs/security-notes.md)（含 `npm run check:bc` 的 BC 掛鉤相容檢查）
+- [個資分享（WPS）協定與限制](docs/profile-share.md)
+- [聊天按鈕與測試整理](docs/chat-buttons-test-audit.md)
+- [檔案搬移對照](docs/file-moves.json)（舊路徑 → 新路徑，供對照審查紀錄）
 - [Responsive／LCE 表情與口型分工](docs/responsive-ownership-review.md)
 - [未完工作與驗收](docs/unfinished-work.md)
 - 審查紀錄：[2026-09-05 程式結構審查](docs/code-review-2026-09-05.md)、[2026-10-06 程式健檢](docs/code-audit-2026-10-06.md)（記錄當時的狀況，不代表現況）
@@ -140,8 +144,9 @@ src/
 
 Translation/         七語 JSON 字表（TW / CN / EN / DE / FR / RU / UA）
 tests/               Node VM modules 測試
-scripts/             素材驗證與 bundle 大小報告
-docs/                設計說明與維護紀錄
+scripts/             素材驗證、bundle 大小報告與 BC 掛鉤相容檢查（check-bc-compat.mjs）
+docs/                設計說明與維護紀錄；互動式架構圖 lce-architecture.html 建置時一併輸出到 dist/，由 Pages 發布
+.github/             CI 工作流程（測試與建置、Pages 部署、BC 相容性週檢、安全檢查）與 Dependabot
 loader.user.js       正式版載入器（建置時由 vite.config.js 輸出到 dist/，經 GitHub Pages 提供；讀自動生成的 assets/main.js）
 loader.local.user.js 本地開發載入器（讀 http://localhost:5174/assets/main.js）
 ```
@@ -200,6 +205,13 @@ LCE.debugExpressions(true) / getExpressionQueue() / getExpressionHookOrder()
 LCE.getHookFailures()               // 目前沒掛上的 BC 掛鉤（BC 改版時用來診斷）
 LCE.debugRelogSnapshot()            // 重連快照診斷
 LCE.WCECompatibility                // WCE 共存判斷（isLoaded / isFeatureEnabled / shouldLceHandle）
+LCE.isExpressionEngineStarted() / getFaceComponents()  // 表情引擎是否啟動／各部位是否在引擎管轄內
+
+// 維護與其他（供其他插件或 console 使用，不保證穩定）
+LCE.refreshI18n()                   // 重新套用語言
+LCE.reloadSettings() / refreshAccounts() / captureProfile() / teardownLoginUI()  // 登入頁相關
+LCE.profileDatabase                 // 共用個資資料庫的名稱與版本（見 docs/profile-database.md）
+LCE.TrustedImageOrigins.normalize(urlOrOrigin)  // 正規化為 https://example.com
 ```
 
 ## 本地測試與建置
@@ -216,6 +228,8 @@ LCE.WCECompatibility                // WCE 共存判斷（isLoaded / isFeatureEn
    ```
    npm test
    ```
+
+   需要與 Bondage Club 原始碼比對掛鉤時，另可執行 `npm run check:bc -- --bc-dir <BC 原始碼資料夾>`，說明見 [安全說明](docs/security-notes.md)。
 
 3. 啟動本地開發伺服器（會 build 一次並開始 watch + preview）：
    ```
@@ -237,7 +251,8 @@ npm run build
 建置產物（`dist/`）**不進 Git**，避免 build 產物在分支合併時產生衝突，一律由 CI 生成：
 
 - **Pull request**：`LCE checks` 會執行 `npm test`、`npm run build`，並與 PR 的 base 分支比較 bundle 大小，不部署。
-- **合併到 `main`**：`Deploy GitHub Pages` 會執行測試與建置，再把 `dist/` 部署到 GitHub Pages（Pages 來源需設為 GitHub Actions）。
+- **合併到 `main`**：`Deploy GitHub Pages` 會執行測試與建置，再把 `dist/` 部署到 GitHub Pages（Pages 來源需設為 GitHub Actions）。`dist/` 內除了 `loader.user.js` 與 `assets/`，也包含互動式架構圖：https://awdrrawd.github.io/BC-LCE/lce-architecture.html
+- **每週排程**：`BC compatibility` 比對 BC 程式碼鏡像與掛鉤基準，有差異時開 issue；`Security checks` 執行 `npm audit` 與 CodeQL（PR 另有 dependency review）；Dependabot 更新相依套件。這些都不會擋 PR 或部署。細節見 [自動檢查（CI）](docs/automation.md)。
 
 `loader.user.js` 直接從 Pages 載入 `assets/main.js`。loader 採獨立版本，只有載入機制變更時才手動更新；build / dev 不會跟隨 `package.json` 改寫 loader 的 `@version`。
 

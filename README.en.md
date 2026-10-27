@@ -94,7 +94,7 @@ Anti-garble keeps the existing WCE-compatible logic. "See the room with eyes clo
 
 ### Wardrobe
 
-BC R132's native wardrobe already includes character preview and overwrite confirmation, so LCE no longer takes those over (the former "character-preview wardrobe" and "overwrite confirmation" features were removed). What remains is the 96-slot extended wardrobe, configurable layer hiding (BETA) and grant wardrobe. The extra wardrobe slots are stored under the same `FBCWardrobe` key as WCE, so accounts that used WCE can read them directly.
+BC R132's and later native wardrobe already includes character preview and overwrite confirmation, so LCE no longer takes those over (the former "character-preview wardrobe" and "overwrite confirmation" features were removed). What remains is the 96-slot extended wardrobe, configurable layer hiding (BETA) and grant wardrobe. The extra wardrobe slots are stored under the same `FBCWardrobe` key as WCE, so accounts that used WCE can read them directly.
 
 ## Languages
 
@@ -104,15 +104,19 @@ The language follows BC's language setting (`TranslationLanguage`) and supports 
 
 Most documents are written in Traditional Chinese.
 
-- [LCE architecture and extension guide](docs/architecture.md) and the [interactive feature map](docs/lce-architecture.html)
+- [LCE architecture and extension guide](docs/architecture.md) and the [interactive feature map](https://awdrrawd.github.io/BC-LCE/lce-architecture.html) (live on GitHub Pages; source: [`docs/lce-architecture.html`](docs/lce-architecture.html))
 - [ExtensionSettings and AccountUpdate handling](docs/extension-settings-account-update.md)
 - [Automatic reconnect and ChatLog protection](docs/automatic-reconnect.md)
 - [Shared profile database](docs/profile-database.md)
 - [Vertical layout API](docs/vertical-api.md) (English)
 - [Animal animation trigger words (7 languages)](docs/animal-trigger-words.md)
 - [WCE / LCE coexistence check](docs/wce-compatibility.md)
-- [R132Beta3 compatibility fixes](docs/r132-compatibility.md)
+- [R132Beta3 compatibility fixes](docs/r132-compatibility.md) (historical record)
 - [Automated checks (CI)](docs/automation.md)
+- [Security notes](docs/security-notes.md) (including the `npm run check:bc` BC hook compatibility check)
+- [Profile sharing (WPS) protocol and limits](docs/profile-share.md)
+- [Chat buttons and test cleanup](docs/chat-buttons-test-audit.md)
+- [File move map](docs/file-moves.json) (old path → new path, for reading the review records)
 - [Responsive / LCE expression and mouth-shape ownership](docs/responsive-ownership-review.md)
 - [Unfinished work and acceptance](docs/unfinished-work.md)
 - Review records: [2026-09-05 code structure review](docs/code-review-2026-09-05.md) and [2026-10-06 code audit](docs/code-audit-2026-10-06.md) (they record the state at the time and do not describe the current state)
@@ -149,8 +153,9 @@ src/
 
 Translation/         Seven-language JSON string tables (TW / CN / EN / DE / FR / RU / UA)
 tests/               Node VM modules tests
-scripts/             Asset verification and bundle-size report
-docs/                Design notes and maintenance records
+scripts/             Asset verification, bundle-size report and BC hook compatibility check (check-bc-compat.mjs)
+docs/                Design notes and maintenance records; the interactive map lce-architecture.html is emitted into dist/ at build time and published by Pages
+.github/             CI workflows (test and build, Pages deploy, weekly BC compatibility check, security checks) and Dependabot
 loader.user.js       Production loader (emitted into dist/ by vite.config.js at build time and served by GitHub Pages; loads the generated assets/main.js)
 loader.local.user.js Local development loader (loads http://localhost:5174/assets/main.js)
 ```
@@ -210,6 +215,13 @@ LCE.debugExpressions(true) / getExpressionQueue() / getExpressionHookOrder()
 LCE.getHookFailures()               // BC hooks that are currently not attached (diagnoses BC updates)
 LCE.debugRelogSnapshot()            // reconnect snapshot diagnostics
 LCE.WCECompatibility                // WCE coexistence checks (isLoaded / isFeatureEnabled / shouldLceHandle)
+LCE.isExpressionEngineStarted() / getFaceComponents()  // whether the expression engine runs / which face parts it manages
+
+// Maintenance and other helpers (for other plugins or the console; not guaranteed stable)
+LCE.refreshI18n()                   // re-apply the language
+LCE.reloadSettings() / refreshAccounts() / captureProfile() / teardownLoginUI()  // login-page related
+LCE.profileDatabase                 // name and version of the shared profile database (see docs/profile-database.md)
+LCE.TrustedImageOrigins.normalize(urlOrOrigin)  // normalises to https://example.com
 ```
 
 ## Local testing and building
@@ -226,6 +238,8 @@ Requires Node.js 22.12 or newer (CI uses Node 22).
    ```
    npm test
    ```
+
+   To compare the hooks against the Bondage Club source, you can also run `npm run check:bc -- --bc-dir <BC source folder>`; see [Security notes](docs/security-notes.md).
 
 3. Start the local development server (builds once, then watches and previews):
    ```
@@ -247,7 +261,8 @@ npm run build
 Build output (`dist/`) is **not committed to Git**, to avoid conflicts when branches are merged. It is always generated by CI:
 
 - **Pull requests:** `LCE checks` runs `npm test` and `npm run build` and compares the bundle size with the PR's base branch. It does not deploy.
-- **Merging into `main`:** `Deploy GitHub Pages` runs the tests and the build, then deploys `dist/` to GitHub Pages (the Pages source must be set to GitHub Actions).
+- **Merging into `main`:** `Deploy GitHub Pages` runs the tests and the build, then deploys `dist/` to GitHub Pages (the Pages source must be set to GitHub Actions). Besides `loader.user.js` and `assets/`, `dist/` contains the interactive architecture map: https://awdrrawd.github.io/BC-LCE/lce-architecture.html
+- **Weekly schedule:** `BC compatibility` compares the BC code mirror with the hook baseline and opens an issue on differences; `Security checks` runs `npm audit` and CodeQL (plus dependency review on PRs); Dependabot updates dependencies. None of these block PRs or deployment. See [Automated checks (CI)](docs/automation.md).
 
 `loader.user.js` loads `assets/main.js` straight from Pages. The loader is versioned independently and updated by hand only when the loading mechanism changes; build / dev never rewrite the loader's `@version` from `package.json`.
 

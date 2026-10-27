@@ -1,6 +1,8 @@
 # LCE 架構與功能分支圖
 
-互動式架構圖：[開啟 LCE 功能分支圖](./lce-architecture.html)
+互動式架構圖：[開啟 LCE 功能分支圖（GitHub Pages 線上版）](https://awdrrawd.github.io/BC-LCE/lce-architecture.html)，原始檔為 [`lce-architecture.html`](./lce-architecture.html)。
+
+GitHub 的檔案頁只會顯示 HTML 原始碼，請用線上版開啟。線上版由 `vite.config.js` 的 `emit-architecture-page` 在建置時輸出到 `dist/`，合併到 `main` 後由 `Deploy GitHub Pages` 部署；本機預覽可執行 `npm run build && npm run preview`，再開 `http://localhost:5174/lce-architecture.html`。
 
 左側選擇功能，右側顯示「功能 → 模組責任 → 實際檔案」。點擊節點可查看完整路徑。
 
@@ -9,6 +11,7 @@
 ```text
 src/
 ├─ app.js / main.js       組裝與載入入口
+├─ modsdk.js             內建 bcModSdk
 ├─ assets/               自有圖示
 ├─ commands/             指令入口
 ├─ core/                 設定、相容、API 與基礎工具
@@ -54,7 +57,7 @@ src/
 
 ## 驗證
 
-執行 `npm test`（目前 208 項）與 `npm run build`。測試以 Node VM 載入實際模組，模擬 BC、DOM、socket 和 IndexedDB，涵蓋設定交易、非同步競態、信任來源、hook 還原與卸載；不能取代實際 BC 和其他插件並存時的介面驗收。Pages 工作流程會先測試再建置。
+執行 `npm test`（2026-10-27 為 229 項）與 `npm run build`。測試以 Node VM 載入實際模組，模擬 BC、DOM、socket 和 IndexedDB，涵蓋設定交易、非同步競態、信任來源、hook 還原與卸載；不能取代實際 BC 和其他插件並存時的介面驗收。Pages 工作流程會先測試再建置；`tests/architecture-page.test.mjs` 另外檢查互動架構圖引用的檔案都存在、頁面不使用 `innerHTML`、沒有會在 Pages 上 404 的相對連結，且建置會輸出該頁面。
 
 詳細問題與實施狀態見 [程式碼檢視報告](./code-review-2026-09-05.md)。互動圖已更新為目前的責任分組與主要事件流程，不代表完整 import 關係。未完工作以 [未完工作與驗收](./unfinished-work.md) 為準。
 
@@ -66,3 +69,10 @@ src/
 - `scripts/verify-assets.mjs` 可在沒有 `.git` 的 Source ZIP 中安全結束；完整 Git clone 仍會照 `assets.lock.json` 驗證／補齊素材。
 - 移除沒有任何執行時 import 的 `src/core/storage.js`，避免保留已分拆到 `src/storage/` 的死碼。
 - 測試新增聊天容量清除邊界案例；所有 Node VM 測試需保持全數通過。
+
+## 2026-10-27 文件核對
+
+- 測試數量更新為 229 項（原寫 208 項）；新增 `tests/architecture-page.test.mjs`。
+- 互動架構圖補上遺漏的 `core/send-budget.js`（動物動畫與個資分享共用的發送預算）與 `features/social/profile-share.js`，頁尾連結改為 GitHub 絕對網址（相對的 `.md` 連結在 Pages 上不存在）。
+- 修正 CodeQL `js/xss-through-dom` 警報：架構圖的 `draw()`／`show()` 改以 DOM API 建立節點，不再把從 DOM 讀回的文字當 HTML 重新解析（見 [安全說明](./security-notes.md)）。
+- 互動架構圖納入 Pages 發布。
