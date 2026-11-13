@@ -26,5 +26,5 @@ export function captureFace(read, applied) {
 export function releaseCachedFace() {
     const taken = cache;
     cache = null;
-    return copy(taken);
+    return taken;
 }

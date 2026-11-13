@@ -4,7 +4,7 @@
 // 徽章的用途是「一眼看出對方裝了什麼」。沒有它，/versions 就形同虛設 ——
 // 你得先知道對方有裝，才會想去查；不知道就不會查，那查得到也沒意義。
 //
-// 兩種徽章，資料由 features/hello.js 寫進角色物件：
+// 兩種徽章，資料由 social/hello.js 寫進角色物件：
 //   WCE / FBC ← character.FBC   （沒有 lce 標記的 BCEMsg）
 //   LCE       ← character.LCE   （夾了 lce 標記的 BCEMsg，或舊版 LCEMsg）
 // 兩者都走 WCE 的 BCEMsg 頻道，靠 payload 裡的 lce 標記區分（見 hello.js 的說明）。
@@ -45,9 +45,8 @@ export function installBadges() {
     }
 }
 
-// 一枚徽章 = 標記 + 版本號兩行。WCE 用的是 +14 / +36，所以一格高 44。
+// 每個角色只畫一枚徽章，版本號顯示在標記下方。
 const SLOT_Y = 14;
-const SLOT_H = 44;
 const VERSION_DY = 22;
 const BADGE_X = 290;
 
@@ -55,11 +54,10 @@ const BADGE_X = 290;
  * 畫一枚徽章。
  * @param {string} label   顯示的標記（WCE / FBC / LCE）
  * @param {string} version 對方報上來的版本字串
- * @param {number} slot    第幾格（0 = 最上面），往下疊
  * @param {string} labelColor 徽章文字顏色
  */
-function drawOne(label, version, slot, CharX, CharY, Zoom, labelColor) {
-    const y = CharY + (SLOT_Y + slot * SLOT_H) * Zoom;
+function drawOne(label, version, CharX, CharY, Zoom, labelColor) {
+    const y = CharY + SLOT_Y * Zoom;
     DrawTextFit(label, CharX + BADGE_X * Zoom, y, 60 * Zoom, labelColor, 'Black');
 
     // 版本號只在格式正常時顯示；結尾 b = beta，用粉色標出來
@@ -75,9 +73,8 @@ function drawBadge([C, CharX, CharY, Zoom]) {
     // BC 的「隱藏圖示」狀態：使用者要求乾淨畫面時，我們也跟著收起來
     if (typeof ChatRoomHideIconState !== 'undefined' && ChatRoomHideIconState !== 0) return;
 
-    // FBCNoteExists 由 features/past-profiles.js 寫入
+    // FBCNoteExists 由 social/note-state.js 寫入
     const note = !!C.FBCNoteExists;
-    let slot = 0;
     if (C.BCLite === true) {
         DrawTextFit('Lite', CharX + BADGE_X * Zoom, CharY + SLOT_Y * Zoom, 60 * Zoom, note ? 'Cyan' : 'White', 'Black');
         return;
@@ -85,9 +82,9 @@ function drawBadge([C, CharX, CharY, Zoom]) {
 
     const both = !!(C.FBC && C.LCE);
     const color = both ? (note ? 'Purple' : 'Red') : (note ? 'Blue' : 'White');
-    if (C.LCE) drawOne('LCE', C.LCE, slot, CharX, CharY, Zoom, color);
+    if (C.LCE) drawOne('LCE', C.LCE, CharX, CharY, Zoom, color);
     else if (C.FBC) {
         const label = ['1', '2', '3', '4', '5'].includes(C.FBC.split('.')[0]) ? 'FBC' : 'WCE';
-        drawOne(label, C.FBC, slot, CharX, CharY, Zoom, color);
+        drawOne(label, C.FBC, CharX, CharY, Zoom, color);
     }
 }

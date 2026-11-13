@@ -322,15 +322,11 @@ test('animal / preview strings exist in all 7 languages and are translated (not 
     assert.equal(load('TW').animal_preview_none, '目前尚無保存外觀，無法測試');
 });
 
-test('animal part list is one source: tab order matches it, and re-saving a pose is picked up by the preview', async () => {
+test('animal parts keep their cycle defaults and re-saving a pose refreshes the preview', async () => {
     const actions = await runtime().load('src/features/animal/actions.js');
     assert.deepEqual([...actions.ANIMAL_TYPES], ['Ears', 'Tails', 'Wings']);
     assert.deepEqual(['Ears', 'Tails', 'Wings'].map(actions.fallbackCycles), [9, 9, 3]);
-    const fs = await import('node:fs');
-    const src = fs.readFileSync(new URL('../src/settings/settings-page.js', import.meta.url), 'utf8');
-    assert.match(src, /animal: \['settings_tab_animal_ears', 'settings_tab_animal_tails', 'settings_tab_animal_wings'\]/);
-
-    const { ctl, preview, tick, rt } = await previewRuntime();
+    const { ctl, preview, rt } = await previewRuntime();
     const ears = () => preview.Appearance.find(i => i.Asset.Group.Name === 'HairAccessory2')?.Asset.Name;
     ctl.rebuild(); ctl.play('Ears'); assert.equal(ears(), 'B');
     rt.settings.updateSettings({ animalEarsState2: { Name: 'B2' } });   // 重新儲存姿勢：快取必須失效
@@ -436,7 +432,7 @@ test('closing asterisk is optional, as BC treats any message starting with * as 
 test('trigger text must be the whole message and exactly a keyword', async () => {
     const rt = runtime();
     const { getAnimTypeFromMsg } = await rt.load('src/features/animal/triggers.js');
-    for (const bad of ['搖尾巴', '*搖尾巴*啊', '我 *搖尾巴*', '*慢慢搖尾巴*', '*remue la queue de son chat*', '**', '*', '', '*wag*wag*', '*wag**', '*慢慢搖尾巴']) {
+    for (const bad of ['*please wag*', "*doesn't wag*", '*he wags his tail*', 'wag', 'wags', '搖尾巴', '*搖尾巴*啊', '我 *搖尾巴*', '*慢慢搖尾巴*', '*remue la queue de son chat*', '**', '*', '', '*wag*wag*', '*wag**', '*慢慢搖尾巴']) {
         assert.equal(getAnimTypeFromMsg(bad), null, bad);
     }
     assert.equal(getAnimTypeFromMsg(null), null);

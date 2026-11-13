@@ -128,7 +128,9 @@ export function emoticonDuration(text) {
     return Math.min(Math.max(duration, DEFAULT_EMOTICON_DURATION), MAX_SLASH_EMOTICON_DURATION);
 }
 
-export function echoActivity(data) {
+// native=true：連 BC 原生（非自訂）活動也回傳，供反應規則表（reactions.js）使用；
+// 預設 false 維持原本只處理 Echo 自訂活動的行為。
+export function echoActivity(data, { native = false } = {}) {
     if (data?.Type !== 'Activity' && data?.Type !== 'Emote' && data?.Type !== 'Action') return null;
     const dict = Array.isArray(data.Dictionary) ? data.Dictionary : [];
     const content = typeof data.Content === 'string' ? data.Content : '';
@@ -156,27 +158,39 @@ export function echoActivity(data) {
     const custom = !isActivity || !!markerEntry || known || /Luzi_/i.test(content) || dict.some(d => /Luzi_/i.test(d.Tag || ''))
         || /Luzi_/i.test(nameEntry?.ActivityName || labelEntry?.Text || '');
 
-    if (isActivity && !custom) return null;
+    if (isActivity && !custom && !native) return null;
 
     return { name, group: /^Chat(?:Other|Self)-([^-]+)-/.exec(content)?.[1], custom };
 }
 
-export function echoExpressionEvent(data, memberNumber) {
-    // 自由文字 Emote/Action 只支援音效（echoSound），不觸發表情，避免 *licks the ice cream* 誤觸
+/**
+ * 把一則活動訊息分類成「類別 + 部位 + 玩家的角色」。
+ * echoExpressionEvent 與反應規則表（reactions.js）共用，分類只此一份。
+ * 回傳 null＝不是活動、或認不出類別。
+ */
+export function classifyActivity(data, memberNumber, { native = false } = {}) {
     if (data?.Type !== 'Activity') return null;
-    const activity = echoActivity(data);
+    const activity = echoActivity(data, { native });
     if (!activity) return null;
     const testName = activity.name.replace(/([a-z])([A-Z])/g, '$1 $2');
-    const event = mappings.find(([, pattern]) => pattern.test(testName))?.[0];
-    if (!event) return null;
-    if (['LongKiss', 'KissOnLips'].includes(event) && activity.group !== 'ItemMouth') return null;
-    const isTarget = data.Dictionary?.some(d => d.TargetCharacter === memberNumber
+    const category = mappings.find(([, pattern]) => pattern.test(testName))?.[0];
+    if (!category) return null;
+    const isTarget = !!data.Dictionary?.some(d => d.TargetCharacter === memberNumber
         || (d.Tag === 'TargetCharacter' && d.MemberNumber === memberNumber));
     const isSender = data.Sender === memberNumber;
+    return { category, group: activity.group, isTarget, isSender, custom: activity.custom };
+}
 
-    if (targetOnly.has(event)) return isTarget ? event : null;
-    if (senderOnly.has(event)) return isSender ? event : null;
-    if (!isTarget && !isSender) return null;
+export function echoExpressionEvent(data, memberNumber) {
+    // 自由文字 Emote/Action 只支援音效（echoSound），不觸發表情，避免 *licks the ice cream* 誤觸
+    const c = classifyActivity(data, memberNumber);
+    if (!c) return null;
+    const event = c.category;
+    if (['LongKiss', 'KissOnLips'].includes(event) && c.group !== 'ItemMouth') return null;
+
+    if (targetOnly.has(event)) return c.isTarget ? event : null;
+    if (senderOnly.has(event)) return c.isSender ? event : null;
+    if (!c.isTarget && !c.isSender) return null;
     return event;
 }
 

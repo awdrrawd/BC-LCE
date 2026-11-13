@@ -15,7 +15,7 @@ function run(processor, candidates) {
 
 function collect(node, selector, candidates, descendants = false) {
     const element = node.nodeType === 1 ? node : node.parentElement;
-    if (!element) return;
+    if (!element || !root?.contains(element)) return;
     const parent = element.closest(selector);
     if (parent) candidates.add(parent);
     if (descendants) element.querySelectorAll(selector).forEach(match => candidates.add(match));

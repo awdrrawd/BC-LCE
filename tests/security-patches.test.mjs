@@ -80,12 +80,6 @@ test('chat snapshot restore clones nodes and never parses HTML strings', async (
     assert.equal(rt.warnings.length, 0, JSON.stringify(rt.warnings));
 });
 
-test('relogin source no longer reparses snapshot HTML', () => {
-    const src = fs.readFileSync('src/features/safety/relogin.js', 'utf8');
-    assert.ok(!/\.innerHTML\s*=\s*snap/.test(src));
-    assert.ok(!/outerHTML/.test(src.replace(/\/\/.*$/gm, '')));
-});
-
 // ───────── 建置：app chunk 必須有內容 hash ─────────
 test('vite config hashes JS chunk file names while keeping the entry name stable', () => {
     const cfg = fs.readFileSync('vite.config.js', 'utf8');

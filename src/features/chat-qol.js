@@ -152,7 +152,7 @@ export function installPetsuitSync() {
 function canAnimate() {
     const player = globalThis.Player;
     return getFeature('petsuitAnimation') && canUseExpressionEngine() && globalThis.CurrentScreen === 'ChatRoom'
-        && player?.Appearance?.some(i => /petsuit|pet suit|宠物服上/i.test(i.Asset.Name))
+        && wearsPetsuit(player)
         && typeof PoseCanChangeUnaided === 'function' && poses.every(p => PoseCanChangeUnaided(player, p));
 }
 
@@ -268,9 +268,6 @@ export function installChatQol() {
             const original = data.Dictionary?.find(d => typeof d.Original === 'string')?.Original;
             const text = stored?.text ?? original ?? data.Content;
             const face = stored?.face ?? emoticonExpression(text);
-            
-
-            
             const duration = stored?.duration ?? emoticonDuration(text);
             if (Object.keys(face).length) {
                 if ('Eyes' in face && !('Eyes2' in face)) face.Eyes2 = face.Eyes;

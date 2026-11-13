@@ -1,8 +1,6 @@
 import { isWceFeatureEnabled } from '../../core/wce-compat.js';
 import { hscExpressionGroups } from '../../core/hsc-compat.js';
-import { resolvePoseConflicts } from './calculations.js';
-import { activeStepIndex, isEventActive } from './calculations.js';
-import { prepareExpressionEvent } from './calculations.js';
+import { resolvePoseConflicts, activeStepIndex, isEventActive, prepareExpressionEvent } from './calculations.js';
 import { createSocketBinding } from '../../core/lifecycle.js';
 import { createHook } from '../../core/hooks.js';
 import { observeResponsive, responsiveOwns } from '../../core/responsive-compat.js';
@@ -39,6 +37,7 @@ import { getFeature } from '../../core/feature-settings.js';
 import { deepCopy } from '../../core/util.js';
 import { ArousalExpressionStages, EventExpressions, ActivityTriggers } from './data.js';
 import { echoExpressionEvent } from './qol-rules.js';
+import { reactionEvent } from './reactions.js';
 import { LOG } from '../../core/constants.js';
 
 
@@ -368,7 +367,8 @@ function handleChatMessage(data) {
     if (!getFeature('activityExpressions')) { dbg('activityExpressions 關閉，略過'); return; }
     let matched = false;
     activityTriggers:
-    for (const trigger of ActivityTriggers.filter(t => t.Type === data.Type)) {
+    for (const trigger of ActivityTriggers) {
+        if (trigger.Type !== data.Type) continue;
         for (const matcher of trigger.Matchers) {
             if (!matcher.Tester.test(data.Content)) continue;
             dbg(`Tester 命中 ${trigger.Event}（${matcher.Tester}）`);
@@ -391,7 +391,8 @@ function handleChatMessage(data) {
         }
     }
     if (!matched) {
-        const event = echoExpressionEvent(data, Player.MemberNumber);
+        // 反應規則表優先（含 BC 原生活動，例如被舔耳朵）；沒命中再走 Echo 自訂活動的對應。
+        const event = reactionEvent(data, Player.MemberNumber) ?? echoExpressionEvent(data, Player.MemberNumber);
         if (event && EventExpressions[event]) {
             const reaction = deepCopy(EventExpressions[event]);
             reaction.Type = 'LceEchoActivity';
@@ -423,10 +424,12 @@ function customArousalExpression() {
 
     // 我們自己管理計時，清掉 BC 的移除計時器。
     // 只碰內建部位：模組新增的表情群組由該模組自己維護，它的計時器不歸我們管。
-    Player.Appearance
-        .filter(a => BASE_FACE_COMPONENTS.includes(a.Asset.Group.Name)
-            && !protectedGroups.has(a.Asset.Group.Name) && a.Property?.RemoveTimer)
-        .forEach(a => { delete a.Property.RemoveTimer; });
+    for (const item of Player.Appearance) {
+        if (BASE_FACE_COMPONENTS.includes(item.Asset.Group.Name)
+            && !protectedGroups.has(item.Asset.Group.Name) && item.Property?.RemoveTimer) {
+            delete item.Property.RemoveTimer;
+        }
+    }
 
     Player.ArousalSettings.AffectExpression = false;   // 取代 BC 原生的慾望表情
 
@@ -456,7 +459,7 @@ function customArousalExpression() {
     // 高潮 → 推送 PostOrgasm 事件
     const ORGASM_RECOVERY = 2;
     if (PreviousArousal.OrgasmStage !== ORGASM_RECOVERY && Player.ArousalSettings.OrgasmStage === ORGASM_RECOVERY
-        && queue.filter(a => a.Type === POST_ORGASM_EVT).length === 0) {
+        && !queue.some(a => a.Type === POST_ORGASM_EVT)) {
         pushEvent(EventExpressions.PostOrgasm);
         lastOrgasm = Date.now();
     }
@@ -565,21 +568,10 @@ function customArousalExpression() {
         if (Object.keys(queue[j].Expression || {}).length === 0 && !queue[j].Poses?.length) { queue.splice(j, 1); j--; }
     }
 
-    // 清掉不再需要的姿勢
     let needsRefresh = false;
-    let poseUpdate = false;
-    if (Player.ActivePose) {
-        const retained = Player.ActivePose.filter(pose => {
-            const p = PoseFemale3DCG.find(pp => pp.Name === pose);
-            return p?.Category || Object.values(desiredPose).some(v => v.Pose === pose);
-        });
-        if (retained.length !== Player.ActivePose.length) {
-            poseUpdate = retained;
-            needsRefresh = true;
-        }
-    }
 
     // 慾望 → 表情分級
+    const adjustedArousal = arousal + lastOrgasmAdjustment();
     outer:
     for (const t of Object.keys(ArousalExpressionStages)) {
         if (protectedGroups.has(t)) continue;
@@ -587,7 +579,7 @@ function customArousalExpression() {
         let chosen = null, chose = false;
         for (const face of ArousalExpressionStages[t]) {
             const limit = face.Limit - (direction === DIR.Up ? 0 : 1);
-            if (arousal + lastOrgasmAdjustment() >= limit) {
+            if (adjustedArousal >= limit) {
                 if (face.Expression !== exp) { chosen = face.Expression; chose = true; break; }
                 continue outer;
             }
@@ -615,7 +607,7 @@ function customArousalExpression() {
 
     // 套用表情
     if (Object.keys(desiredExpression).length > 0) {
-        dbg('套用表情', JSON.parse(JSON.stringify(desiredExpression)), '佇列長度=', queue.length);
+        if (debugOn) dbg('套用表情', JSON.parse(JSON.stringify(desiredExpression)), '佇列長度=', queue.length);
         let refreshScreen = false;
         const now = Date.now();
         for (const t of Object.keys(desiredExpression)) {
@@ -696,11 +688,10 @@ function customArousalExpression() {
         };
     }
     const newPose = Object.values(desiredPose).map(p => p.Pose);
-    if (JSON.stringify(Player.ActivePose) !== JSON.stringify(newPose)) { poseUpdate = newPose; needsRefresh = true; }
-
-    if (poseUpdate) {
-        Player.ActivePose = poseUpdate;
-        ServerSend('ChatRoomCharacterPoseUpdate', { Pose: poseUpdate });
+    if (Player.ActivePose?.length !== newPose.length || newPose.some((pose, i) => pose !== Player.ActivePose[i])) {
+        needsRefresh = true;
+        Player.ActivePose = newPose;
+        ServerSend('ChatRoomCharacterPoseUpdate', { Pose: newPose });
         if (DialogSelfMenuSelected === 'Pose' && DialogSelfMenuMapping.Pose.C.IsPlayer()) DialogSelfMenuMapping.Pose.Reload();
     }
 

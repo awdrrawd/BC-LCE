@@ -13,7 +13,6 @@ import { createSocketBinding } from '../../core/lifecycle.js';
 // ════════════════════════════════════════════════════════════════════════════
 
 import modApi from '../../modsdk.js';
-import { createHook } from '../../core/hooks.js';
 import { getFeature } from '../../core/feature-settings.js';
 import { isWceFeatureEnabled } from '../../core/wce-compat.js';
 import { T } from '../../core/i18n.js';
@@ -28,25 +27,10 @@ const POLL_MS = 20000;
 // 這些畫面本來就有好友資訊 / 尚未連線，不查也不通知（同 WCE）
 const SKIP_SCREENS = ['FriendList', 'Relog', 'Login'];
 
-let lastFriends = [];
-let resyncFriends = false;
+let stableFriends = null;
+const pendingChanges = new Map();
+let pollRound = 0;
 const PRESENCE_CATEGORY = 'lce-friend-presence';
-const QUEUE_TTL_MS = 10000;
-
-function prunePresenceQueue(all = false) {
-    if (typeof ToastManager === 'undefined' || !Array.isArray(ToastManager.queue)) return;
-    const now = Date.now();
-    ToastManager.queue = ToastManager.queue.filter(t => t.category !== PRESENCE_CATEGORY
-        || (!all && t.lcePresenceExpiresAt > now));
-}
-
-function clearPresenceBubbles() {
-    if (typeof ToastManager === 'undefined') return;
-    // Remove waiting cards before dismissing visible cards: dismissal can drain the queue.
-    prunePresenceQueue(true);
-    ToastManager.dismissByCategory?.(PRESENCE_CATEGORY);
-}
-
 
 const onlineOn = () => !!getFeature('friendOnlineNotifyEnabled') && !isWceFeatureEnabled('friendPresenceNotifications');
 const offlineOn = () => !!getFeature('friendOfflineNotifyEnabled')
@@ -70,17 +54,16 @@ function showBubble(text) {
     if (typeof ToastManager !== 'undefined' && typeof ToastManager.info === 'function') {
         ToastManager.info(text, {
             category: PRESENCE_CATEGORY, duration: BUBBLE_MS, icon: '',
-            lcePresenceExpiresAt: Date.now() + QUEUE_TTL_MS,
             onClick: () => { if (typeof FriendListShow === 'function') FriendListShow(); },
         });
-        setTimeout(prunePresenceQueue, QUEUE_TTL_MS);
-        return;
+        return true;
     }
-    if (typeof ServerShowBeep !== 'function') return;
+    if (typeof ServerShowBeep !== 'function') return false;
     ServerShowBeep(text, BUBBLE_MS, {
         silent: true,
         onClick: () => { if (typeof FriendListShow === 'function') FriendListShow(); },
     });
+    return true;
 }
 
 /**
@@ -100,53 +83,84 @@ function showLocal(text, durationMs = LOCAL_MS) {
  * 不在聊天室時 message 沒地方顯示，退回氣泡；both 則自然只剩氣泡。
  */
 function notify(text, style, sound, durationSec = 5) {
-    if (sound) playSound();
     const inChatRoom = typeof CurrentScreen !== 'undefined' && CurrentScreen === 'ChatRoom';
     const wantLocal = (style === 'message' || style === 'both') && inChatRoom;
     const seconds = Math.max(0, Math.min(999, Number(durationSec) || 0));
-    const sentLocal = wantLocal ? showLocal(text, seconds === 0 ? 0 : seconds * 1000) : false;
-    if (style === 'bubble' || style === 'both' || !sentLocal) showBubble(text);
+    let sent = false;
+    if (wantLocal) {
+        try { sent = showLocal(text, seconds === 0 ? 0 : seconds * 1000); }
+        catch (error) { console.warn(LOG, 'Friend presence local notification failed:', error); }
+    }
+    if (style === 'bubble' || style === 'both' || !sent) {
+        try { sent = showBubble(text) || sent; }
+        catch (error) { console.warn(LOG, 'Friend presence bubble notification failed:', error); }
+    }
+    if (sent && sound) playSound();
+    return sent;
 }
 
 const fmt = (list) => list.map(({ MemberName, MemberNumber }) => `${MemberName} (${MemberNumber})`).join(', ');
 
-/** 比對前後兩次的線上好友清單並發通知。 */
+// Only consecutive polling rounds confirm a change; extra replies cannot accelerate it.
 function handleQueryResult(data) {
-    if (skipScreen()) return;
     if (!data || data.Query !== 'OnlineFriends' || !Array.isArray(data.Result)) return;
-    // Background timers/socket delivery may be suspended. The first response after
-    // returning is a fresh baseline, not a list of events to replay.
-    if (document.hidden || resyncFriends) {
-        lastFriends = data.Result;
-        resyncFriends = !!document.hidden;
+    const current = new Map(data.Result.map(({ MemberNumber, MemberName }) => [MemberNumber, { MemberNumber, MemberName }]));
+    const online = onlineOn(), offline = offlineOn();
+    if (!stableFriends) {
+        stableFriends = current;
+        pendingChanges.clear();
         return;
     }
-    if (!onlineOn() && !offlineOn()) { lastFriends = data.Result; return; }
 
-    const nowNumbers = data.Result.map(f => f.MemberNumber);
-    const lastNumbers = lastFriends.map(f => f.MemberNumber);
-
-    if (onlineOn()) {
-        const came = data.Result.filter(f => !lastNumbers.includes(f.MemberNumber));
-        if (came.length) notify(T('friend_now_online').replace('{list}', fmt(came)), getFeature('friendOnlineNotify'), getFeature('friendOnlineNotifySound'), getFeature('friendOnlineNotifyDuration'));
+    // Pausing notifications must not erase the last state reported to the user.
+    if (skipScreen() || (!online && !offline)) { pendingChanges.clear(); return; }
+    const came = [], went = [];
+    for (const id of new Set([...stableFriends.keys(), ...current.keys(), ...pendingChanges.keys()])) {
+        const present = current.has(id);
+        if (present === stableFriends.has(id)) {
+            pendingChanges.delete(id);
+            if (present) stableFriends.set(id, current.get(id));
+            continue;
+        }
+        const pending = pendingChanges.get(id);
+        const enabled = present ? online : offline;
+        if (!enabled) { pendingChanges.delete(id); continue; }
+        if (!pending || pending.round !== pollRound - 1) {
+            if (pending?.round !== pollRound) pendingChanges.set(id, { round: pollRound });
+            continue;
+        }
+        const friend = present ? current.get(id) : stableFriends.get(id);
+        (present ? came : went).push(friend);
     }
-    if (offlineOn()) {
-        const went = lastFriends.filter(f => !nowNumbers.includes(f.MemberNumber));
-        if (went.length) notify(T('friend_now_offline').replace('{list}', fmt(went)), getFeature('friendOfflineNotify'), getFeature('friendOfflineNotifySound'), getFeature('friendOfflineNotifyDuration'));
-    }
 
-    lastFriends = data.Result;
+    for (const [friends, present, key] of [[came, true, 'friendOnlineNotify'], [went, false, 'friendOfflineNotify']]) {
+        if (!friends.length) continue;
+        const text = T(present ? 'friend_now_online' : 'friend_now_offline').replace('{list}', fmt(friends));
+        if (!notify(text, getFeature(key), getFeature(key + 'Sound'), getFeature(key + 'Duration'))) continue;
+        for (const friend of friends) {
+            if (present) stableFriends.set(friend.MemberNumber, friend);
+            else stableFriends.delete(friend.MemberNumber);
+            pendingChanges.delete(friend.MemberNumber);
+        }
+    }
 }
 
 const socketBinding = createSocketBinding({ AccountQueryResult: handleQueryResult });
-function bindListener() { socketBinding.bind(typeof ServerSocket === 'undefined' ? null : ServerSocket); }
+function bindListener() { pendingChanges.clear(); socketBinding.bind(typeof ServerSocket === 'undefined' ? null : ServerSocket); }
 
 function poll() {
     if (!onlineOn() && !offlineOn()) return;
-    // WCE already queries every 20 seconds; both consumers receive its response.
-    if (isWceFeatureEnabled('friendPresenceNotifications') || isWceFeatureEnabled('instantMessenger')) return;
+    // The interval owns the cadence; reply latency must not skip a polling tick.
+    if (typeof ServerIsConnected === 'undefined' || !ServerIsConnected || ServerSocket?.connected === false) {
+        pendingChanges.clear();
+        return;
+    }
     if (skipScreen()) return;
     if (typeof ServerSend !== 'function') return;
+    pollRound++;
+    for (const [id, pending] of pendingChanges) {
+        if (pending.round < pollRound - 1) pendingChanges.delete(id);
+    }
     ServerSend('AccountQuery', { Query: 'OnlineFriends' });
 }
 
@@ -155,20 +169,6 @@ let installed = false;
 export function installFriendPresence() {
     if (installed) return;
     installed = true;
-    if (typeof ToastManager !== 'undefined' && typeof ToastManager._process === 'function') {
-        // Check before display as well: suspended timers can run after queue processing.
-        createHook('friend-presence')('ToastManager._process', 10, (args, next) => {
-            prunePresenceQueue(document.hidden);
-            return next(args);
-        });
-    }
-    resyncFriends = !!document.hidden;
-    document.addEventListener('visibilitychange', () => {
-        resyncFriends = true;
-        if (document.hidden) clearPresenceBubbles();
-        else poll();
-    });
-
     (function wait(n = 240) {
         if (typeof ServerSocket === 'undefined' || !ServerSocket || typeof ServerIsConnected === 'undefined') {
             if (n <= 0) { console.warn(LOG, '好友通知：等待連線逾時'); return; }
