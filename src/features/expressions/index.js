@@ -39,6 +39,7 @@ import { getFeature } from '../../core/feature-settings.js';
 import { deepCopy } from '../../core/util.js';
 import { ArousalExpressionStages, EventExpressions, ActivityTriggers } from './data.js';
 import { echoExpressionEvent } from './qol-rules.js';
+import { reactionEvent } from './reactions.js';
 import { LOG } from '../../core/constants.js';
 
 
@@ -391,7 +392,8 @@ function handleChatMessage(data) {
         }
     }
     if (!matched) {
-        const event = echoExpressionEvent(data, Player.MemberNumber);
+        // 反應規則表優先（含 BC 原生活動，例如被舔耳朵）；沒命中再走 Echo 自訂活動的對應。
+        const event = reactionEvent(data, Player.MemberNumber) ?? echoExpressionEvent(data, Player.MemberNumber);
         if (event && EventExpressions[event]) {
             const reaction = deepCopy(EventExpressions[event]);
             reaction.Type = 'LceEchoActivity';
