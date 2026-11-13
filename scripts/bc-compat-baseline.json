@@ -298,6 +298,11 @@
       "hash": "AB38BAA6",
       "file": "Scripts/Layering.js"
     },
+    "Layering._GetTabContents": {
+      "hash": "7DD2C2A5",
+      "file": "Scripts/Layering.js",
+      "gameVersion": "R134Beta1"
+    },
     "Layering._ResetClickListener": {
       "hash": "CBE28EA4",
       "file": "Scripts/Layering.js"

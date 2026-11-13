@@ -29,6 +29,7 @@ const CAP = 'layeringHide';            // 能力名（沿用 WCE 的字串，才
 const OVERRIDE_KEY = 'WCEOverrides';   // ExtensionSettings 鍵（與 WCE 相同，勿改）
 const HIDE_PROP = 'wceOverrideHide';   // item.Property 欄位（與 WCE 相同，勿改）
 const STYLE_ID = 'lce-layering-hide';
+let hideTabContents = null;
 
 /** WCE 的圖層隱藏已開啟，因此由 WCE 接管。 */
 function wceOwnsLayeringHide() {
@@ -44,8 +45,28 @@ function lceOwnsLayeringHide() {
 // R130 起 BC 把 #layering 改成 Screen 元件框架（.screen > .screen-main-container > main.screen-main），
 // 版面由框架自己管；若在新版還去覆寫 #layering 的 grid-template，整個選單會被擠爆（＝UI變形）。
 // 所以這段 CSS 只在 R129 注入（見 applyLayeringStyle），新版一律不注入、改把設定框塞進 .screen-main。
+const HIDE_CONTENT_CSS = `
+#layering-wce-hide-div,
+#layering-wce-hide-div fieldset {
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    box-sizing: border-box;
+}
+#layering-wce-hide-div .layering-layer-inner-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+#layering-wce-hide-div .layering-pair {
+    min-width: 0;
+    grid-template-columns: max-content minmax(0, 1fr);
+    justify-content: start;
+}
+#layering-wce-hide-div .layering-pair-text {
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}`;
+
 const LAYERING_CSS = `
-.layering-pair { justify-content: start; }
 #layering {
     grid-template:
         "asset-header button-grid" min-content
@@ -72,7 +93,7 @@ const LAYERING_CSS = `
 function applyLayeringStyle() {
     if (lceOwnsLayeringHide()) {
         const legacyLayout = typeof GameVersion !== 'undefined' && GameVersion === 'R129';
-        injectStyle(STYLE_ID, legacyLayout ? LAYERING_CSS : '.layering-pair { justify-content: start; }');
+        injectStyle(STYLE_ID, HIDE_CONTENT_CSS + (legacyLayout ? LAYERING_CSS : ''));
     } else {
         removeStyle(STYLE_ID);
     }
@@ -151,8 +172,8 @@ export function installLayeringHide() {
             // WCE 可能在 LCE 安裝後才開/關此設定；每次開選單都重新校正所有權與 CSS。
             applyLayeringStyle();
             if (!lceOwnsLayeringHide() || CurrentScreen === 'Crafting') return ret;
-            if (!Layering?.Character?.BCECapabilities?.includes(CAP)) return ret;
-            const defaultItemHide = Layering.Asset?.Hide || [];
+            if (!Layering?.Character?.IsPlayer?.() && !Layering?.Character?.BCECapabilities?.includes(CAP)) return ret;
+            const defaultItemHide = [...new Set([...(Layering.Asset?.Hide || []), ...(Layering.Item?.Property?.Hide || [])])];
             if (defaultItemHide.length === 0) return ret;
 
             const root = document.getElementById(Layering.ID.root);
@@ -188,6 +209,9 @@ export function installLayeringHide() {
                 const container = root.querySelector('#layering-content-container');
                 if (!container) return;
                 container.innerHTML = '';
+                container.appendChild(hideTabContents());
+            };
+            hideTabContents = () => {
                 const overrideItemHide = Layering.Item?.Property?.[HIDE_PROP] || defaultItemHide;
                 const content = ElementCreate({
                     tag: 'fieldset',
@@ -207,7 +231,7 @@ export function installLayeringHide() {
                         },
                     ],
                 });
-                container.appendChild(content);
+                return content;
             };
 
             const rotateTab = root.querySelector('#layering-tab-rotate');
@@ -247,6 +271,12 @@ export function installLayeringHide() {
         return ret;
     });
 
+    // Native visibility/reload controls rebuild the active tab through this entry point.
+    hook('Layering._GetTabContents', 10, (args, next) => {
+        if (args[0] === 'lce-hide' && lceOwnsLayeringHide() && hideTabContents) return [hideTabContents()];
+        return next(args);
+    });
+
     // 「重設」按鈕：清掉 override、把勾選框全部勾回（同 WCE _ResetClickListener）
     hook('Layering._ResetClickListener', 10, (args, next) => {
         try {
@@ -266,6 +296,8 @@ export function installLayeringHide() {
             `
         const hide = item.Property?.wceOverrideHide != null ? item.Property.wceOverrideHide : item.Asset.Hide;
         if ((hide != null) && (hide.indexOf(GroupName) >= 0) && !Excluded) HidingItem = true;`,
+        '(item.Property.Hide.indexOf(GroupName) >= 0)':
+            '((item.Property.wceOverrideHide ?? item.Property.Hide).indexOf(GroupName) >= 0)',
     }, 'override item hide');
 
     // 相同資料格式共用 WCE 的入口；尚未載入 WCE 時提供等價實作。
