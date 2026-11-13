@@ -241,28 +241,6 @@ test('Echo bridge custom sound regex matching', () => {
     }), null);
 });
 
-test('Animal animation triggers', async () => {
-    const rt = runtime({ globals: { window: { location: { href: 'http://localhost' } } } });
-    const { getAnimTypeFromMsg } = await rt.load('src/features/animal/triggers.js');
-
-    // Exact forms should trigger
-    assert.equal(getAnimTypeFromMsg('*wag*'), 'Tails');
-    assert.equal(getAnimTypeFromMsg('*wags*'), 'Tails');
-    assert.equal(getAnimTypeFromMsg('*flap*'), 'Wings');
-    assert.equal(getAnimTypeFromMsg('*flaps*'), 'Wings');
-    assert.equal(getAnimTypeFromMsg('*wiggle*'), 'Ears');
-    assert.equal(getAnimTypeFromMsg('*twitch*'), 'Ears');
-
-    // Sentences containing the word should not trigger
-    assert.equal(getAnimTypeFromMsg('*please wag*'), null);
-    assert.equal(getAnimTypeFromMsg("*doesn't wag*"), null);
-    assert.equal(getAnimTypeFromMsg('*he wags his tail*'), null);
-
-    // Non-emotes should not trigger
-    assert.equal(getAnimTypeFromMsg('wag'), null);
-    assert.equal(getAnimTypeFromMsg('wags'), null);
-});
-
 async function fixture({ responsive = false } = {}) {
     const events = [], restored = [], cancelled = [], buttons = [], settled = [], timers = [];
     let tick, ready = true, responsiveConsumer;

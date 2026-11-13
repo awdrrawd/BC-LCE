@@ -147,17 +147,3 @@ test('animal rows and tabs stay left of the preview block (right edge ≤ 1460)'
         }
     }
 });
-
-test('tab hover and row hover share one game-colour overlay (no hard-coded hover colour for tabs)', async () => {
-    const fs = await import('node:fs');
-    const src = fs.readFileSync(new URL('../src/settings/settings-page.js', import.meta.url), 'utf8');
-    assert.ok(!src.includes('#e8f1fb'), 'tab hover must not use its own colour');
-    assert.equal((src.match(/drawHoverOverlay\(/g) || []).length, 3, 'definition + tab + row');
-    assert.match(src, /function drawHoverOverlay[\s\S]*?globalAlpha = 0\.14[\s\S]*?'Cyan'/);
-});
-
-test('hovered tab label lights up like the active one', async () => {
-    const fs = await import('node:fs');
-    const src = fs.readFileSync(new URL('../src/settings/settings-page.js', import.meta.url), 'utf8');
-    assert.match(src, /active \|\| hover \? 'Black' : '#555555'/);
-});

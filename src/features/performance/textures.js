@@ -30,7 +30,8 @@ function reloadTextures() {
 export function doClearCaches() {
     try {
         // 清掉已不在房間內的舊角色（只有在聊天室裡才有意義，見 reloadTextures 的說明）
-        const stale = Character.filter(c => c.IsOnline?.() && !ChatRoomCharacter.some(cc => cc.MemberNumber === c.MemberNumber));
+        const present = new Set(ChatRoomCharacter.map(c => c.MemberNumber));
+        const stale = Character.filter(c => c.IsOnline?.() && !present.has(c.MemberNumber));
         stale.forEach(c => CharacterDelete(c));
         reloadTextures();
         console.debug(LOG, '已清除繪圖緩存');
