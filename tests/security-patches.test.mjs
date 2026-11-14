@@ -5,7 +5,8 @@ import { runtime, Element } from './helpers/runtime.mjs';
 
 // ───────── i18n loadScript：只能執行自家來源的腳本 ─────────
 async function loadEngine(fetchImpl) {
-    const rt = runtime({ globals: { fetch: fetchImpl, Function: globalThis.Function } });
+    const rt = runtime({ globals: { fetch: fetchImpl, AbortController, Function: globalThis.Function } });
+    rt.window.Liko = { __Sys_Flags__: {} }; // Isolate script requests from flag image preloading.
     await rt.load('src/core/i18n-engine.js');
     return { rt, api: rt.window.Liko.__Sys_i18n__ };
 }

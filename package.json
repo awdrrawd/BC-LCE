@@ -14,7 +14,9 @@
     "dev": "vite build && concurrently -k -n build,serve \"vite build --watch\" \"vite preview --port 5174\"",
     "prebuild": "node scripts/verify-assets.mjs",
     "build": "vite build",
-    "preview": "vite preview --port 5174"
+    "preview": "vite preview --port 5174",
+    "sync:i18n": "node scripts/sync-i18n.mjs",
+    "check:i18n": "node scripts/sync-i18n.mjs --check"
   },
   "devDependencies": {
     "acorn": "^8.19.0",

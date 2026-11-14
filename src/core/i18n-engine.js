@@ -3,7 +3,7 @@
 // @name:zh        Liko 共用多語引擎（介面 + 聊天在地化 + 國旗）
 // @namespace      https://github.com/awdrrawd/liko-Plugin-Repository
 // @supportURL     https://github.com/awdrrawd/liko-Plugin-Repository
-// @version        2.2.0
+// @version        2.3.0
 // @description    Shared UI translations, chat localization and on-demand flags (__Sys_i18n__, __Sys_L10N__, __Sys_Flags__)
 // @author         Likolisu
 // @include        /^https:\/\/(www\.)?(bondage(projects\.elementfx|-(europe|asia))\.com|bondageeurope\.com)\/R*/
@@ -22,7 +22,7 @@
     // Flags initializes independently, including when an older translation engine won the race.
     installFlags();
     if (window.Liko.__Sys_i18n__ && window.Liko.__Sys_L10N__) return;   // 防重複載入（先到者勝）
-    const ENGINE_VER = '2.2.0';
+    const ENGINE_VER = '2.3.0';
 
     function installFlags() {
         if (window.Liko.__Sys_Flags__) return;
@@ -194,7 +194,6 @@
                 const rect = select.getBoundingClientRect();
                 const menu = document.createElement('div');
                 const style = getComputedStyle(select);
-                if (select.id === 'lce-lang-select') menu.classList.add('lce-login-language-menu');
                 menu.setAttribute('role', 'listbox');
                 menu.setAttribute('aria-label', select.getAttribute('aria-label') || 'Language');
                 menu.style.cssText = `position:fixed;z-index:2147483647;box-sizing:border-box;overflow:auto;max-height:45vh;padding:4px;border:1px solid currentColor;border-radius:6px;box-shadow:0 4px 16px #0008;`;
@@ -300,14 +299,25 @@
 
     const _languageListeners = new Set();
     let _lastDetectedLang = detectLang();
-    setInterval(() => {
+    function refreshLanguage() {
         const next = detectLang();
-        if (next === _lastDetectedLang) return;
+        if (next === _lastDetectedLang) return false;
         _lastDetectedLang = next;
         for (const listener of _languageListeners) {
             try { listener(next); } catch (e) { console.warn('[Liko i18n] language listener failed:', e); }
         }
-    }, 2000);
+        return true;
+    }
+    window.addEventListener?.('storage', event => {
+        if (!event.key || event.key === 'BondageClubLanguage') refreshLanguage();
+    });
+    window.addEventListener?.('focus', refreshLanguage);
+    // Native language controls update within the same tab; notify after their click handlers.
+    window.addEventListener?.('click', () => queueMicrotask(refreshLanguage));
+    window.addEventListener?.('change', () => queueMicrotask(refreshLanguage));
+    document.addEventListener?.('visibilitychange', () => {
+        if (!document.hidden) refreshLanguage();
+    });
     function onChange(listener) {
         if (typeof listener !== 'function') return () => {};
         _languageListeners.add(listener);
@@ -371,49 +381,64 @@
     }
 
     // ── 共用：字庫載入（單一合併 JS / 依語言分檔 .js|.json）───────────────────
-    const _loadedUrls = new Set();     // 去重：同一 URL 只抓一次
-    function _bust(url) { return url + (url.includes('?') ? '&' : '?') + 't=' + Date.now(); }
+    // Keep the in-flight promise: every caller must wait for registration to finish.
+    const _loads = new Map();
+    function _load(key, url, consume) {
+        if (!url) return Promise.resolve(false);
+        if (_loads.has(key)) return _loads.get(key);
+        const request = (async () => {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 15000);
+            try {
+                const response = await fetch(url, { signal: controller.signal, cache: 'no-cache' });
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+                await consume(response);
+                return true;
+            } finally {
+                clearTimeout(timer);
+            }
+        })().catch(error => {
+            _loads.delete(key);
+            console.warn('[Liko i18n] Failed to load ' + url + ': ' + error.message);
+            return false;
+        });
+        _loads.set(key, request);
+        return request;
+    }
 
-    // 抓一支 JS 並執行（合併字庫檔會自行呼叫 register 註冊）
-    // 只允許執行自家來源的腳本：loadScript 掛在公開的 Liko.__Sys_i18n__ / __Sys_L10N__ 上，
-    // 沒有限制的話任何插件都能藉它 new Function 執行任意遠端程式碼。
-    const _SCRIPT_ORIGINS = new Set(['https://awdrrawd.github.io', 'https://cdn.jsdelivr.net']);
-    function _isAllowedScriptUrl(url) {
+    function isTrustedScriptUrl(url) {
         try {
-            const u = new URL(url);   // 只接受絕對網址；相對路徑一律拒絕
-            if (u.protocol !== 'https:' || !_SCRIPT_ORIGINS.has(u.origin)) return false;
-            return u.origin !== 'https://cdn.jsdelivr.net' || /^\/(gh\/awdrrawd\/|npm\/)/.test(u.pathname);
+            const u = new URL(url);
+            if (u.username || u.password) return false;
+            if (['localhost', '127.0.0.1', '[::1]'].includes(u.hostname)) return ['http:', 'https:'].includes(u.protocol);
+            if (u.protocol !== 'https:') return false;
+            if (u.hostname === 'awdrrawd.github.io') return true;
+            if (u.hostname === 'raw.githubusercontent.com') return u.pathname.startsWith('/awdrrawd/');
+            return u.hostname === 'cdn.jsdelivr.net' && u.pathname.startsWith('/gh/awdrrawd/');
         } catch { return false; }
     }
 
     function loadScript(url) {
-        if (!url || _loadedUrls.has(url)) return Promise.resolve(false);
-        if (!_isAllowedScriptUrl(url)) {
-            console.warn(`🐈‍⬛ [Liko i18n] ⚠️ loadScript blocked (origin not allowed): ${url}`);
+        if (!isTrustedScriptUrl(url)) {
+            console.warn('[Liko i18n] loadScript blocked untrusted URL: ' + url);
             return Promise.resolve(false);
         }
-        _loadedUrls.add(url);
-        return fetch(_bust(url))
-            .then(res => { if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.text(); })
-            .then(code => { if (code && !code.trimStart().startsWith('<')) new Function(code)(); return true; })
-            .catch(e => { _loadedUrls.delete(url); console.warn(`🐈‍⬛ [Liko i18n] ⚠️ loadScript ${url}: ${e.message}`); return false; });
+        return _load(url, url, async response => {
+            const code = await response.text();
+            if (!code.trim() || code.trimStart().startsWith('<')) throw new Error('Invalid script content');
+            new Function(code)();
+        });
     }
 
-    // 抓一支 .json（純資料 { key: "字串" }）並註冊成單一語言
     function _loadJsonLang(realm, ns, lang, url) {
-        if (!url || _loadedUrls.has(url)) return Promise.resolve(false);
-        _loadedUrls.add(url);
-        return fetch(_bust(url))
-            .then(res => { if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.json(); })
-            .then(data => {
-                if (data && typeof data === 'object') {
-                    const table = {};
-                    for (const [k, v] of Object.entries(data)) table[k] = { [lang]: v };
-                    _register(realm, ns, table);
-                }
-                return true;
-            })
-            .catch(e => { _loadedUrls.delete(url); console.warn(`🐈‍⬛ [Liko i18n] ⚠️ json ${url}: ${e.message}`); return false; });
+        // The same JSON URL may be registered into different namespaces or realms.
+        return _load(JSON.stringify([realm, ns, lang, url]), url, async response => {
+            const data = await response.json();
+            if (!data || typeof data !== 'object' || Array.isArray(data) ||
+                Object.values(data).some(value => typeof value !== 'string')) throw new Error('Invalid translation table');
+            const table = Object.fromEntries(Object.entries(data).map(([key, value]) => [key, { [lang]: value }]));
+            _register(realm, ns, table);
+        });
     }
 
     // 依語言分檔：只抓「目標語言」與 EN 後備。urlMap = { TW:url, CN:url, EN:url, ... }
@@ -448,6 +473,7 @@
         detectLang,
         normalizeLang,
         onChange,
+        refreshLanguage,
         register: (ns, strings) => _register('ui', ns, strings),
         has: (ns, key) => _has('ui', ns, key),
         getNamespaceLanguages: ns => _languages('ui', ns),
@@ -504,12 +530,12 @@
 
     function msg_install(modApi) {
         if (_l10nInstalled || !modApi?.hookFunction) return;
-        _l10nInstalled = true;
         try {
             modApi.hookFunction('ChatRoomMessage', 5, (a, next) => {
                 msg_localize(a[0]);
                 return next(a);
             });
+            _l10nInstalled = true;
         } catch (e) { console.warn('🐈‍⬛ [Liko L10N] hook 失敗:', e.message); }
     }
 
@@ -521,6 +547,7 @@
         detectLang,
         normalizeLang,
         onChange,
+        refreshLanguage,
         register: (ns, table) => _register('msg', ns, table),
         has: (ns, key) => _has('msg', ns, key),
         getNamespaceLanguages: ns => _languages('msg', ns),
