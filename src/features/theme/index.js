@@ -205,8 +205,9 @@ function installHooks() {
 
         DrawTextFit(label, x + w / 2, y + h / 2 + 1, w - 4, plainColors.text);
         drawButtonImageFit(image, x, y, w, h);
-        if (hoveringText != null && isHovering && typeof DrawHoverElements !== 'undefined') {
-            DrawHoverElements.push(() => DrawButtonHover(x, y, w, h, hoveringText));
+        if (hoveringText != null && isHovering && !globalThis.CommonPhotoMode && typeof DrawHoverElements !== 'undefined') {
+            const frame = args[9] && typeof RectGetFrame === 'function' ? RectGetFrame(args[9]) : [x, y, w, h];
+            DrawHoverElements.push(() => DrawButtonHover(...frame, hoveringText));
         }
     });
 
@@ -470,7 +471,7 @@ function installHooks() {
 // 因為那些字串是在函式內部產生的。Themed 用 patchFunction 把它們換成 % 語意 token，
 // 再由上面的 DrawRect 解碼 —— 這才是「所有按鈕都被染到」的關鍵。
 // 有被 patch 的函式（關閉主題時要逐一收回）
-const PATCHED_FNS = ['DrawProcessScreenFlash', 'ChatAdminRun', 'ExtendedItemGetButtonColor', 'DialogDraw', 'AppearanceRun', 'Shop2._AssetElementDraw'];
+const PATCHED_FNS = ['DrawProcessScreenFlash', 'ExtendedItemGetButtonColor', 'DialogDraw', 'AppearanceRun', 'Shop2._AssetElementDraw'];
 
 /** 收回所有 patch（主題關閉時），避免 %token 被當成真顏色送進 canvas。 */
 function removePatches() {
@@ -490,12 +491,6 @@ function installPatches() {
                 'DrawRect(0, 0, 2000, 1000, "!#ffffff" + DrawGetScreenFlashAlpha(FlashTime / Math.max(1, 4 - DrawLastDarkFactor)));',
             'DrawRect(0, 0, 2000, 1000, DrawScreenFlashColor + PinkFlashAlpha);':
                 'DrawRect(0, 0, 2000, 1000, "!" + DrawScreenFlashColor + PinkFlashAlpha);',
-        });
-
-        patch('ChatAdminRun', {
-            // 新版 R133 把停用色抽成 disabledColor 變數
-            'const ButtonBackground = canEdit ? "White" : disabledColor;':
-                'const ButtonBackground = canEdit ? "%background" : "%disabled";',
         });
 
         patch('ExtendedItemGetButtonColor', {

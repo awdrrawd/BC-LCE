@@ -218,6 +218,67 @@ export function installProfile() {
         `body.${LCE_OWNS_CLASS} #bceRichOnlineProfile { display: none !important; }\n` +
         `body.${LCE_EDITING_CLASS} #${TA_ID} { display: block !important; }`);
 
+    if (typeof OnlineProfileSetMode === 'function') {
+        hook('OnlineProfileSetMode', 10, (args, next) => {
+            const result = next(args);
+            const ids = OnlineProfile.IDs;
+            const mode = OnlineProfile.mode;
+            const input = ElementWrap(ids[mode]);
+            const save = ElementWrap(ids.saveButton);
+            if (!input || !save) return result;
+            document.getElementById('lce-profile-edit')?.remove();
+            document.getElementById(RICH_ID)?.remove();
+            editing = false;
+            for (const id of [ids.description, ids.ownersNotes]) ElementWrap(id)?.style.removeProperty('display');
+            if (!anyOn()) return result;
+            const canEdit = OnlineProfile.canEdit(mode);
+            const render = () => {
+                setOwns(true);
+                input.readOnly = !editing || !canEdit;
+                save.hidden = !editing;
+                document.getElementById(RICH_ID)?.remove();
+                input.style.display = '';
+                if (!editing && richOn()) {
+                    const preview = document.createElement('div');
+                    preview.id = RICH_ID;
+                    preview.className = 'lce-rich-textarea';
+                    preview.style.cssText = 'overflow:auto;white-space:pre-wrap;height:100%';
+                    preview.textContent = input.value;
+                    processChatAugmentsForLine(preview, () => false);
+                    input.after(preview);
+                    input.style.display = 'none';
+                }
+            };
+            if (canEdit && !isEditProfileButtonHidden() && !isEditProfileButtonVisualHidden()) {
+                const edit = ElementButton.Create('lce-profile-edit', () => {
+                    if (editing) input.value = OnlineProfile[mode]();
+                    editing = !editing;
+                    render();
+                    if (editing) input.focus();
+                }, { image: 'Icons/Crafting.png', tooltip: T('profile_edit_off') });
+                save.before(edit);
+            }
+            render();
+            return result;
+        });
+        hook('OnlineProfileExit', 10, (args, next) => {
+            if (!editing || !anyOn()) return next(args);
+            const mode = OnlineProfile.mode;
+            const input = ElementWrap(OnlineProfile.IDs[mode]);
+            if (args[0] && OnlineProfile.canEdit(mode)) {
+                if (mode === 'description') OnlineProfileSaveDescription(input.value.slice(0, OnlineProfileTextDescMaxLen));
+                else CharacterSetOwnersNotes(InformationSheetSelection, input.value.slice(0, OnlineProfileTextOwnersNotesMaxLen));
+            } else input.value = OnlineProfile[mode]();
+            OnlineProfileSetMode(mode);
+        });
+        hook('OnlineProfileUnload', 10, (args, next) => {
+            editing = false;
+            setOwns(false);
+            return next(args);
+        });
+        return;
+    }
+
     hook('OnlineProfileLoad', 10, (args, next) => {
         const ret = next(args);
         try { if (anyOn()) enterViewMode(); else cleanup(); } catch (e) { console.warn('🐈‍⬛ [LCE]', e); }
