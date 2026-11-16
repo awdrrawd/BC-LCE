@@ -20,9 +20,9 @@
   },
   "devDependencies": {
     "acorn": "^8.19.0",
-    "concurrently": "^10.0.6",
-    "sass": "^1.107.1",
-    "vite": "^8.3.6"
+    "concurrently": "^10.0.7",
+    "sass": "^1.108.2",
+    "vite": "^8.3.8"
   },
   "dependencies": {
     "idb": "^8.0.4"
