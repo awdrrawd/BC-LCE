@@ -5,7 +5,7 @@
 - 手動：Actions 頁可執行 `LCE checks`。
 - 每週（週一，台北時間）：
   - `Dependabot`（09:00）：npm 與 GitHub Actions 相依更新，小版本與修補版合併成一個 PR。
-  - `BC compatibility`（09:00，`bc-compat.yml`）：比對 BC 程式碼鏡像與 `scripts/bc-compat-baseline.json`，有差異只開（或更新）一個 `bc-compat` issue，不擋 PR 或部署；說明見 [安全說明](security-notes.md)。
+  - `BC compatibility`（09:00，`bc-compat.yml`）：比對 BC 程式碼鏡像與 `scripts/bc-compat-baseline.json`，有差異時開一個 `bc-compat` issue，差異內容改變時更新並留言，差異消失後自動關閉（由 `scripts/bc-compat-issue.mjs` 處理），不擋 PR 或部署；說明見 [安全說明](security-notes.md)。
   - `Security checks`（09:30，`security.yml`）：`npm audit`、CodeQL，PR 另有 dependency review；PR 與 push 到 `main` 時也會執行。CodeQL 警報在 Security 分頁查看。
 
 ## 管理者設定
