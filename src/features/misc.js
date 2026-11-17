@@ -26,8 +26,14 @@ function askOrigin(origin, type) {
     if (promptOpen) return;
     promptOpen = true;
     const content = T(type === 'image' ? 'domain_image' : type === 'music' ? 'domain_music' : 'domain_content');
+    const room = typeof ChatRoomData !== 'undefined' ? ChatRoomData : null;
     requestOriginTrust(origin, content, { persistent: type === 'image' })
-        .finally(() => { promptOpen = false; });
+        .finally(() => { promptOpen = false; })
+        .then(action => {
+            if (action !== 'cancel' && room && room.Custom === ChatRoomData?.Custom && typeof ChatAdminRoomCustomizationRefreshPreview === 'function') {
+                ChatRoomUpdateCustomization();
+            }
+        });
 }
 
 let installed = false;
@@ -89,22 +95,44 @@ export function installMisc() {
     })();
 
     // ── 房間自訂背景/音樂的網域確認 ──
-    hook('ChatAdminRoomCustomizationProcess', 20, (args, next) => {
-        if (!shouldLceHandle('customContentDomainCheck')) return next(args);
+    function allowRoomMedia({ ImageURL, MusicURL }) {
         try {
-            const [{ ImageURL, MusicURL }] = args;
             const imageOrigin = ImageURL && new URL(ImageURL).origin;
             const musicOrigin = MusicURL && new URL(MusicURL).origin;
-
             if (imageOrigin && getTrustDecision(imageOrigin) === 'unknown') askOrigin(imageOrigin, 'image');
             else if (musicOrigin && getTrustDecision(musicOrigin, { persistent: false }) === 'unknown') askOrigin(musicOrigin, 'music');
+            return (!ImageURL || isTrustedOrigin(imageOrigin))
+                && (!MusicURL || isTrustedOrigin(musicOrigin, { persistent: false }));
+        } catch { return false; }
+    }
 
-            // 全部都已授權才放行；否則擋下（不載入）
-            if ((!ImageURL || isTrustedOrigin(imageOrigin))
-                && (!MusicURL || isTrustedOrigin(musicOrigin, { persistent: false }))) {
-                return next(args);
-            }
-        } catch { /* URL 解析失敗就當作不放行 */ }
+    // R134 checks this predicate before loading either room media source.
+    if (typeof ChatAdminRoomCustomizationRefreshPreview === 'function') {
+        hook('ChatAdminRoomCustomizationLoad', 0, async (args, next) => {
+            const result = await next(args);
+            const save = document.getElementById('chatroom-admin-subscreen-save');
+            if (!save) return result;
+            const inputs = ['InputImageURL', 'InputMusicURL'].map(id => document.getElementById(id));
+            const original = inputs.map(input => input?.value.trim());
+            save.addEventListener('click', () => {
+                inputs.forEach((input, index) => {
+                    const value = input?.value.trim();
+                    if (!value || value === original[index]) return;
+                    try { sessionCustomOrigins.set(new URL(value).origin, 'allowed'); } catch { /* Invalid URL */ }
+                });
+            }, { capture: true });
+            return result;
+        });
+        hook('ChatRoomIsCustomized', 20, (args, next) => {
+            const enabled = next(args);
+            if (!enabled || !shouldLceHandle('customContentDomainCheck')) return enabled;
+            return allowRoomMedia(ChatRoomData.Custom);
+        });
+        return;
+    }
+
+    hook('ChatAdminRoomCustomizationProcess', 20, (args, next) => {
+        if (!shouldLceHandle('customContentDomainCheck') || allowRoomMedia(args[0])) return next(args);
         return null;
     });
 

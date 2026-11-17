@@ -1,13 +1,13 @@
 {
-  "gameVersion": "R133",
-  "commit": "0444daadce251b9529e1eaff1ccdde4f3bfea710",
+  "gameVersion": "R134",
+  "commit": "dcf8b3eb00649c8db67f09ef93d917c35b5f220e",
   "functions": {
     "ActivityCheckPrerequisites": {
       "hash": "2E8F2D62",
       "file": "Scripts/Activity.js"
     },
     "ActivityTimerProgress": {
-      "hash": "6CD388A7",
+      "hash": "0FEA58D2",
       "file": "Scripts/Activity.js"
     },
     "AppearanceGetPreviewImageColor": {
@@ -15,7 +15,7 @@
       "file": "Screens/Character/Appearance/Appearance.js"
     },
     "AppearanceRun": {
-      "hash": "30EF156C",
+      "hash": "6C886587",
       "file": "Screens/Character/Appearance/Appearance.js"
     },
     "AudioPlaySoundForChatMessage": {
@@ -27,11 +27,11 @@
       "file": "Screens/Character/Appearance/Appearance.js"
     },
     "CharacterAppearanceVisible": {
-      "hash": "AFFE9F3A",
+      "hash": "376C3073",
       "file": "Screens/Character/Appearance/Appearance.js"
     },
     "CharacterCompressWardrobe": {
-      "hash": "AD648C41",
+      "hash": "24BB4A7A",
       "file": "Scripts/Character.js"
     },
     "CharacterLoadCanvas": {
@@ -39,7 +39,7 @@
       "file": "Scripts/Character.js"
     },
     "CharacterLoadOnline": {
-      "hash": "9A8EAE82",
+      "hash": "B2E96794",
       "file": "Scripts/Character.js"
     },
     "CharacterSetActivePose": {
@@ -51,16 +51,16 @@
       "file": "Scripts/Character.js"
     },
     "ChatAdminRoomCustomizationClick": {
-      "hash": "3F2C19FA",
+      "hash": "3F102828",
+      "file": "Screens/Online/ChatAdminRoomCustomization/ChatAdminRoomCustomization.js"
+    },
+    "ChatAdminRoomCustomizationLoad": {
+      "hash": "96CF93CA",
       "file": "Screens/Online/ChatAdminRoomCustomization/ChatAdminRoomCustomization.js"
     },
     "ChatAdminRoomCustomizationProcess": {
       "hash": "16B92DC3",
       "file": "Screens/Online/ChatAdminRoomCustomization/ChatAdminRoomCustomization.js"
-    },
-    "ChatAdminRun": {
-      "hash": "FDE001C7",
-      "file": "Screens/Online/ChatAdmin/ChatAdmin.js"
     },
     "ChatRoomAppendChat": {
       "hash": "58B6464F",
@@ -71,7 +71,7 @@
       "file": "Screens/Online/ChatRoom/ChatRoomCharacterView.js"
     },
     "ChatRoomClick": {
-      "hash": "938A8D24",
+      "hash": "49382E96",
       "file": "Screens/Online/ChatRoom/ChatRoom.js"
     },
     "ChatRoomDrawCharacterStatusIcons": {
@@ -88,6 +88,10 @@
     },
     "ChatRoomInputResize": {
       "hash": "08B806FD",
+      "file": "Screens/Online/ChatRoom/ChatRoom.js"
+    },
+    "ChatRoomIsCustomized": {
+      "hash": "025F1803",
       "file": "Screens/Online/ChatRoom/ChatRoom.js"
     },
     "ChatRoomKeyDown": {
@@ -111,7 +115,7 @@
       "file": "Screens/Online/ChatRoom/ChatRoom.js"
     },
     "ChatRoomMessage": {
-      "hash": "42605304",
+      "hash": "657E9417",
       "file": "Screens/Online/ChatRoom/ChatRoom.js"
     },
     "ChatRoomMessageDisplay": {
@@ -123,11 +127,11 @@
       "file": "Screens/Online/ChatRoom/ChatRoom.js"
     },
     "ChatRoomMessageSetReply": {
-      "hash": "F380B10E",
+      "hash": "AAC40AAF",
       "file": "Screens/Online/ChatRoom/ChatRoom.js"
     },
     "ChatRoomResize": {
-      "hash": "ADF365CE",
+      "hash": "5758BF76",
       "file": "Screens/Online/ChatRoom/ChatRoom.js"
     },
     "ChatRoomRun": {
@@ -147,7 +151,7 @@
       "file": "Screens/Online/ChatRoom/ChatRoom.js"
     },
     "ChatRoomSync": {
-      "hash": "DAEBD74D",
+      "hash": "6F5B5E1A",
       "file": "Screens/Online/ChatRoom/ChatRoom.js"
     },
     "ChatRoomSyncItem": {
@@ -159,7 +163,7 @@
       "file": "Screens/Online/ChatRoom/ChatRoom.js"
     },
     "ChatRoomSyncSingle": {
-      "hash": "E5456B3F",
+      "hash": "139C0D33",
       "file": "Screens/Online/ChatRoom/ChatRoom.js"
     },
     "ChatSearchLoad": {
@@ -195,7 +199,7 @@
       "file": "Scripts/Dialog.js"
     },
     "DialogDraw": {
-      "hash": "9CDAC5F2",
+      "hash": "80EA2192",
       "file": "Scripts/Dialog.js"
     },
     "DialogGetMenuButtonColor": {
@@ -203,7 +207,7 @@
       "file": "Scripts/Dialog.js"
     },
     "DialogLeave": {
-      "hash": "3AB3FCF3",
+      "hash": "BB71F57C",
       "file": "Scripts/Dialog.js"
     },
     "DialogLoad": {
@@ -211,15 +215,15 @@
       "file": "Scripts/Dialog.js"
     },
     "DrawArousalMeter": {
-      "hash": "BB0755AF",
+      "hash": "B9C445D5",
       "file": "Scripts/Drawing.js"
     },
     "DrawBackNextButton": {
-      "hash": "0A746990",
+      "hash": "2CCCF59F",
       "file": "Scripts/Drawing.js"
     },
     "DrawButton": {
-      "hash": "2EB14CB8",
+      "hash": "45896474",
       "file": "Scripts/Drawing.js"
     },
     "DrawButtonHover": {
@@ -227,7 +231,7 @@
       "file": "Scripts/Drawing.js"
     },
     "DrawCharacter": {
-      "hash": "2CD2CA5F",
+      "hash": "9272BAF3",
       "file": "Scripts/Drawing.js"
     },
     "DrawCheckbox": {
@@ -243,11 +247,11 @@
       "file": "Scripts/Drawing.js"
     },
     "DrawPreviewBox": {
-      "hash": "E1E7A487",
+      "hash": "D1AC8301",
       "file": "Scripts/Drawing.js"
     },
     "DrawProcess": {
-      "hash": "91C96D27",
+      "hash": "807CA55E",
       "file": "Scripts/Drawing.js"
     },
     "DrawProcessScreenFlash": {
@@ -271,7 +275,7 @@
       "file": "Scripts/Drawing.js"
     },
     "DrawTextWrap": {
-      "hash": "EEA1D08E",
+      "hash": "FF038723",
       "file": "Scripts/Drawing.js"
     },
     "ElementButton.Create": {
@@ -287,11 +291,11 @@
       "file": "Scripts/GLDraw.js"
     },
     "GameRun": {
-      "hash": "BA72C165",
+      "hash": "D7D4A488",
       "file": "Scripts/Game.js"
     },
     "InformationSheetRun": {
-      "hash": "F33DBCA5",
+      "hash": "82ADDEDB",
       "file": "Screens/Character/InformationSheet/InformationSheet.js"
     },
     "Layering.Load": {
@@ -300,8 +304,7 @@
     },
     "Layering._GetTabContents": {
       "hash": "7DD2C2A5",
-      "file": "Scripts/Layering.js",
-      "gameVersion": "R134Beta1"
+      "file": "Scripts/Layering.js"
     },
     "Layering._ResetClickListener": {
       "hash": "CBE28EA4",
@@ -312,11 +315,11 @@
       "file": "Screens/Character/Login/Login.js"
     },
     "LoginLoad": {
-      "hash": "F8A527CB",
+      "hash": "0BA16BD6",
       "file": "Screens/Character/Login/Login.js"
     },
     "LoginResponse": {
-      "hash": "58671CE3",
+      "hash": "C57C963E",
       "file": "Screens/Character/Login/Login.js"
     },
     "LoginStatusReset": {
@@ -332,23 +335,27 @@
       "file": "Scripts/Notification.js"
     },
     "OnlineProfileClick": {
-      "hash": "6ED6EEC6",
+      "hash": "5F04F30C",
       "file": "Screens/Character/OnlineProfile/OnlineProfile.js"
     },
     "OnlineProfileExit": {
-      "hash": "D09E1D3F",
+      "hash": "471A362A",
       "file": "Screens/Character/OnlineProfile/OnlineProfile.js"
     },
     "OnlineProfileLoad": {
-      "hash": "3A702CAD",
+      "hash": "B5AFB28D",
       "file": "Screens/Character/OnlineProfile/OnlineProfile.js"
     },
     "OnlineProfileRun": {
-      "hash": "8333DDD1",
+      "hash": "17BE428C",
+      "file": "Screens/Character/OnlineProfile/OnlineProfile.js"
+    },
+    "OnlineProfileSetMode": {
+      "hash": "88EE8C7B",
       "file": "Screens/Character/OnlineProfile/OnlineProfile.js"
     },
     "OnlineProfileUnload": {
-      "hash": "024E7746",
+      "hash": "1F54FDB8",
       "file": "Screens/Character/OnlineProfile/OnlineProfile.js"
     },
     "PoseSetActive": {
@@ -356,7 +363,7 @@
       "file": "Scripts/Pose.js"
     },
     "PreferenceExit": {
-      "hash": "E0D0A274",
+      "hash": "F3C80DBC",
       "file": "Screens/Character/Preference/Preference.js"
     },
     "RelogExit": {
@@ -368,7 +375,7 @@
       "file": "Screens/Character/Relog/Relog.js"
     },
     "ServerAccountBeep": {
-      "hash": "D1B35DC1",
+      "hash": "DB0EEA1C",
       "file": "Scripts/Server.js"
     },
     "ServerAppearanceLoadFromBundle": {
@@ -384,7 +391,7 @@
       "file": "Scripts/Server.js"
     },
     "ServerPlayerAppearanceSync": {
-      "hash": "A014E0B7",
+      "hash": "6DA4AB8C",
       "file": "Scripts/Server.js"
     },
     "ServerPlayerSync": {
@@ -404,11 +411,11 @@
       "file": "Scripts/Speech.js"
     },
     "StruggleFlexibilityCheck": {
-      "hash": "727CE05B",
+      "hash": "DAEBFF0F",
       "file": "Scripts/Struggle.js"
     },
     "StruggleLockPickDraw": {
-      "hash": "C52B06CE",
+      "hash": "FF939806",
       "file": "Scripts/Struggle.js"
     },
     "StruggleMinigameHandleExpression": {
@@ -423,12 +430,8 @@
       "hash": "7A6DB2BF",
       "file": "Scripts/Timer.js"
     },
-    "ToastManager._process": {
-      "hash": "428E1B2F",
-      "file": "Scripts/Toasts.js"
-    },
     "ValidationSanitizeProperties": {
-      "hash": "B40B87BD",
+      "hash": "65EE05EC",
       "file": "Scripts/Validation.js"
     }
   }

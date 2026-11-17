@@ -679,6 +679,22 @@ test('permanent image trust survives a fresh session but does not authorize musi
 });
 
 
+test('R134 checks room media trust only when native customization is active', async () => {
+    const room = { Custom: { ImageURL: 'https://images.example/a.svg', MusicURL: '' } };
+    const rt = runtime({ globals: { ChatRoomData: room, ChatAdminRoomCustomizationRefreshPreview() {} } });
+    const settings = await rt.load('src/core/feature-settings.js');
+    settings.setFeature('customContentDomainCheck', true);
+    const trust = await rt.load('src/features/trusted-domains.js');
+    const misc = await rt.load('src/features/misc.js');
+    misc.installMisc();
+    const check = rt.hooks.get('ChatRoomIsCustomized');
+    trust.sessionCustomOrigins.set('https://images.example', 'denied');
+    assert.equal(check([], () => true), false);
+    trust.sessionCustomOrigins.set('https://images.example', 'allowed');
+    assert.equal(check([], () => true), true);
+    assert.equal(check([], () => false), false);
+});
+
 test('IM receives both arrivals after exactly one pending history read', async () => {
     let release, reads = 0;
     const pending = new Promise(resolve => { release = resolve; });

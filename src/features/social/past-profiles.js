@@ -398,6 +398,7 @@ const isNote = (n) => !!n && typeof n === 'object' && typeof n.note === 'string'
 
 function showNoteInput() {
     if (!InformationSheetSelection?.MemberNumber || !noteInput) return;
+    if (typeof OnlineProfileSetMode === 'function') ElementWrap(OnlineProfile.IDs.screen)?.setAttribute('hidden', '');
     inNotes = true;
     noteInput.classList.remove('lce-hidden');
     noteInput.value = '…';
@@ -410,6 +411,7 @@ function showNoteInput() {
 }
 
 function hideNoteInput() {
+    if (inNotes && typeof OnlineProfileSetMode === 'function') ElementWrap(OnlineProfile.IDs.screen)?.removeAttribute('hidden');
     noteInput?.classList.add('lce-hidden');
     inNotes = false;
 }
@@ -503,6 +505,18 @@ export async function installPastProfiles() {
     refreshExistingNoteFlags();
 
     // 備註介面：優先權高於 BIO 編輯鈕，開啟備註時直接接管整個畫面
+    if (typeof OnlineProfileSetMode === 'function') {
+        hook('OnlineProfileLoad', 20, async (args, next) => {
+            const result = await next(args);
+            const cancel = ElementWrap(OnlineProfile.IDs.cancelButton);
+            if (cancel && !isNotesButtonHidden() && !isNotesButtonVisualHidden()) {
+                cancel.after(ElementButton.Create('lce-profile-notes', showNoteInput, {
+                    image: 'Icons/Notifications.png', tooltip: T('notes_button'),
+                }));
+            }
+            return result;
+        });
+    }
     hook('OnlineProfileRun', 20, (args, next) => {
         if (inNotes) {
             DrawText(T('notes_title'), 910, 105, 'Black', 'Gray');
@@ -512,7 +526,7 @@ export async function installPastProfiles() {
             DrawButton(...CANCEL_BTN, '', 'White', 'Icons/Cancel.png', TextGet('LeaveNoSave'));
             return null;   // 不呼叫 next：備註模式下不畫原本的個資頁
         }
-        if (!isNotesButtonHidden() && !isNotesButtonVisualHidden()) {
+        if (typeof OnlineProfileSetMode !== 'function' && !isNotesButtonHidden() && !isNotesButtonVisualHidden()) {
             DrawButton(...getNotesButtonPosition(), '', 'White', 'Icons/Notifications.png', T('notes_button'));
         }
         return next(args);
@@ -529,7 +543,7 @@ export async function installPastProfiles() {
             }
             return null;
         }
-        if (!isNotesButtonHidden() && MouseIn(...getNotesButtonPosition())) { showNoteInput(); return null; }
+        if (typeof OnlineProfileSetMode !== 'function' && !isNotesButtonHidden() && MouseIn(...getNotesButtonPosition())) { showNoteInput(); return null; }
         return next(args);
     });
 
