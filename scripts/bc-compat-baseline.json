@@ -1,6 +1,6 @@
 {
   "gameVersion": "R134",
-  "commit": "dcf8b3eb00649c8db67f09ef93d917c35b5f220e",
+  "commit": "0333e3d45038",
   "functions": {
     "ActivityCheckPrerequisites": {
       "hash": "2E8F2D62",
@@ -155,7 +155,7 @@
       "file": "Screens/Online/ChatRoom/ChatRoom.js"
     },
     "ChatRoomSyncItem": {
-      "hash": "AAE07A27",
+      "hash": "2A199385",
       "file": "Screens/Online/ChatRoom/ChatRoom.js"
     },
     "ChatRoomSyncMemberJoin": {
@@ -379,7 +379,7 @@
       "file": "Scripts/Server.js"
     },
     "ServerAppearanceLoadFromBundle": {
-      "hash": "84F1258E",
+      "hash": "20170723",
       "file": "Scripts/Server.js"
     },
     "ServerDisconnect": {
@@ -431,7 +431,7 @@
       "file": "Scripts/Timer.js"
     },
     "ValidationSanitizeProperties": {
-      "hash": "65EE05EC",
+      "hash": "96798E34",
       "file": "Scripts/Validation.js"
     }
   }
