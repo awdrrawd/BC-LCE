@@ -48,7 +48,7 @@ jobs:
         with:
           persist-credentials: false
       # 比對 PR 前後的 lockfile，擋下帶有 high 以上已知漏洞的新增或升級相依。
-      - uses: actions/dependency-review-action@bbc44d14a204704ccc493733616cd1e93a0321ec # v5.0.1
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
         with:
           fail-on-severity: high
 
