@@ -62,3 +62,21 @@
 }
 
 /* #endregion AdminCustomization */
+
+/* #region Layering */
+
+/* 分頁按鈕（圖層/移動/縮放/旋轉）是直接放文字、不是 .button-label，
+   所以吃不到上面 .button-label 的文字色，會退回瀏覽器黑。 */
+#layering .layering-tabs .layering-tab-button {
+  color: var(--lce-text);
+}
+
+/* 目前分頁：BC 用白底黑字，主題下改用強調色底 */
+#layering .layering-tabs .layering-tab-button.layering-tab-active,
+#layering .layering-tabs .layering-tab-button[aria-checked="true"] {
+  background-color: var(--lce-accent);
+  border-color: var(--lce-accent);
+  color: var(--lce-text);
+}
+
+/* #endregion Layering */
