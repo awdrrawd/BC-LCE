@@ -193,9 +193,12 @@ const kebab = (s) => s.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
 export function composeRootCss() {
     composeColors();
     let out = '';
-    for (const [k, v] of Object.entries(plainColors)) out += `--lce-${kebab(k)}:${v};`;
+    // 同時輸出 --tmd-* 別名：LSCG 等第三方模組的 DOM 介面讀的是 Themed 的 --tmd-* 變數
+    // （例如 LSCG 的 --lscg-text-color: var(--tmd-text, black)）。沒有這組別名它們就退回黑字。
+    for (const [k, v] of Object.entries(plainColors)) out += `--lce-${kebab(k)}:${v};--tmd-${kebab(k)}:${v};`;
     for (const [k, v] of Object.entries(specialColors)) {
         out += `--lce-${kebab(k)}:${v[0]};--lce-${kebab(k)}-hover:${v[1]};`;
+        out += `--tmd-${kebab(k)}:${v[0]};--tmd-${kebab(k)}-hover:${v[1]};`;
     }
     // 房間搜尋「已滿」的混色（移植 Themed 的 search-full-*）
     out += `--lce-search-full-blocked:${mix(specialColors.roomBlocked[0], plainColors.elementDisabled)};`;

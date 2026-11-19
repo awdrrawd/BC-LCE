@@ -1,7 +1,39 @@
 /* #region InformationSheet */
 
+/* BC R134 把資訊頁改成 HTML：預設字色是瀏覽器黑，標籤/備註另外寫死咖啡色 #3a2c22。
+   兩者都換成主題文字色（--lce-text，預設 #CCCCCC）。
+   紅/藍/綠（強制稱號、修正值正負）是語意色，刻意不動。 */
+#information-sheet-screen,
+#information-sheet-screen .information-sheet-body {
+  color: var(--lce-text);
+}
+
+#information-sheet-screen .information-sheet-facts dt,
+#information-sheet-screen .information-sheet-since,
+#information-sheet-screen .information-sheet-duration,
+#information-sheet-screen .information-sheet-note,
+#information-sheet-screen .information-sheet-empty,
+#information-sheet-screen .information-sheet-stat-label,
+#information-sheet-screen .information-sheet-permissions .dropdown-label,
 #AllowedInteractions-dropdown-label {
   color: var(--lce-text);
+}
+
+#information-sheet-screen .information-sheet-column h3 {
+  border-bottom-color: color-mix(in srgb, var(--lce-text) 35%, transparent);
+}
+
+/* 深色底下近黑的刻度線/進度條會看不見，改跟文字色 */
+#information-sheet-screen .information-sheet-bimeter-axis,
+#information-sheet-screen .information-sheet-meter-fill,
+#information-sheet-screen .information-sheet-trait-bimeter .information-sheet-bimeter-fill {
+  background: var(--lce-text);
+}
+
+#information-sheet-screen .information-sheet-bimeter,
+#information-sheet-screen .information-sheet-meter {
+  background: color-mix(in srgb, var(--lce-text) 12%, transparent);
+  border-color: color-mix(in srgb, var(--lce-text) 35%, transparent);
 }
 
 /* #endregion InformationSheet */
@@ -30,3 +62,21 @@
 }
 
 /* #endregion AdminCustomization */
+
+/* #region Layering */
+
+/* 分頁按鈕（圖層/移動/縮放/旋轉）是直接放文字、不是 .button-label，
+   所以吃不到上面 .button-label 的文字色，會退回瀏覽器黑。 */
+#layering .layering-tabs .layering-tab-button {
+  color: var(--lce-text);
+}
+
+/* 目前分頁：BC 用白底黑字，主題下改用強調色底 */
+#layering .layering-tabs .layering-tab-button.layering-tab-active,
+#layering .layering-tabs .layering-tab-button[aria-checked="true"] {
+  background-color: var(--lce-accent);
+  border-color: var(--lce-accent);
+  color: var(--lce-text);
+}
+
+/* #endregion Layering */
