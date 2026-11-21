@@ -101,6 +101,12 @@ function applyLayeringStyle() {
 
 let installed = false;
 
+/** wceOverrideHide 的合法值：長度有上限的陣列，且每個元素都是真實存在的部位名。 */
+function isValidHideOverride(v) {
+    if (!Array.isArray(v) || v.length > 128) return false;
+    return v.every(g => typeof g === 'string' && !!AssetGroupGet('Female3DCG', g));
+}
+
 
 const hook = createHook('layering-hide');
 
@@ -286,6 +292,23 @@ export function installLayeringHide() {
             }
         } catch (e) { console.warn(LOG, 'layeringHide 重設失敗:', e); }
         return next(args);
+    });
+
+    // BC-R134-COMPAT：R134 起 ExtendedItemInit / ValidationSanitizeProperties 會以 ItemPropertiesValidate
+    // 的回傳值覆寫 Item.Property，只保留 PropertyData 有條目的欄位；wceOverrideHide 沒有條目（只在上傳白名單），
+    // 會在開物品對話框、穿上、收到外觀時被靜默刪除。這裡在驗證後把「合法的」值放回去。
+    // 只還原陣列且元素都是真實存在的部位名，不信任其他來源的任意內容。
+    // 可移除時機：PropertyData 補上 wceOverrideHide 條目後（R133 沒人呼叫 Validate，此 hook 無作用）。
+    hook('ItemPropertiesValidate', 5, (args, next) => {
+        const ret = next(args);
+        try {
+            if (!lceOwnsLayeringHide()) return ret;   // WCE 接管時由 WCE 自行處理
+            const hide = args[0]?.[HIDE_PROP];
+            if (ret?.value && ret.value[HIDE_PROP] === undefined && isValidHideOverride(hide)) {
+                ret.value[HIDE_PROP] = hide.slice();
+            }
+        } catch (e) { console.warn(LOG, 'wceOverrideHide 還原失敗:', e); }
+        return ret;
     });
 
     // ── 讓 wceOverrideHide 真的生效：覆蓋 CharacterAppearanceVisible 的遮蔽判斷 ──

@@ -73,3 +73,22 @@ test('other characters still require capabilities and non-hiding items have no H
     const { root } = await setup({ self: false, capable: true, hide: ['Bra'] });
     assert.ok(root.querySelector('#layering-tab-lce-hide'));
 });
+
+test('R134: ItemPropertiesValidate 洗掉 wceOverrideHide 後，合法的值會被還原；非法內容不還原', async () => {
+    const { rt } = await setup({ hide: ['Bra'] });
+    rt.context.AssetGroupGet = (_family, name) => (['Bra', 'Panties'].includes(name) ? { Name: name } : null);
+    const validate = rt.hooks.get('ItemPropertiesValidate');
+    // 模擬 R134：未登記欄位被丟掉，回傳全新物件
+    const dropped = () => ({ value: { TranslationX: 1 }, status: 'ok' });
+
+    let ret = validate([{ wceOverrideHide: ['Bra'] }], dropped);
+    assert.deepEqual(ret.value.wceOverrideHide, ['Bra']);
+
+    for (const bad of [['Nope'], 'Bra', [{ x: 1 }], Array(200).fill('Bra'), null]) {
+        ret = validate([{ wceOverrideHide: bad }], dropped);
+        assert.equal(ret.value.wceOverrideHide, undefined);
+    }
+    // 驗證已保留該欄位時不覆寫
+    ret = validate([{ wceOverrideHide: ['Bra'] }], () => ({ value: { wceOverrideHide: ['Panties'] } }));
+    assert.deepEqual(ret.value.wceOverrideHide, ['Panties']);
+});

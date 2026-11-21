@@ -298,6 +298,10 @@
       "hash": "82ADDEDB",
       "file": "Screens/Character/InformationSheet/InformationSheet.js"
     },
+    "ItemPropertiesValidate": {
+      "hash": "C0015725",
+      "file": "Scripts/Item.js"
+    },
     "Layering.Load": {
       "hash": "AB38BAA6",
       "file": "Scripts/Layering.js"

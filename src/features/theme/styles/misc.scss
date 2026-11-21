@@ -19,6 +19,23 @@
   color: var(--lce-text);
 }
 
+/* R134 的身分區塊（#會員編號、暱稱(名字)•代名詞、稱號／金錢等 facts 的 key/value）
+   在 information-sheet.css 內把顏色寫死為 #3a2c22，上面的選擇器沒涵蓋這些類別。
+   生日金色、強制／獲得稱號的語意色用 :not() 排除，避免被蓋掉。 */
+#information-sheet-screen {
+  .information-sheet-identity-member-number,
+  .information-sheet-identity-name,
+  .information-sheet-fact-key,
+  .information-sheet-fact-value,
+  .information-sheet-nickname,
+  .information-sheet-name,
+  .information-sheet-pronouns {
+    &:not(.information-sheet-birthday):not(.information-sheet-title-forced):not(.information-sheet-title-earned) {
+      color: var(--lce-text);
+    }
+  }
+}
+
 #information-sheet-screen .information-sheet-column h3 {
   border-bottom-color: color-mix(in srgb, var(--lce-text) 35%, transparent);
 }
