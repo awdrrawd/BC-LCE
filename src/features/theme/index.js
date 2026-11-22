@@ -21,6 +21,7 @@ import { createHook } from '../../core/hooks.js';
 import modApi from '../../modsdk.js';
 import { getFeature } from '../../core/feature-settings.js';
 import { plainColors, specialColors, composeColors, composeRootCss, getHexComputed, lighten, darken, isDark } from './theme-colors.js';
+import { createEchsCanvasTheme, isEchsScreen, ECHS_KNOWN } from './echs-canvas.js';
 
 // BC 現在多數畫面是 HTML（設定九宮格、勾選框、下拉、卷軸、聊天室選單…），canvas hook 碰不到，
 // 只能靠 CSS。以下樣式表移植自 Themed（變數前綴改為 --lce-），跳過其自有元件與 integrations。
@@ -100,6 +101,10 @@ const KNOWN = new Map([
 ]);
 
 function drawRectRaw(next, l, t, w, h, color) { return next([l, t, w, h, color]); }
+
+// ECHS（HypnosisAddon）設定頁：其文字直接用 MainCanvas.fillText 畫，繞過 DrawText hook；
+// 這層只在 ECHS 設定頁開著時，把近黑/灰的字換成主題文字色（詳見 echs-canvas.js）。
+const echsCanvas = createEchsCanvasTheme({ isActive: doRedraw, colors: () => plainColors, toHex: getHexComputed });
 
 // ───────────────────────────── 套用 ─────────────────────────────
 
@@ -192,6 +197,7 @@ function installHooks() {
     // 按鈕：把顏色重新編碼後交給 DrawRect/DrawEmptyRect 解碼（移植 Themed draw_button.ts）
     hook('DrawButton', 11, (args, next) => {
         if (!doRedraw()) return next(args);
+        echsCanvas.ensure();
         const [x, y, w, h, label, , image, hoveringText, isDisabled] = args;
         const isHovering = typeof MouseHovering === 'function' ? MouseHovering(x, y, w, h) : false;
         const state = isDisabled ? C.Disabled : (isHovering ? C.Hover : C.Base);
@@ -258,7 +264,8 @@ function installHooks() {
             if (/^#[0-9a-f]{8}$/i.test(color.trim()) || color.trim().toLowerCase().startsWith('rgba')) return next(args);
             const parsed = getHexComputed(color);
             if (!parsed) return next(args);
-            const semantic = KNOWN.get(parsed);
+            // ECHS 左側分頁按鈕的 #d8d8d8 不在通用對照表內：只在 ECHS 畫面才查專用表
+            const semantic = KNOWN.get(parsed) ?? (ECHS_KNOWN.has(parsed) && isEchsScreen() ? ECHS_KNOWN.get(parsed) : undefined);
             if (semantic) color = plainColors[semantic];
         }
 
