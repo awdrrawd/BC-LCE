@@ -1,6 +1,6 @@
 {
   "gameVersion": "R134",
-  "commit": "0333e3d45038",
+  "commit": "b3afd52e44f69c4a6bcd826993679ecfb5336556",
   "functions": {
     "ActivityCheckPrerequisites": {
       "hash": "2E8F2D62",
@@ -55,7 +55,7 @@
       "file": "Screens/Online/ChatAdminRoomCustomization/ChatAdminRoomCustomization.js"
     },
     "ChatAdminRoomCustomizationLoad": {
-      "hash": "96CF93CA",
+      "hash": "443EF253",
       "file": "Screens/Online/ChatAdminRoomCustomization/ChatAdminRoomCustomization.js"
     },
     "ChatAdminRoomCustomizationProcess": {
@@ -83,7 +83,7 @@
       "file": "Screens/Online/ChatRoom/ChatRoom.js"
     },
     "ChatRoomHideElements": {
-      "hash": "6BA24585",
+      "hash": "5FADB155",
       "file": "Screens/Online/ChatRoom/ChatRoom.js"
     },
     "ChatRoomInputResize": {
@@ -323,7 +323,7 @@
       "file": "Screens/Character/Login/Login.js"
     },
     "LoginResponse": {
-      "hash": "C57C963E",
+      "hash": "5777701D",
       "file": "Screens/Character/Login/Login.js"
     },
     "LoginStatusReset": {
