@@ -2,7 +2,9 @@
 // 角色素材、背景、場景圖不能碰；本身已有配色的圖示也排除。
 // R133 把表情與活動圖示從 Assets/Female3DCG/ 搬到 Icons/Expressions/、Icons/Activity/，
 // 它們原本就在上面的排除範圍內，所以新路徑也要排除。
-const CANVAS_NO_PREFIX = ['Assets/Female3DCG/', 'Backgrounds/', 'Icons/Struggle/', 'Icons/LARP/', 'Icons/MagicBattle/', 'Icons/Expressions/', 'Icons/Activity/', 'Screens/', 'http'];
+// 地圖房（ChatRoomMapView）的地板/牆/物件/霧效是 Assets/Map/ 下的場景圖，
+// 以字串網址交給 DrawImageEx，不排除的話會全部被染成強調色。
+const CANVAS_NO_PREFIX = ['Assets/Female3DCG/', 'Assets/Map/', 'Backgrounds/', 'Icons/Struggle/', 'Icons/LARP/', 'Icons/MagicBattle/', 'Icons/Expressions/', 'Icons/Activity/', 'Screens/', 'http'];
 const HTML_NO_PREFIX = [...CANVAS_NO_PREFIX, 'data:'];
 
 const BASE_NO_FILES = [
