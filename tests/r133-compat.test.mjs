@@ -39,3 +39,12 @@ test('R133 moved expression and activity icons under Icons/ but they must stay u
     // plain UI icons keep being themed
     assert.equal(policy.doColorizeImage('Icons/Range/1.png'), true);
 });
+
+test('map room scene images (Assets/Map/) must stay uncolored while UI icons keep being themed', async () => {
+    const policy = await runtime().load('src/features/theme/image-policy.js');
+    for (const path of ['Assets/Map/Objects/Statue/Default.png', './Assets/Map/Tiles/Water/Default.png', 'Assets/Map/Tiles/WallEffect/1.png', 'Assets/Map/Tiles/Fog/Full.png?v=2']) {
+        assert.equal(policy.doColorizeImage(path), false, path);
+        assert.equal(policy.doColorizeHTMLImage(path), false, path);
+    }
+    assert.equal(policy.doColorizeImage('Icons/Range/1.png'), true);
+});
