@@ -2,11 +2,13 @@ name: BC compatibility
 
 # 每週檢查 LCE 掛鉤 / patch 的 Bondage Club 函式，是否仍與已記錄的基準一致。
 # 有差異時開一個 issue，差異內容改變時更新並留言，差異消失後自動關閉；不會擋 PR，也不會擋部署。
-# 來源預設為下方的程式碼鏡像；可用 repository variables BC_REPO_URL / BC_REF 改用其他來源，
-# 手動執行時也能指定分支或 tag。
+# 步驟在共用 workflow awdrrawd/Bondage-College-Mirror/.github/workflows/reusable-bc-compat.yml：
+# 抓鏡像的 bondageclub 分支，執行 `scripts/check-bc-compat.mjs --bc-dir <bc> --json --report <md>`，
+# 再把結果交給 `scripts/bc-compat-issue.mjs`。
+# 可用 repository variables BC_REPO_URL / BC_REF 改用其他來源，手動執行時也能指定分支或 tag。
 on:
   schedule:
-    - cron: '0 1 * * 1' # 週一 09:00 Asia/Taipei
+    - cron: '7 1 * * 1' # 週一 09:07 Asia/Taipei，避開整點排程擁擠
   workflow_dispatch:
     inputs:
       ref:
@@ -15,47 +17,21 @@ on:
 
 permissions:
   contents: read
-  issues: write
 
 concurrency:
   group: bc-compat
   cancel-in-progress: false
 
-env:
-  BC_REPO_URL: ${{ vars.BC_REPO_URL || 'https://github.com/awdrrawd/Bondage-College-Mirror.git' }}
-  BC_REF: ${{ inputs.ref || vars.BC_REF || 'bondageclub' }}
-
 jobs:
   watch:
-    name: Compare hooks with the BC mirror
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: '22'
-          cache: npm
-      - run: npm ci --ignore-scripts
-      - name: Fetch the Bondage Club code mirror
-        run: |
-          git clone --depth 1 --filter=blob:none --sparse --branch "$BC_REF" "$BC_REPO_URL" "$RUNNER_TEMP/bc"
-          git -C "$RUNNER_TEMP/bc" sparse-checkout set --no-cone '/Scripts/' '/Screens/**/*.js'
-      - name: Compare hooked functions with the baseline
-        id: compare
-        run: |
-          set +e
-          node scripts/check-bc-compat.mjs --bc-dir "$RUNNER_TEMP/bc" --json --report "$RUNNER_TEMP/report.md" > "$RUNNER_TEMP/report.json"
-          code=$?
-          echo "code=$code" >> "$GITHUB_OUTPUT"
-          if [ -f "$RUNNER_TEMP/report.md" ]; then cat "$RUNNER_TEMP/report.md" >> "$GITHUB_STEP_SUMMARY"; fi
-          # 0 = 一致、1 = 有差異（下一步回報）；其他代碼代表檢查本身壞了，讓 job 失敗。
-          if [ "$code" -gt 1 ]; then exit "$code"; fi
-      - name: Sync the tracking issue (update on change, close when resolved)
-        if: steps.compare.outputs.code == '0' || steps.compare.outputs.code == '1'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: node scripts/bc-compat-issue.mjs LCE "$RUNNER_TEMP/report.json" "$RUNNER_TEMP/report.md"
+    permissions:
+      contents: read
+      issues: write
+    uses: awdrrawd/Bondage-College-Mirror/.github/workflows/reusable-bc-compat.yml@main
+    with:
+      module: LCE
+      bc-repo-url: ${{ vars.BC_REPO_URL }}
+      bc-ref: ${{ inputs.ref || vars.BC_REF }}
+      node-version: '22'
+      check-script: scripts/check-bc-compat.mjs
+      issue-script: scripts/bc-compat-issue.mjs

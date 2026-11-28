@@ -23,6 +23,7 @@ jobs:
           cache: npm
       # --ignore-scripts：安裝時不執行相依套件的 lifecycle script（build/test 不需要它們）。
       - run: npm ci --ignore-scripts
+      - run: npm run check:i18n
       - run: npm test
       - run: npm run build
       - name: Checkout PR base
