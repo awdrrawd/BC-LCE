@@ -226,7 +226,7 @@ LCE.TrustedImageOrigins.normalize(urlOrOrigin)  // normalises to https://example
 
 ## Local testing and building
 
-Requires Node.js 22.12 or newer (CI uses Node 22).
+Requires Node.js 22.12 or newer (CI uses Node 24).
 
 1. Install dependencies:
    ```

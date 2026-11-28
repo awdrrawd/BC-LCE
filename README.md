@@ -216,7 +216,7 @@ LCE.TrustedImageOrigins.normalize(urlOrOrigin)  // 正規化為 https://example.
 
 ## 本地測試與建置
 
-需要 Node.js 22.12 以上（CI 使用 Node 22）。
+需要 Node.js 22.12 以上（CI 使用 Node 24）。
 
 1. 安裝相依套件：
    ```

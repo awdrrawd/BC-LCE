@@ -4,7 +4,7 @@
 - main：`Deploy GitHub Pages`（`static.yml`）先檢查共用 i18n 副本、測試、建置，再把 `dist/` 部署到 GitHub Pages。`dist/` 包含 `loader.user.js`、`assets/` 與互動式架構圖 [`lce-architecture.html`](https://awdrrawd.github.io/BC-LCE/lce-architecture.html)。
 - 手動：Actions 頁可執行 `LCE checks`。
 - 每週（台北時間）：
-  - `Dependabot`（週六 08:07）：npm 與 GitHub Actions 相依更新，小版本與修補版合併成一個 PR。
+  - `Dependabot`（週六 08:07）：npm 與 GitHub Actions 相依更新，小版本與修補版合併成一個 PR；新版本發布滿 7 天才提出（安全性更新不受影響）。
   - `BC compatibility`（週一 09:07，`bc-compat.yml`；步驟在 Bondage-College-Mirror 的共用 workflow）：比對 BC 程式碼鏡像與 `scripts/bc-compat-baseline.json`，有差異時開一個 `bc-compat` issue，差異內容改變時更新並留言，差異消失後自動關閉（由 `scripts/bc-compat-issue.mjs` 處理），不擋 PR 或部署；說明見 [安全說明](security-notes.md)。
   - `Security checks`（週一 09:30，`security.yml`）：`npm audit`、CodeQL，PR 另有 dependency review；PR 與 push 到 `main` 時也會執行。CodeQL 警報在 Security 分頁查看。
 
