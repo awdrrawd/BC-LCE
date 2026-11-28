@@ -32,6 +32,6 @@ jobs:
       module: LCE
       bc-repo-url: ${{ vars.BC_REPO_URL }}
       bc-ref: ${{ inputs.ref || vars.BC_REF }}
-      node-version: '22'
+      node-version: '24'
       check-script: scripts/check-bc-compat.mjs
       issue-script: scripts/bc-compat-issue.mjs
